@@ -12,15 +12,16 @@ The project has two complementary experiences:
 
 ## Project status
 
-**Stage 2: Durable Match Platform** is in progress. Sub-phases 2A and 2B are
+**Stage 2: Durable Match Platform** is in progress. Sub-phases 2A through 2C are
 implemented: matches, moves, resets, and immutable ordered events are persisted;
-the match lifecycle is explicit; and database compare-and-swap rejects concurrent
-writers. The playable human-vs-Stockfish Lounge from Stage 1 remains intact.
+the match lifecycle is explicit; database compare-and-swap rejects concurrent
+writers; and Fischer clocks, deadlines, pause/resume, and timeout results are owned
+by the server. The playable human-vs-Stockfish Lounge from Stage 1 remains intact.
 
 Read [`docs/STAGE_2_DURABLE_MATCHES.md`](docs/STAGE_2_DURABLE_MATCHES.md) for the
 current increment, [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md)
 for the playable foundation, and [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) for
-the complete roadmap. No model-provider credentials are required for Stage 2A/2B.
+the complete roadmap. No model-provider credentials are required for Stage 2A–2C.
 
 ## Core match types
 
