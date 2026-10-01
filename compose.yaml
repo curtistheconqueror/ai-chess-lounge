@@ -1,0 +1,8 @@
+services:
+  lounge:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      STOCKFISH_PATH: /usr/games/stockfish
+    restart: unless-stopped
