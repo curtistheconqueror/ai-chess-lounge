@@ -6,6 +6,17 @@ import { ChessBoard } from "./ChessBoard";
 import type { GameSnapshot } from "./types";
 
 type PanelTab = "moves" | "pgn" | "fen";
+type TimeControlKey = "1+0" | "3+2" | "5+2" | "10+5";
+
+const timeControls: Record<
+  TimeControlKey,
+  { label: string; initialTimeMs: number; incrementMs: number }
+> = {
+  "1+0": { label: "1 + 0 · Bullet", initialTimeMs: 60_000, incrementMs: 0 },
+  "3+2": { label: "3 + 2 · Blitz", initialTimeMs: 180_000, incrementMs: 2_000 },
+  "5+2": { label: "5 + 2 · Rapid", initialTimeMs: 300_000, incrementMs: 2_000 },
+  "10+5": { label: "10 + 5 · Classical", initialTimeMs: 600_000, incrementMs: 5_000 },
+};
 
 const savedGameKey = "ai-chess-lounge:active-game";
 
@@ -14,13 +25,16 @@ function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [flipped, setFlipped] = useState(false);
   const [stockfishElo, setStockfishElo] = useState(1600);
+  const [timeControl, setTimeControl] = useState<TimeControlKey>("5+2");
   const [panelTab, setPanelTab] = useState<PanelTab>("moves");
   const [replayPly, setReplayPly] = useState<number | null>(null);
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [clockTick, setClockTick] = useState(Date.now());
   const socketRef = useRef<WebSocket | null>(null);
   const initialEloRef = useRef(stockfishElo);
+  const initialTimeControlRef = useRef(timeControl);
 
   const acceptSnapshot = useCallback((snapshot: GameSnapshot) => {
     setGame(snapshot);
@@ -33,14 +47,17 @@ function App() {
     setBusy(true);
     setNotice(null);
     try {
-      acceptSnapshot(await createGame(stockfishElo));
+      const control = timeControls[timeControl];
+      acceptSnapshot(
+        await createGame(stockfishElo, control.initialTimeMs, control.incrementMs),
+      );
       setReplayPly(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to create game.");
     } finally {
       setBusy(false);
     }
-  }, [acceptSnapshot, stockfishElo]);
+  }, [acceptSnapshot, stockfishElo, timeControl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +75,14 @@ function App() {
       if (!cancelled) {
         setBusy(true);
         try {
-          acceptSnapshot(await createGame(initialEloRef.current));
+          const control = timeControls[initialTimeControlRef.current];
+          acceptSnapshot(
+            await createGame(
+              initialEloRef.current,
+              control.initialTimeMs,
+              control.incrementMs,
+            ),
+          );
         } catch (error) {
           setNotice(error instanceof Error ? error.message : "Unable to create game.");
         } finally {
@@ -93,6 +117,13 @@ function App() {
     return () => socket.close();
   }, [game?.id, acceptSnapshot]);
 
+  useEffect(() => {
+    if (game?.lifecycle !== "running" || game.status !== "active") return;
+    setClockTick(Date.now());
+    const timer = window.setInterval(() => setClockTick(Date.now()), 100);
+    return () => window.clearInterval(timer);
+  }, [game?.id, game?.lifecycle, game?.status, game?.turn, game?.clock.server_time]);
+
   const displayFen = useMemo(() => {
     if (!game || replayPly === null || replayPly === game.moves.length) return game?.fen ?? "";
     if (replayPly === 0) return game.initial_fen;
@@ -106,6 +137,7 @@ function App() {
   }, [game, replayPly]);
 
   const moveRows = useMemo(() => pairMoves(game?.moves ?? []), [game?.moves]);
+  const clocks = useMemo(() => projectClocks(game, clockTick), [game, clockTick]);
   const atLive = replayPly === null || replayPly === game?.moves.length;
   const playerCanMove = Boolean(game?.can_move && atLive && !busy);
 
@@ -214,6 +246,8 @@ function App() {
             subtitle={`Engine · target ${game?.engine?.target_elo ?? stockfishElo} Elo`}
             badge={game?.turn === "black" && game?.status === "active" ? "THINKING" : "BLACK"}
             active={game?.turn === "black" && game?.status === "active"}
+            clock={formatClock(clocks.black)}
+            urgent={game?.turn === "black" && clocks.black <= 10_000}
           />
 
           <div className="strategy-banner" role="status">
@@ -240,6 +274,8 @@ function App() {
             subtitle="Human seat · White"
             badge={game?.turn === "white" && game?.status === "active" ? "YOUR MOVE" : "WHITE"}
             active={game?.turn === "white" && game?.status === "active"}
+            clock={formatClock(clocks.white)}
+            urgent={game?.turn === "white" && clocks.white <= 10_000}
           />
 
           <div className="playback-bar">
@@ -297,6 +333,19 @@ function App() {
                 <option value={2000}>2000 · Expert</option>
                 <option value={2500}>2500 · Grandmaster+</option>
                 <option value={3190}>Maximum · Brutal</option>
+              </select>
+            </label>
+            <label>
+              Time control
+              <select
+                value={timeControl}
+                onChange={(event) => setTimeControl(event.target.value as TimeControlKey)}
+              >
+                {(Object.entries(timeControls) as [TimeControlKey, (typeof timeControls)[TimeControlKey]][]).map(
+                  ([key, control]) => (
+                    <option key={key} value={key}>{control.label}</option>
+                  ),
+                )}
               </select>
             </label>
             <button className="primary-button" onClick={() => void startNewGame()} disabled={busy}>
@@ -361,6 +410,10 @@ function App() {
             />
             <Metric label="Position version" value={String(game?.version ?? 0)} />
             <Metric label="Event sequence" value={String(game?.event_sequence ?? 0)} />
+            <Metric
+              label="Time control"
+              value={game ? `${Math.round(game.clock.initial_time_ms / 60_000)}+${game.clock.increment_ms / 1_000}` : "—"}
+            />
             <Metric label="Lifecycle" value={(game?.lifecycle ?? "loading").toUpperCase()} accent />
             <Metric label="Storage" value="DURABLE" accent />
           </div>
@@ -391,12 +444,16 @@ function PlayerCard({
   subtitle,
   badge,
   active,
+  clock,
+  urgent,
 }: {
   side: "white" | "black";
   title: string;
   subtitle: string;
   badge: string;
   active: boolean;
+  clock: string;
+  urgent: boolean;
 }) {
   return (
     <div className={`player-card ${active ? "active" : ""}`}>
@@ -405,9 +462,39 @@ function PlayerCard({
         <strong>{title}</strong>
         <span>{subtitle}</span>
       </div>
-      <span className="player-badge">{badge}</span>
+      <div className="player-status">
+        <strong className={`player-clock ${urgent ? "urgent" : ""}`}>{clock}</strong>
+        <span className="player-badge">{badge}</span>
+      </div>
     </div>
   );
+}
+
+function projectClocks(
+  game: GameSnapshot | null,
+  nowMs: number,
+): { white: number; black: number } {
+  if (!game) return { white: 0, black: 0 };
+  let white = game.clock.white_remaining_ms;
+  let black = game.clock.black_remaining_ms;
+  if (game.lifecycle === "running" && game.status === "active") {
+    const serverTime = Date.parse(game.clock.server_time);
+    const elapsed = Number.isFinite(serverTime) ? Math.max(0, nowMs - serverTime) : 0;
+    if (game.turn === "white") white = Math.max(0, white - elapsed);
+    else black = Math.max(0, black - elapsed);
+  }
+  return { white, black };
+}
+
+function formatClock(milliseconds: number): string {
+  const safe = Math.max(0, milliseconds);
+  const minutes = Math.floor(safe / 60_000);
+  const seconds = Math.floor((safe % 60_000) / 1_000);
+  if (safe < 10_000) {
+    const tenths = Math.floor((safe % 1_000) / 100);
+    return `${minutes}:${String(seconds).padStart(2, "0")}.${tenths}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 function Metric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {

@@ -23,13 +23,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function createGame(stockfishElo: number): Promise<GameSnapshot> {
+export function createGame(
+  stockfishElo: number,
+  initialTimeMs = 300_000,
+  incrementMs = 2_000,
+): Promise<GameSnapshot> {
   return request<GameSnapshot>("/api/games", {
     method: "POST",
     body: JSON.stringify({
       opponent: "stockfish",
       stockfish_elo: stockfishElo,
       engine_move_time_ms: stockfishElo >= 2500 ? 700 : 400,
+      initial_time_ms: initialTimeMs,
+      increment_ms: incrementMs,
     }),
   });
 }

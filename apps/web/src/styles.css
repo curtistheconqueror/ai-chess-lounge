@@ -261,6 +261,28 @@ h2 {
   letter-spacing: 0.13em;
 }
 
+.player-status {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.player-clock {
+  min-width: 74px;
+  color: #f4efe2;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+  text-align: right;
+}
+
+.player-clock.urgent {
+  color: #ff9a86;
+  text-shadow: 0 0 18px rgba(255, 88, 67, 0.32);
+}
+
 .strategy-banner {
   display: flex;
   align-items: center;
@@ -520,7 +542,7 @@ h2 {
 
 .match-controls {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
   padding: 17px 0;
