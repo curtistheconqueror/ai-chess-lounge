@@ -12,11 +12,14 @@ The project has two complementary experiences:
 
 ## Project status
 
-The repository is in **Stage 0: Foundation**. The product blueprint, architecture,
-delivery phases, evaluation rules, and acceptance gates are defined in
-[docs/MASTER_PLAN.md](docs/MASTER_PLAN.md).
+**Stage 1: Local Playable Vertical Slice** is implemented. The current build
+supports a human playing White against a configurable Stockfish seat on a live,
+responsive board with server-validated moves, WebSocket updates, PGN/FEN, replay,
+reset, resign, and reconnect restoration.
 
-No provider credentials or production infrastructure are required yet.
+Read [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md) for launch
+instructions and [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) for the complete
+staged roadmap. No model-provider credentials are required for Stage 1.
 
 ## Core match types
 
@@ -30,13 +33,24 @@ No provider credentials or production infrastructure are required yet.
 
 ## Proposed stack
 
-- **Web:** Next.js, React, TypeScript, and a reusable chessboard component
-- **API:** Python, FastAPI, WebSockets, and python-chess
+- **Web:** React, TypeScript, Vite, and a custom accessible chessboard
+- **API:** Python, FastAPI, WebSockets, and `python-chess`
 - **Engine:** Stockfish through the UCI protocol
 - **Data:** PostgreSQL plus an append-only match event log
 - **Coordination:** Redis when multi-instance workers are introduced
 - **Runtime:** Docker Compose locally; independently deployable web, API, and
   worker services in production
+
+## Run the Lounge
+
+With Docker installed:
+
+```bash
+docker compose up --build
+```
+
+Open <http://localhost:8000>. For native development, use `make setup` followed
+by `make dev`.
 
 ## Design principles
 
@@ -54,9 +68,9 @@ No provider credentials or production infrastructure are required yet.
 
 ## Contributing
 
-Read [AGENTS.md](AGENTS.md) before making changes and
-[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Read [`AGENTS.md`](AGENTS.md) before making changes and
+[`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [`LICENSE`](LICENSE).

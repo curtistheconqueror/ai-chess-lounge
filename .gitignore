@@ -10,6 +10,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .venv/
+.runtime/
 
 # Node
 node_modules/
@@ -28,3 +29,7 @@ Thumbs.db
 *.sqlite3
 logs/
 tmp/
+
+# Web builds
+apps/web/dist/
+*.tsbuildinfo
