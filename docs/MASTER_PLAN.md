@@ -1,6 +1,6 @@
 # AI Chess Lounge — Master Product and Execution Plan
 
-**Status:** Stage 2 in progress — 2A persistence and 2B lifecycle implemented
+**Status:** Stage 2 in progress — 2A persistence, 2B lifecycle, and 2C clocks implemented
 
 **Working repository:** `curtistheconqueror/ai-chess-lounge`
 
@@ -473,10 +473,11 @@ reload the page, replay it, and export valid PGN. CI is green.
 
 **Goal:** Turn the prototype into a reliable match service.
 
-**Progress:** 2A and 2B are implemented. PostgreSQL is the production store,
+**Progress:** 2A through 2C are implemented. PostgreSQL is the production store,
 SQLite is the contributor/test fallback, immutable events are sequence ordered,
-and match writes use a durable revision compare-and-swap. Clocks, complete
-multi-process recovery, and accounts remain later Stage 2 increments.
+match writes use a durable revision compare-and-swap, and restart-safe Fischer
+clocks use server time. Complete multi-process recovery and accounts remain later
+Stage 2 increments.
 
 | Sub-phase | Deliverables |
 | --- | --- |
@@ -675,6 +676,7 @@ pull requests according to GitHub permissions.
 | P0 | Implement sandboxed Stockfish UCI adapter and human-vs-engine loop | 1D |
 | P0 | Add WebSocket snapshot/event protocol and reconnect test | 1E |
 | P1 | Add PostgreSQL event persistence and match state machine | 2A/2B |
+| P1 | Add durable server-authoritative clocks and timeout recovery | 2C |
 | P1 | Add scripted/fake agent contract harness | 3A |
 | P1 | Add first hosted-model adapter with strict structured move output | 3B |
 | P1 | Build model-vs-model match creation flow | 3F |
