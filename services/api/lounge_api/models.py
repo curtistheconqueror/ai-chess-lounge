@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -11,11 +12,25 @@ class OpponentKind(StrEnum):
 
 
 class GameStatus(StrEnum):
+    WAITING = "waiting"
     ACTIVE = "active"
+    PAUSED = "paused"
     CHECKMATE = "checkmate"
     STALEMATE = "stalemate"
     DRAW = "draw"
     RESIGNED = "resigned"
+    ABORTED = "aborted"
+    ADJUDICATED = "adjudicated"
+
+
+class MatchState(StrEnum):
+    CREATED = "created"
+    WAITING = "waiting"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    ABORTED = "aborted"
+    ADJUDICATED = "adjudicated"
 
 
 class CreateGameRequest(BaseModel):
@@ -34,7 +49,19 @@ class MoveRequest(BaseModel):
         return value.strip().lower()
 
 
+class AdjudicateRequest(BaseModel):
+    result: str
+
+    @field_validator("result")
+    @classmethod
+    def validate_result(cls, value: str) -> str:
+        if value not in {"1-0", "0-1", "1/2-1/2"}:
+            raise ValueError("Result must be 1-0, 0-1, or 1/2-1/2.")
+        return value
+
+
 class MoveRecord(BaseModel):
+    generation: int = 0
     ply: int
     uci: str
     san: str
@@ -42,6 +69,14 @@ class MoveRecord(BaseModel):
     fen: str
     timestamp: str
     elapsed_ms: int | None = None
+
+
+class MatchEvent(BaseModel):
+    sequence: int
+    type: str
+    position_version: int
+    payload: dict[str, Any] = Field(default_factory=dict)
+    timestamp: str
 
 
 class EngineSummary(BaseModel):
@@ -55,10 +90,14 @@ class EngineSummary(BaseModel):
 
 class GameSnapshot(BaseModel):
     id: str
+    lifecycle: MatchState
     status: GameStatus
     result: str
     turn: str
     version: int
+    revision: int
+    generation: int
+    event_sequence: int
     fen: str
     initial_fen: str
     pgn: str
@@ -70,6 +109,8 @@ class GameSnapshot(BaseModel):
     opponent: OpponentKind
     engine: EngineSummary | None
     strategy_banner: str
+    created_at: str
+    updated_at: str
 
 
 class HealthResponse(BaseModel):
