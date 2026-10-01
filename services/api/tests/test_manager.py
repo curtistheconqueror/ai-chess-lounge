@@ -3,10 +3,10 @@ from __future__ import annotations
 import asyncio
 
 import chess
-
 from lounge_api.engine import EngineMove, StockfishService
 from lounge_api.manager import GameManager
 from lounge_api.models import CreateGameRequest, EngineSummary, OpponentKind
+from lounge_api.persistence import DatabaseStore
 
 
 class FakeEngine(StockfishService):
@@ -34,16 +34,24 @@ class FakeEngine(StockfishService):
 
 def test_human_move_triggers_engine_reply() -> None:
     async def run() -> None:
-        manager = GameManager(engine=FakeEngine())
-        game = await manager.create(
-            CreateGameRequest(opponent=OpponentKind.STOCKFISH, stockfish_elo=1600)
+        manager = GameManager(
+            engine=FakeEngine(),
+            store=DatabaseStore("sqlite+aiosqlite:///:memory:"),
         )
-        snapshot = await manager.make_human_move(game.id, "e2e4", 0)
+        await manager.start()
+        try:
+            game = await manager.create(
+                CreateGameRequest(opponent=OpponentKind.STOCKFISH, stockfish_elo=1600)
+            )
+            snapshot = await manager.make_human_move(game.id, "e2e4", 0)
 
-        assert len(snapshot.moves) == 2
-        assert snapshot.moves[0].actor == "human:white"
-        assert snapshot.moves[1].actor == "stockfish:black"
-        assert snapshot.turn == "white"
-        assert snapshot.version == 2
+            assert len(snapshot.moves) == 2
+            assert snapshot.moves[0].actor == "human:white"
+            assert snapshot.moves[1].actor == "stockfish:black"
+            assert snapshot.turn == "white"
+            assert snapshot.version == 2
+            assert snapshot.event_sequence == 4
+        finally:
+            await manager.close()
 
     asyncio.run(run())

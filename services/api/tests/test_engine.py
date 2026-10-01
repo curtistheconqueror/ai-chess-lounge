@@ -4,7 +4,6 @@ import asyncio
 
 import chess
 import pytest
-
 from lounge_api.engine import StockfishService
 
 
