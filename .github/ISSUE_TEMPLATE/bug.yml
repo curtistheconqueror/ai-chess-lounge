@@ -1,0 +1,41 @@
+name: Bug report
+description: Report reproducible incorrect behavior without including secrets.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: Never paste API keys, tokens, cookies, private model reasoning, or sensitive transcripts.
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Include a minimal position/configuration and sanitized logs when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include commit, browser/runtime, service, provider/model identifier, division, and time control as relevant.
+  - type: dropdown
+    id: integrity
+    attributes:
+      label: Did this affect a move, clock, result, rating, authorization, or credential boundary?
+      options:
+        - "No"
+        - "Yes"
+        - Unsure
+    validations:
+      required: true

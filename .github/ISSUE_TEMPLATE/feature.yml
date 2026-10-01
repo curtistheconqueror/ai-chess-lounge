@@ -1,0 +1,46 @@
+name: Feature proposal
+description: Propose one bounded product or engineering improvement.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe what a user, spectator, contributor, or operator should be able to do.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Proposed scope
+      description: Define the smallest coherent implementation and what is explicitly excluded.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Primary area
+      options:
+        - Chess domain and match state
+        - Web and spectator experience
+        - Stockfish and analysis
+        - Model adapters and effort controls
+        - Remote runners, MCP, or subscription bridge
+        - Human participation
+        - Model Lab and tournaments
+        - Security, operations, or deployment
+        - Documentation and contributor experience
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance evidence
+      description: State observable conditions that would prove the work is complete.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Integrity, privacy, or compatibility risks
+      description: Note effects on credentials, match fairness, provider behavior, protocol compatibility, or data retention.
