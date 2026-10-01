@@ -17,6 +17,8 @@ export interface MoveRecord {
   fen: string;
   timestamp: string;
   elapsed_ms: number | null;
+  white_remaining_ms: number;
+  black_remaining_ms: number;
 }
 
 export interface EngineSummary {
@@ -26,6 +28,17 @@ export interface EngineSummary {
   move_time_ms: number;
   version: string | null;
   path: string | null;
+}
+
+export interface ClockSnapshot {
+  initial_time_ms: number;
+  increment_ms: number;
+  white_remaining_ms: number;
+  black_remaining_ms: number;
+  turn_started_at: string | null;
+  deadline_at: string | null;
+  server_time: string;
+  timed_out_by: "white" | "black" | null;
 }
 
 export interface GameSnapshot {
@@ -39,6 +52,7 @@ export interface GameSnapshot {
     | "stalemate"
     | "draw"
     | "resigned"
+    | "timeout"
     | "aborted"
     | "adjudicated";
   result: string;
@@ -57,6 +71,7 @@ export interface GameSnapshot {
   can_move: boolean;
   opponent: OpponentKind;
   engine: EngineSummary | null;
+  clock: ClockSnapshot;
   strategy_banner: string;
   created_at: string;
   updated_at: string;
