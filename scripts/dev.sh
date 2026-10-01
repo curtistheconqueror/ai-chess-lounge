@@ -9,6 +9,8 @@ if [[ ! -x .venv/bin/uvicorn ]]; then
   exit 1
 fi
 
+.venv/bin/alembic upgrade head
+
 cleanup() {
   kill "${api_pid:-}" "${web_pid:-}" 2>/dev/null || true
 }
