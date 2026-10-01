@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 import chess
 from lounge_api.engine import EngineMove, StockfishService
 from lounge_api.manager import GameManager
-from lounge_api.models import CreateGameRequest, EngineSummary, OpponentKind
+from lounge_api.models import CreateGameRequest, EngineSummary, GameStatus, OpponentKind
 from lounge_api.persistence import DatabaseStore
 
 
@@ -32,6 +33,17 @@ class FakeEngine(StockfishService):
         return None
 
 
+class FakeClock:
+    def __init__(self) -> None:
+        self.current = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
+
+    def __call__(self) -> datetime:
+        return self.current
+
+    def advance(self, **kwargs: float) -> None:
+        self.current += timedelta(**kwargs)
+
+
 def test_human_move_triggers_engine_reply() -> None:
     async def run() -> None:
         manager = GameManager(
@@ -51,6 +63,65 @@ def test_human_move_triggers_engine_reply() -> None:
             assert snapshot.turn == "white"
             assert snapshot.version == 2
             assert snapshot.event_sequence == 4
+        finally:
+            await manager.close()
+
+    asyncio.run(run())
+
+
+def test_manager_persists_timeout_and_completion_events() -> None:
+    async def run() -> None:
+        clock = FakeClock()
+        manager = GameManager(
+            store=DatabaseStore("sqlite+aiosqlite:///:memory:"),
+            clock=clock,
+            schedule_timeouts=False,
+        )
+        await manager.start()
+        try:
+            game = await manager.create(
+                CreateGameRequest(
+                    opponent=OpponentKind.HUMAN,
+                    initial_time_ms=1_000,
+                    increment_ms=0,
+                )
+            )
+            clock.advance(seconds=1)
+
+            assert await manager.expire_due_games() == [game.id]
+            snapshot = await manager.snapshot(game.id)
+            events = await manager.events(game.id)
+
+            assert snapshot.status is GameStatus.TIMEOUT
+            assert snapshot.result == "0-1"
+            assert snapshot.clock.timed_out_by == "white"
+            assert [event.type for event in events][-2:] == [
+                "clock.timeout",
+                "match.completed",
+            ]
+            assert events[-2].payload["white_remaining_ms"] == 0
+            assert events[-2].timestamp == clock.current.isoformat()
+        finally:
+            await manager.close()
+
+    asyncio.run(run())
+
+
+def test_background_deadline_task_broadcasts_timeout() -> None:
+    async def run() -> None:
+        manager = GameManager(store=DatabaseStore("sqlite+aiosqlite:///:memory:"))
+        await manager.start()
+        try:
+            game = await manager.create(
+                CreateGameRequest(
+                    opponent=OpponentKind.HUMAN,
+                    initial_time_ms=100,
+                    increment_ms=0,
+                )
+            )
+            await asyncio.sleep(0.14)
+            snapshot = await manager.snapshot(game.id)
+            assert snapshot.status is GameStatus.TIMEOUT
         finally:
             await manager.close()
 
