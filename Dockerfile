@@ -18,8 +18,9 @@ RUN apt-get update \
 WORKDIR /app
 COPY requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.lock
+COPY alembic.ini ./
 COPY services/ ./services/
 COPY --from=web-builder /build/apps/web/dist ./apps/web/dist
 
 EXPOSE 8000
-CMD ["uvicorn", "lounge_api.main:app", "--app-dir", "services/api", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["bash", "-lc", "alembic upgrade head && uvicorn lounge_api.main:app --app-dir services/api --host 0.0.0.0 --port 8000"]

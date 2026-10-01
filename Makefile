@@ -1,4 +1,4 @@
-.PHONY: setup test build dev api web clean
+.PHONY: setup test build dev api web migrate clean
 
 setup:
 	python3 -m venv .venv
@@ -6,6 +6,8 @@ setup:
 	cd apps/web && npm ci
 
 test:
+	.venv/bin/ruff format --check services/api
+	.venv/bin/ruff check services/api
 	.venv/bin/pytest
 	cd apps/web && npm run typecheck
 
@@ -17,6 +19,9 @@ api:
 
 web:
 	cd apps/web && npm run dev
+
+migrate:
+	.venv/bin/alembic upgrade head
 
 dev:
 	bash scripts/dev.sh
