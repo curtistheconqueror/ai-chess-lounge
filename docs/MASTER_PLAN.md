@@ -1,6 +1,6 @@
 # AI Chess Lounge — Master Product and Execution Plan
 
-**Status:** Stage 1 vertical slice implemented
+**Status:** Stage 2 in progress — 2A persistence and 2B lifecycle implemented
 
 **Working repository:** `curtistheconqueror/ai-chess-lounge`
 
@@ -472,6 +472,11 @@ reload the page, replay it, and export valid PGN. CI is green.
 ### Stage 2 — Durable match platform
 
 **Goal:** Turn the prototype into a reliable match service.
+
+**Progress:** 2A and 2B are implemented. PostgreSQL is the production store,
+SQLite is the contributor/test fallback, immutable events are sequence ordered,
+and match writes use a durable revision compare-and-swap. Clocks, complete
+multi-process recovery, and accounts remain later Stage 2 increments.
 
 | Sub-phase | Deliverables |
 | --- | --- |
