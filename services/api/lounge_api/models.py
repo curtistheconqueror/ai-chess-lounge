@@ -19,6 +19,7 @@ class GameStatus(StrEnum):
     STALEMATE = "stalemate"
     DRAW = "draw"
     RESIGNED = "resigned"
+    TIMEOUT = "timeout"
     ABORTED = "aborted"
     ADJUDICATED = "adjudicated"
 
@@ -37,6 +38,8 @@ class CreateGameRequest(BaseModel):
     opponent: OpponentKind = OpponentKind.STOCKFISH
     stockfish_elo: int = Field(default=1600, ge=800, le=3200)
     engine_move_time_ms: int = Field(default=450, ge=50, le=10_000)
+    initial_time_ms: int = Field(default=300_000, ge=100, le=86_400_000)
+    increment_ms: int = Field(default=2_000, ge=0, le=60_000)
 
 
 class MoveRequest(BaseModel):
@@ -69,6 +72,8 @@ class MoveRecord(BaseModel):
     fen: str
     timestamp: str
     elapsed_ms: int | None = None
+    white_remaining_ms: int
+    black_remaining_ms: int
 
 
 class MatchEvent(BaseModel):
@@ -86,6 +91,17 @@ class EngineSummary(BaseModel):
     move_time_ms: int
     version: str | None = None
     path: str | None = None
+
+
+class ClockSnapshot(BaseModel):
+    initial_time_ms: int
+    increment_ms: int
+    white_remaining_ms: int
+    black_remaining_ms: int
+    turn_started_at: str | None
+    deadline_at: str | None
+    server_time: str
+    timed_out_by: str | None
 
 
 class GameSnapshot(BaseModel):
@@ -108,6 +124,7 @@ class GameSnapshot(BaseModel):
     can_move: bool
     opponent: OpponentKind
     engine: EngineSummary | None
+    clock: ClockSnapshot
     strategy_banner: str
     created_at: str
     updated_at: str

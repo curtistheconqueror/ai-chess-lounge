@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
-from .domain import MatchTransitionRejected, MoveRejected, StalePosition
+from .domain import ClockExpired, MatchTransitionRejected, MoveRejected, StalePosition
 from .manager import GameManager, GameNotFound
 from .models import (
     AdjudicateRequest,
@@ -59,12 +59,12 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             game = await active_manager.create(request)
         except Exception as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
-        return game.snapshot()
+        return await active_manager.snapshot(game.id)
 
     @application.get("/api/games/{game_id}", response_model=GameSnapshot)
     async def get_game(game_id: str) -> GameSnapshot:
         try:
-            return (await active_manager.get(game_id)).snapshot()
+            return await active_manager.snapshot(game_id)
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
 
@@ -83,7 +83,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             )
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
-        except (StalePosition, ConcurrentGameUpdate) as exc:
+        except (ClockExpired, StalePosition, ConcurrentGameUpdate) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except MoveRejected as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -105,6 +105,8 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             return await active_manager.resign(game_id)
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
+        except ClockExpired as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except MoveRejected as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except ConcurrentGameUpdate as exc:

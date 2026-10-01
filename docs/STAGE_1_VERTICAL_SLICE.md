@@ -1,6 +1,6 @@
 # Stage 1 — Local Playable Vertical Slice
 
-> Historical stage record. Current `main` also includes the durable Stage 2A/2B
+> Historical stage record. Current `main` also includes the durable Stage 2A–2C
 > increment described in [`STAGE_2_DURABLE_MATCHES.md`](STAGE_2_DURABLE_MATCHES.md).
 
 ## Current outcome

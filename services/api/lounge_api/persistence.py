@@ -27,6 +27,7 @@ from .domain import GameSession
 from .models import EngineSummary, MatchEvent, MatchState, MoveRecord, OpponentKind
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
+SCHEMA_REVISION = "0002_authoritative_clocks"
 
 
 class ConcurrentGameUpdate(RuntimeError):
@@ -45,6 +46,12 @@ class MatchRow(Base):
     opponent: Mapped[str] = mapped_column(String(24), nullable=False)
     stockfish_elo: Mapped[int] = mapped_column(Integer, nullable=False)
     engine_move_time_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    initial_time_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    increment_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    white_remaining_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    black_remaining_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    turn_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    timed_out_by: Mapped[str | None] = mapped_column(String(5), nullable=True)
     initial_fen: Mapped[str] = mapped_column(Text, nullable=False)
     current_fen: Mapped[str] = mapped_column(Text, nullable=False)
     position_version: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -77,6 +84,8 @@ class MoveRow(Base):
     fen: Mapped[str] = mapped_column(Text, nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    white_remaining_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    black_remaining_ms: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class EventRow(Base):
@@ -141,9 +150,7 @@ class DatabaseStore:
             )
             if current_revision is None:
                 await connection.execute(
-                    text(
-                        "INSERT INTO alembic_version (version_num) VALUES ('0001_durable_matches')"
-                    )
+                    text(f"INSERT INTO alembic_version (version_num) VALUES ('{SCHEMA_REVISION}')")
                 )
         self._initialized = True
 
@@ -185,6 +192,8 @@ class DatabaseStore:
                     fen=move.fen,
                     timestamp=datetime.fromisoformat(move.timestamp),
                     elapsed_ms=move.elapsed_ms,
+                    white_remaining_ms=move.white_remaining_ms,
+                    black_remaining_ms=move.black_remaining_ms,
                 )
             )
             session.add_all(self._event_rows(game.id, events))
@@ -297,6 +306,12 @@ class DatabaseStore:
             "opponent": game.opponent.value,
             "stockfish_elo": game.stockfish_elo,
             "engine_move_time_ms": game.engine_move_time_ms,
+            "initial_time_ms": game.initial_time_ms,
+            "increment_ms": game.increment_ms,
+            "white_remaining_ms": game._stored_remaining("white"),
+            "black_remaining_ms": game._stored_remaining("black"),
+            "turn_started_at": game.turn_started_at,
+            "timed_out_by": game.timed_out_by,
             "initial_fen": game.initial_fen,
             "current_fen": game.board.fen(),
             "position_version": game.version,
@@ -346,6 +361,8 @@ class DatabaseStore:
                     fen=persisted.fen,
                     timestamp=_utc(persisted.timestamp).isoformat(),
                     elapsed_ms=persisted.elapsed_ms,
+                    white_remaining_ms=persisted.white_remaining_ms,
+                    black_remaining_ms=persisted.black_remaining_ms,
                 )
             )
         if board.fen() != row.current_fen:
@@ -355,6 +372,8 @@ class DatabaseStore:
             opponent=OpponentKind(row.opponent),
             stockfish_elo=row.stockfish_elo,
             engine_move_time_ms=row.engine_move_time_ms,
+            initial_time_ms=row.initial_time_ms,
+            increment_ms=row.increment_ms,
             board=board,
             initial_fen=row.initial_fen,
             lifecycle=MatchState(row.lifecycle),
@@ -370,4 +389,10 @@ class DatabaseStore:
             engine_summary=(
                 EngineSummary.model_validate(row.engine_summary) if row.engine_summary else None
             ),
+            white_remaining_ms=row.white_remaining_ms,
+            black_remaining_ms=row.black_remaining_ms,
+            turn_started_at=(
+                _utc(row.turn_started_at) if row.turn_started_at is not None else None
+            ),
+            timed_out_by=row.timed_out_by,
         )

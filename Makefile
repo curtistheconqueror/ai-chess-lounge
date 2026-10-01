@@ -24,6 +24,7 @@ migrate:
 	.venv/bin/alembic upgrade head
 
 dev:
+	.venv/bin/alembic upgrade head
 	bash scripts/dev.sh
 
 clean:
