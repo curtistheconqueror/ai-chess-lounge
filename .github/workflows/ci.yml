@@ -24,8 +24,19 @@ jobs:
       - name: Install API dependencies
         run: pip install -r requirements.lock
 
+      - name: Validate database migration
+        env:
+          DATABASE_URL: sqlite+aiosqlite:////tmp/ai-chess-lounge-ci.db
+        run: |
+          alembic upgrade head
+          alembic current
+          alembic downgrade base
+
       - name: Test API and chess domain
-        run: pytest
+        run: |
+          ruff format --check services/api
+          ruff check services/api
+          pytest
 
       - name: Set up Node
         uses: actions/setup-node@v5
