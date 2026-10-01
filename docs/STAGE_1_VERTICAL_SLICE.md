@@ -1,5 +1,8 @@
 # Stage 1 — Local Playable Vertical Slice
 
+> Historical stage record. Current `main` also includes the durable Stage 2A/2B
+> increment described in [`STAGE_2_DURABLE_MATCHES.md`](STAGE_2_DURABLE_MATCHES.md).
+
 ## Current outcome
 
 Stage 1 delivers a locally runnable Human-vs-Stockfish Lounge with a
@@ -57,8 +60,8 @@ make build
 
 ## Stage 1 limitations
 
-- Games are held in memory and disappear when the API process restarts. Durable
-  events and PostgreSQL belong to Stage 2.
+- At the Stage 1 exit gate, games were held in memory. Stage 2A now persists games,
+  moves, and ordered events across restarts.
 - Stage 1 has one human White seat and a Stockfish Black seat. Seat selection,
   model adapters, remote runners, and tournaments arrive in later stages.
 - The strategy banner is an explicit public status summary, not model

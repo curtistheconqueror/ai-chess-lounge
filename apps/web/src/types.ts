@@ -1,6 +1,15 @@
 export type OpponentKind = "stockfish" | "human";
+export type MatchState =
+  | "created"
+  | "waiting"
+  | "running"
+  | "paused"
+  | "completed"
+  | "aborted"
+  | "adjudicated";
 
 export interface MoveRecord {
+  generation: number;
   ply: number;
   uci: string;
   san: string;
@@ -21,10 +30,23 @@ export interface EngineSummary {
 
 export interface GameSnapshot {
   id: string;
-  status: "active" | "checkmate" | "stalemate" | "draw" | "resigned";
+  lifecycle: MatchState;
+  status:
+    | "waiting"
+    | "active"
+    | "paused"
+    | "checkmate"
+    | "stalemate"
+    | "draw"
+    | "resigned"
+    | "aborted"
+    | "adjudicated";
   result: string;
   turn: "white" | "black";
   version: number;
+  revision: number;
+  generation: number;
+  event_sequence: number;
   fen: string;
   initial_fen: string;
   pgn: string;
@@ -36,6 +58,8 @@ export interface GameSnapshot {
   opponent: OpponentKind;
   engine: EngineSummary | null;
   strategy_banner: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ApiError {

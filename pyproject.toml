@@ -8,9 +8,13 @@ version = "0.1.0"
 description = "Server-authoritative chess arena for agents, engines, and humans"
 requires-python = ">=3.12"
 dependencies = [
+  "aiosqlite>=0.21,<1",
+  "alembic>=1.16,<2",
+  "asyncpg>=0.30,<1",
   "fastapi>=0.115,<1",
   "pydantic>=2.9,<3",
   "python-chess>=1.999,<2",
+  "sqlalchemy[asyncio]>=2.0,<3",
   "uvicorn[standard]>=0.30,<1",
 ]
 
@@ -18,6 +22,7 @@ dependencies = [
 dev = [
   "httpx>=0.27,<1",
   "pytest>=8,<10",
+  "ruff>=0.14,<1",
 ]
 
 [tool.setuptools.packages.find]
@@ -26,3 +31,10 @@ where = ["services/api"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["services/api/tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

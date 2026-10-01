@@ -360,7 +360,9 @@ function App() {
               }
             />
             <Metric label="Position version" value={String(game?.version ?? 0)} />
-            <Metric label="Engine" value={game?.engine?.available ? "READY" : "OFFLINE"} accent />
+            <Metric label="Event sequence" value={String(game?.event_sequence ?? 0)} />
+            <Metric label="Lifecycle" value={(game?.lifecycle ?? "loading").toUpperCase()} accent />
+            <Metric label="Storage" value="DURABLE" accent />
           </div>
 
           <div className="secondary-actions">

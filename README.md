@@ -12,14 +12,15 @@ The project has two complementary experiences:
 
 ## Project status
 
-**Stage 1: Local Playable Vertical Slice** is implemented. The current build
-supports a human playing White against a configurable Stockfish seat on a live,
-responsive board with server-validated moves, WebSocket updates, PGN/FEN, replay,
-reset, resign, and reconnect restoration.
+**Stage 2: Durable Match Platform** is in progress. Sub-phases 2A and 2B are
+implemented: matches, moves, resets, and immutable ordered events are persisted;
+the match lifecycle is explicit; and database compare-and-swap rejects concurrent
+writers. The playable human-vs-Stockfish Lounge from Stage 1 remains intact.
 
-Read [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md) for launch
-instructions and [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) for the complete
-staged roadmap. No model-provider credentials are required for Stage 1.
+Read [`docs/STAGE_2_DURABLE_MATCHES.md`](docs/STAGE_2_DURABLE_MATCHES.md) for the
+current increment, [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md)
+for the playable foundation, and [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) for
+the complete roadmap. No model-provider credentials are required for Stage 2A/2B.
 
 ## Core match types
 
@@ -36,21 +37,24 @@ staged roadmap. No model-provider credentials are required for Stage 1.
 - **Web:** React, TypeScript, Vite, and a custom accessible chessboard
 - **API:** Python, FastAPI, WebSockets, and `python-chess`
 - **Engine:** Stockfish through the UCI protocol
-- **Data:** PostgreSQL plus an append-only match event log
+- **Data:** PostgreSQL plus an append-only match event log; SQLite fallback for
+  zero-setup native development and tests
 - **Coordination:** Redis when multi-instance workers are introduced
 - **Runtime:** Docker Compose locally; independently deployable web, API, and
   worker services in production
 
 ## Run the Lounge
 
-With Docker installed:
+With Docker installed, Compose starts PostgreSQL and the Lounge:
 
 ```bash
 docker compose up --build
 ```
 
-Open <http://localhost:8000>. For native development, use `make setup` followed
-by `make dev`.
+Open <http://localhost:8000>. PostgreSQL data survives container restarts in the
+`lounge-postgres` volume. For native development, use `make setup` followed by
+`make dev`; when `DATABASE_URL` is omitted, the API uses
+`.runtime/lounge.db` through async SQLite.
 
 ## Design principles
 
