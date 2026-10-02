@@ -2,31 +2,22 @@
 
 Updated: 2026-10-02. Read this file, AGENTS.md, README.md, MASTER_PLAN.md, and ADR 0018.
 
-## Last completed phase
+## Last completed phase — Stage 5D
 
-Stage 5C — local MCP facade — is merged in PR #12:
-https://github.com/curtistheconqueror/ai-chess-lounge/pull/12
+Stage 5D — authorized subscription CLI bridge — is merged in PR #13:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/13
 
-Verified merge/base: `689b0581cc35ac56bd76cb120e46cff1aa0e1aca`.
-Immutable checkpoint: `pickup/stage-5c-complete` at that merge.
-Retained 5C contributor: `feat/stage-5c-mcp-facade` (postmerge handoff at
-`c1e8d32f668ddfaa8a00497387f40bd6597c55bc`).
+Verified merge/base: `12255ba8209162af8f78f2124f9d7a1ae23b81d7`.
+Immutable checkpoint: `pickup/stage-5d-complete` at that exact merge.
+Retained contributor: `feat/stage-5d-subscription-bridge`.
+Final published source: `e4a85426c6a8628c8e028502e11a667d403aa312`.
+The merge tree matches the locally tested source tree exactly.
 
-5C PR CI run 37051541641 and postmerge run 37051818985 passed.
-Postmerge CI: 148 Python passed, 2 missing-Stockfish skips; 3 TypeScript tests;
-web build; 13 browser tests passed, 32 intentional viewport-duplicate skips.
-Local 5C Python: 149 passed, 1 PostgreSQL-environment skip.
+Prior baseline: Stage 5C PR #12, merge
+`689b0581cc35ac56bd76cb120e46cff1aa0e1aca`; retained checkpoint
+`pickup/stage-5c-complete`.
 
-## Current work — Stage 5D live gate passed; merge verification pending
-
-Contributor: `feat/stage-5d-subscription-bridge`, based on the verified 5C merge.
-PR #13: https://github.com/curtistheconqueror/ai-chess-lounge/pull/13
-Published implementation: `d116e5399fc1d3e642c8e620348dc8814c8b23c4`.
-Reviewed source checkpoint (includes final-turn fix and regression):
-`6fbf562172b43ef81bb6afe9e196d7eeeaa60c43`.
-The live-game gate has passed. Finish updated-head CI and merge verification,
-then create `pickup/stage-5d-complete` at the verified merge. Keep this contributor
-branch after merge.
+## Shipped
 
 Implemented:
 
@@ -65,32 +56,39 @@ read, copied, or retained. Full evidence and public PGN are in
 
 ## Verification
 
-After the proxy/classifier fix: 185 Python tests passed, 1 PostgreSQL-environment skip;
-3 TypeScript runner tests passed; Ruff format/lint, web typecheck, and production
-build passed. Optional package editable install and CLI entry point passed.
-Local Playwright could not launch because its Chromium revision was absent;
-the official download returned a truncated/invalid archive. Browser results
-were verified by PR CI run `37066364849`, job `111035002777`, which passed:
-170 Python tests, 2 missing-Stockfish skips; PostgreSQL and SQLite migrations;
-3 TypeScript tests; production build; 14 browser tests passed and 36 intentional
-viewport-duplicate skips.
+After the proxy/classifier fix: 185 local Python tests passed, 1 PostgreSQL
+configuration skip; all 31 bridge tests passed. Ruff format/lint, TypeScript
+web typecheck, 3 TypeScript runner tests, and production web build passed.
+Optional package installation and CLI entry point passed.
+
+Final PR CI run `37071482932`, job `111051703636`: success. It verified
+184 Python tests (2 missing-Stockfish skips), PostgreSQL/SQLite migrations,
+3 TypeScript tests, web build, and 14 browser tests (36 intentional
+viewport-duplicate skips). Local Chromium could not be installed because its
+download was truncated; browser acceptance is supplied by green GitHub CI.
+
+Postmerge CI run `37071772590`, job `111052639598`: completed successfully,
+including database migrations, Python/TypeScript tests, web build, and responsive
+browser smoke tests, on merge `12255ba8209162af8f78f2124f9d7a1ae23b81d7`.
 
 Luna extra-high independently reviewed the bridge and found the final-turn limit
-edge case. It is fixed, with the full fake-CLI game now constrained to exactly
-two moves per side. All 31 bridge tests and Ruff passed after the proxy/classifier regressions. Updated
-PR CI must remain green at its current head; consult PR #13 Checks. Run `make test`, `make build`, and
-`cd apps/web && npm run e2e` after any changes. PostgreSQL is verified in CI;
-local runs may skip it when TEST_POSTGRES_URL is unset.
+edge case. It is fixed and covered by the two-move-per-side terminal-game test.
+The real subscription game also completed on its final authorized turn.
 
-## Exact next target
+## Current work and exact next target
 
-1. Verify CI on the current PR #13 head containing the proxy/classifier fixes.
-2. Mark the PR ready, merge, verify postmerge CI, and create the immutable
-   `pickup/stage-5d-complete` branch at that merge commit.
-3. Update this retained contributor handoff with merge/CI/checkpoint evidence.
-4. Begin Stage 5E trust controls: server-scoped match grants, audit events,
-   limits, revocation/reconnect/forfeit rules. Existing session revoke remains
-   available, but the one-match grant is currently local-sidecar enforcement.
+Stage 5D is complete. No implementation work is in progress in this branch.
+Start Stage 5E trust controls from the verified Stage 5D merge:
+
+1. Read this handoff, confirm the base against main, and create a new contributor
+   branch. Preserve the completed contributor and immutable pickup branches.
+2. Design server-scoped match grants and append-only authorization audit events.
+3. Implement limits and explicit revocation/reconnect/forfeit behavior. Existing
+   session revoke remains available; the one-match grant is currently enforced
+   by the local sidecar rather than a dedicated server-scoped match grant.
+4. Add focused authorization/lifecycle regressions and run the relevant tests,
+   build, and browser smoke suite before publication and merge.
+5. Finish with a new immutable pickup branch and updated contributor handoff.
 
 ## Known boundaries
 
