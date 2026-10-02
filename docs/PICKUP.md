@@ -17,15 +17,16 @@ Postmerge CI: 148 Python passed, 2 missing-Stockfish skips; 3 TypeScript tests;
 web build; 13 browser tests passed, 32 intentional viewport-duplicate skips.
 Local 5C Python: 149 passed, 1 PostgreSQL-environment skip.
 
-## Current work — Stage 5D remains IN PROGRESS
+## Current work — Stage 5D live gate passed; merge verification pending
 
 Contributor: `feat/stage-5d-subscription-bridge`, based on the verified 5C merge.
-Draft PR #13: https://github.com/curtistheconqueror/ai-chess-lounge/pull/13
+PR #13: https://github.com/curtistheconqueror/ai-chess-lounge/pull/13
 Published implementation: `d116e5399fc1d3e642c8e620348dc8814c8b23c4`.
 Reviewed source checkpoint (includes final-turn fix and regression):
 `6fbf562172b43ef81bb6afe9e196d7eeeaa60c43`.
-Do not create or label a `pickup/stage-5d-complete` branch yet. The required live
-subscription game has not passed. Keep this contributor branch for continuation.
+The live-game gate has passed. Finish updated-head CI and merge verification,
+then create `pickup/stage-5d-complete` at the verified merge. Keep this contributor
+branch after merge.
 
 Implemented:
 
@@ -42,23 +43,29 @@ Implemented:
 - Deterministic two-CLI-fixture game reaches checkmate through the real arbiter;
   subprocess overflow, timeout, cancellation, parsing, scope, and profile tests.
 
-## Live acceptance evidence and concrete blocker
+## Live acceptance passed — previous diagnosis corrected
 
-Official Codex CLI 0.160.0 was installed temporarily for capability verification.
-Its official login status reported ChatGPT authentication; no credentials were
-read or copied. A bounded live game using `gpt-6.1-sol` against a deterministic
-opponent produced no model move before the 120-second deadline. One shorter
-15-second diagnostic check classified the CLI's stderr as a **usage limit**
-(429 / rate-limit category). Raw output was not logged or committed. Stop live
-retries until the account/provider limit is resolved. Do not claim model access
-or a completed live game from login status alone.
+The user authorized a fresh retry on 2026-10-02. A 120-second retry showed
+connection/reconnect failures, with no explicit HTTP 429 or quota message.
+The previous classifier matched bare digits and was too broad; the earlier
+claim of a usage-limit blocker is superseded.
 
-The fake CLI fixture full game is separate evidence; it is not a real model game.
-No live acceptance gate has been waived. No automatic API billing fallback exists.
+Root cause: the child environment removed the hosted runtime's required outbound
+proxy routing. Preserving existing credential-free HTTP(S) proxy URLs fixed the
+connection. Credential-bearing URLs and API keys remain excluded. Diagnostic
+classification now requires contextual status codes and distinguishes explicit
+quota errors from rate limiting and transport failures.
+
+A live official Codex CLI 0.160.0 / gpt-6.1-sol subscription game then completed
+unattended after one grant: `1. f3 e5 2. g4 Qh4# 0-1`. The real CLI played Black
+against a declared deterministic opponent. Both proposals traversed the signed
+runner protocol and real arbiter. No provider credentials or raw reasoning were
+read, copied, or retained. Full evidence and public PGN are in
+`docs/verification/stage5d-live.md` and `stage5d-live.pgn`.
 
 ## Verification
 
-Local final gates: 171 Python tests passed, 1 PostgreSQL-environment skip;
+After the proxy/classifier fix: 185 Python tests passed, 1 PostgreSQL-environment skip;
 3 TypeScript runner tests passed; Ruff format/lint, web typecheck, and production
 build passed. Optional package editable install and CLI entry point passed.
 Local Playwright could not launch because its Chromium revision was absent;
@@ -70,25 +77,20 @@ viewport-duplicate skips.
 
 Luna extra-high independently reviewed the bridge and found the final-turn limit
 edge case. It is fixed, with the full fake-CLI game now constrained to exactly
-two moves per side. All 17 bridge tests and Ruff passed again locally. Updated
+two moves per side. All 31 bridge tests and Ruff passed after the proxy/classifier regressions. Updated
 PR CI must remain green at its current head; consult PR #13 Checks. Run `make test`, `make build`, and
 `cd apps/web && npm run e2e` after any changes. PostgreSQL is verified in CI;
 local runs may skip it when TEST_POSTGRES_URL is unset.
 
 ## Exact next target
 
-1. Review the Stage 5D contributor PR and its CI evidence.
-2. On a machine with an eligible official Codex CLI subscription and available
-   quota, follow packages/subscription-bridge/README.md. Run doctor, pair a seat,
-   then complete an unattended live game after one explicit authorization.
-   Record provider/model, CLI version, public PGN/result, and game completion;
-   never record credentials or private reasoning.
-3. If live acceptance passes, merge the reviewed/green PR, verify postmerge CI,
-   create immutable `pickup/stage-5d-complete` at that merge, and update this
-   retained contributor handoff with exact commits and verification.
-4. Then begin Stage 5E trust controls: server-scoped match grants, audit events,
+1. Verify CI on the current PR #13 head containing the proxy/classifier fixes.
+2. Mark the PR ready, merge, verify postmerge CI, and create the immutable
+   `pickup/stage-5d-complete` branch at that merge commit.
+3. Update this retained contributor handoff with merge/CI/checkpoint evidence.
+4. Begin Stage 5E trust controls: server-scoped match grants, audit events,
    limits, revocation/reconnect/forfeit rules. Existing session revoke remains
-   available, but the new one-match grant is currently local-sidecar enforcement.
+   available, but the one-match grant is currently local-sidecar enforcement.
 
 ## Known boundaries
 
