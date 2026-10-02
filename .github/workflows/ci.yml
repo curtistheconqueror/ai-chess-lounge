@@ -11,6 +11,20 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: lounge_test
+          POSTGRES_USER: lounge
+          POSTGRES_PASSWORD: lounge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lounge -d lounge_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -32,7 +46,18 @@ jobs:
           alembic current
           alembic downgrade base
 
+      - name: Validate PostgreSQL migration
+        env:
+          DATABASE_URL: postgresql+asyncpg://lounge:lounge@127.0.0.1:5432/lounge_test
+        run: |
+          alembic upgrade head
+          alembic current
+          alembic downgrade base
+          alembic upgrade head
+
       - name: Test API and chess domain
+        env:
+          TEST_POSTGRES_URL: postgresql+asyncpg://lounge:lounge@127.0.0.1:5432/lounge_test
         run: |
           ruff format --check services/api
           ruff check services/api
@@ -52,3 +77,21 @@ jobs:
       - name: Typecheck and build web
         working-directory: apps/web
         run: npm run build
+
+      - name: Install browser for responsive smoke tests
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run responsive browser smoke tests
+        working-directory: apps/web
+        run: npm run e2e
+
+      - name: Upload browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lounge-browser-artifacts
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          if-no-files-found: ignore
