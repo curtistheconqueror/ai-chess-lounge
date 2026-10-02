@@ -29,6 +29,7 @@ from .adapters import (
     ScriptedPlayerAdapter,
     StockfishPlayerAdapter,
 )
+from .anthropic_adapter import AnthropicMessagesAdapter
 from .domain import ClockExpired, GameSession, MoveRejected, StalePosition
 from .engine import EngineAnalysis, EngineFailure, StockfishService
 from .models import (
@@ -94,6 +95,7 @@ class GameManager:
                 ScriptedPlayerAdapter(),
                 StockfishPlayerAdapter(self.engine),
                 OpenAIResponsesAdapter(),
+                AnthropicMessagesAdapter(),
             ]
         )
         self.store = store or DatabaseStore()

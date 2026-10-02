@@ -26,7 +26,8 @@ import type {
 
 type PanelTab = "moves" | "analysis" | "pgn" | "fen";
 type TimeControlKey = "1+0" | "3+2" | "5+2" | "10+5";
-type SeatChoice = "human" | "stockfish" | "scripted" | "openai";
+type HostedProviderChoice = "openai" | "anthropic";
+type SeatChoice = "human" | "stockfish" | "scripted" | HostedProviderChoice;
 type ClockSync = { gameId: string; generation: number; revision: number; receivedAt: number };
 type PromotionRequest = { from: string; to: string; candidates: string[] };
 type Color = "white" | "black";
@@ -63,10 +64,14 @@ const promotionCodes: Record<PromotionPiece, string> = {
 
 const savedGameKey = "ai-chess-lounge:active-game";
 const loungeEffortLevels: EffortLevel[] = ["fast", "balanced", "deep", "maximum"];
-const openAiPublicSettings = {
+const hostedProviderPublicSettings = {
   move_timeout_ms: 20_000,
   spectator_delay_ms: 180,
 } as const;
+const hostedProviderDetails: Record<HostedProviderChoice, { label: string; provider: string }> = {
+  openai: { label: "OpenAI", provider: "OpenAI" },
+  anthropic: { label: "Claude", provider: "Anthropic" },
+};
 
 function App() {
   const [game, setGame] = useState<GameSnapshot | null>(null);
@@ -79,8 +84,8 @@ function App() {
   const [whiteSeat, setWhiteSeat] = useState<SeatChoice>("human");
   const [blackSeat, setBlackSeat] = useState<SeatChoice>("stockfish");
   const [playerAdapters, setPlayerAdapters] = useState<PlayerAdapterCatalog | null>(null);
-  const [whiteOpenAiModel, setWhiteOpenAiModel] = useState("");
-  const [blackOpenAiModel, setBlackOpenAiModel] = useState("");
+  const [whiteProviderModel, setWhiteProviderModel] = useState("");
+  const [blackProviderModel, setBlackProviderModel] = useState("");
   const [whiteEffort, setWhiteEffort] = useState<EffortLevel>("balanced");
   const [blackEffort, setBlackEffort] = useState<EffortLevel>("balanced");
   const [timeControl, setTimeControl] = useState<TimeControlKey>("5+2");
@@ -97,10 +102,25 @@ function App() {
   const clockSyncRef = useRef<ClockSync | null>(null);
   const initialEloRef = useRef(stockfishElo);
   const initialTimeControlRef = useRef(timeControl);
-  const initialWhiteSeatRef = useRef<Exclude<SeatChoice, "openai">>("human");
-  const initialBlackSeatRef = useRef<Exclude<SeatChoice, "openai">>("stockfish");
+  const initialWhiteSeatRef = useRef<Exclude<SeatChoice, HostedProviderChoice>>("human");
+  const initialBlackSeatRef = useRef<Exclude<SeatChoice, HostedProviderChoice>>("stockfish");
 
-  const openAiModels = useMemo(() => selectableOpenAiModels(playerAdapters), [playerAdapters]);
+  const openAiModels = useMemo(
+    () => selectableProviderModels("openai", playerAdapters),
+    [playerAdapters],
+  );
+  const anthropicModels = useMemo(
+    () => selectableProviderModels("anthropic", playerAdapters),
+    [playerAdapters],
+  );
+  const whiteProviderModels = useMemo(
+    () => modelsForSeat(whiteSeat, openAiModels, anthropicModels),
+    [anthropicModels, openAiModels, whiteSeat],
+  );
+  const blackProviderModels = useMemo(
+    () => modelsForSeat(blackSeat, openAiModels, anthropicModels),
+    [anthropicModels, blackSeat, openAiModels],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -117,24 +137,30 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!openAiModels.length) return;
-    const resolvedWhiteModel = selectedOpenAiModel(whiteOpenAiModel, openAiModels);
-    const resolvedBlackModel = selectedOpenAiModel(blackOpenAiModel, openAiModels);
-    if (whiteOpenAiModel !== resolvedWhiteModel) setWhiteOpenAiModel(resolvedWhiteModel);
-    if (blackOpenAiModel !== resolvedBlackModel) setBlackOpenAiModel(resolvedBlackModel);
-    if (!loungeEffortsForModel(resolvedWhiteModel, playerAdapters).includes(whiteEffort)) {
-      setWhiteEffort(defaultOpenAiEffort(resolvedWhiteModel, playerAdapters));
+    if (whiteProviderModels.length) {
+      const resolvedWhiteModel = selectedProviderModel(whiteProviderModel, whiteProviderModels);
+      if (whiteProviderModel !== resolvedWhiteModel) setWhiteProviderModel(resolvedWhiteModel);
+      if (!loungeEffortsForModel(whiteSeat, resolvedWhiteModel, playerAdapters).includes(whiteEffort)) {
+        setWhiteEffort(defaultProviderEffort(whiteSeat, resolvedWhiteModel, playerAdapters));
+      }
     }
-    if (!loungeEffortsForModel(resolvedBlackModel, playerAdapters).includes(blackEffort)) {
-      setBlackEffort(defaultOpenAiEffort(resolvedBlackModel, playerAdapters));
+    if (blackProviderModels.length) {
+      const resolvedBlackModel = selectedProviderModel(blackProviderModel, blackProviderModels);
+      if (blackProviderModel !== resolvedBlackModel) setBlackProviderModel(resolvedBlackModel);
+      if (!loungeEffortsForModel(blackSeat, resolvedBlackModel, playerAdapters).includes(blackEffort)) {
+        setBlackEffort(defaultProviderEffort(blackSeat, resolvedBlackModel, playerAdapters));
+      }
     }
   }, [
     blackEffort,
-    blackOpenAiModel,
-    openAiModels,
+    blackProviderModel,
+    blackProviderModels,
+    blackSeat,
     playerAdapters,
     whiteEffort,
-    whiteOpenAiModel,
+    whiteProviderModel,
+    whiteProviderModels,
+    whiteSeat,
   ]);
 
   const acceptSnapshot = useCallback((snapshot: GameSnapshot) => {
@@ -196,7 +222,7 @@ function App() {
             whiteSeat,
             "white",
             stockfishElo,
-            whiteOpenAiModel,
+            whiteProviderModel,
             whiteEffort,
             playerAdapters,
           ),
@@ -204,7 +230,7 @@ function App() {
             blackSeat,
             "black",
             stockfishElo,
-            blackOpenAiModel,
+            blackProviderModel,
             blackEffort,
             playerAdapters,
           ),
@@ -219,13 +245,13 @@ function App() {
   }, [
     acceptSnapshot,
     blackEffort,
-    blackOpenAiModel,
+    blackProviderModel,
     blackSeat,
     playerAdapters,
     stockfishElo,
     timeControl,
     whiteEffort,
-    whiteOpenAiModel,
+    whiteProviderModel,
     whiteSeat,
   ]);
 
@@ -600,7 +626,7 @@ function App() {
       whiteSeat,
       "white",
       stockfishElo,
-      whiteOpenAiModel,
+      whiteProviderModel,
       whiteEffort,
       playerAdapters,
     );
@@ -609,7 +635,7 @@ function App() {
       blackSeat,
       "black",
       stockfishElo,
-      blackOpenAiModel,
+      blackProviderModel,
       blackEffort,
       playerAdapters,
     );
@@ -716,7 +742,10 @@ function App() {
                 value={whiteSeat}
                 onChange={(event) => setWhiteSeat(event.target.value as SeatChoice)}
               >
-                <SeatOptions openAiSelectable={openAiModels.length > 0} />
+                <SeatOptions
+                  openAiSelectable={openAiModels.length > 0}
+                  anthropicSelectable={anthropicModels.length > 0}
+                />
               </select>
             </label>
             <label>
@@ -726,33 +755,68 @@ function App() {
                 value={blackSeat}
                 onChange={(event) => setBlackSeat(event.target.value as SeatChoice)}
               >
-                <SeatOptions openAiSelectable={openAiModels.length > 0} />
+                <SeatOptions
+                  openAiSelectable={openAiModels.length > 0}
+                  anthropicSelectable={anthropicModels.length > 0}
+                />
               </select>
             </label>
             {whiteSeat === "openai" && (
-              <OpenAiSeatControls
+              <ProviderSeatControls
+                providerChoice="openai"
                 color="white"
                 models={openAiModels}
                 catalog={playerAdapters}
-                selectedModel={selectedOpenAiModel(whiteOpenAiModel, openAiModels)}
+                selectedModel={selectedProviderModel(whiteProviderModel, openAiModels)}
                 selectedEffort={whiteEffort}
                 onModelChange={(model) => {
-                  setWhiteOpenAiModel(model);
-                  setWhiteEffort(defaultOpenAiEffort(model, playerAdapters));
+                  setWhiteProviderModel(model);
+                  setWhiteEffort(defaultProviderEffort("openai", model, playerAdapters));
                 }}
                 onEffortChange={setWhiteEffort}
               />
             )}
             {blackSeat === "openai" && (
-              <OpenAiSeatControls
+              <ProviderSeatControls
+                providerChoice="openai"
                 color="black"
                 models={openAiModels}
                 catalog={playerAdapters}
-                selectedModel={selectedOpenAiModel(blackOpenAiModel, openAiModels)}
+                selectedModel={selectedProviderModel(blackProviderModel, openAiModels)}
                 selectedEffort={blackEffort}
                 onModelChange={(model) => {
-                  setBlackOpenAiModel(model);
-                  setBlackEffort(defaultOpenAiEffort(model, playerAdapters));
+                  setBlackProviderModel(model);
+                  setBlackEffort(defaultProviderEffort("openai", model, playerAdapters));
+                }}
+                onEffortChange={setBlackEffort}
+              />
+            )}
+            {whiteSeat === "anthropic" && (
+              <ProviderSeatControls
+                providerChoice="anthropic"
+                color="white"
+                models={anthropicModels}
+                catalog={playerAdapters}
+                selectedModel={selectedProviderModel(whiteProviderModel, anthropicModels)}
+                selectedEffort={whiteEffort}
+                onModelChange={(model) => {
+                  setWhiteProviderModel(model);
+                  setWhiteEffort(defaultProviderEffort("anthropic", model, playerAdapters));
+                }}
+                onEffortChange={setWhiteEffort}
+              />
+            )}
+            {blackSeat === "anthropic" && (
+              <ProviderSeatControls
+                providerChoice="anthropic"
+                color="black"
+                models={anthropicModels}
+                catalog={playerAdapters}
+                selectedModel={selectedProviderModel(blackProviderModel, anthropicModels)}
+                selectedEffort={blackEffort}
+                onModelChange={(model) => {
+                  setBlackProviderModel(model);
+                  setBlackEffort(defaultProviderEffort("anthropic", model, playerAdapters));
                 }}
                 onEffortChange={setBlackEffort}
               />
@@ -910,13 +974,20 @@ function Metric({ label, value, accent = false }: { label: string; value: string
   return <div className="metric"><span>{label}</span><strong className={accent ? "accent" : ""}>{value}</strong></div>;
 }
 
-function SeatOptions({ openAiSelectable }: { openAiSelectable: boolean }) {
+function SeatOptions({
+  openAiSelectable,
+  anthropicSelectable,
+}: {
+  openAiSelectable: boolean;
+  anthropicSelectable: boolean;
+}) {
   return (
     <>
       <option value="human">Human player</option>
       <option value="stockfish">Stockfish</option>
       <option value="scripted">Deterministic agent</option>
       <option value="openai" disabled={!openAiSelectable}>OpenAI model{openAiSelectable ? "" : " · not configured"}</option>
+      <option value="anthropic" disabled={!anthropicSelectable}>Claude model{anthropicSelectable ? "" : " · not configured"}</option>
     </>
   );
 }
@@ -925,10 +996,12 @@ function seatChoiceLabel(choice: SeatChoice): string {
   if (choice === "stockfish") return "Stockfish";
   if (choice === "scripted") return "Deterministic Agent";
   if (choice === "openai") return "OpenAI";
+  if (choice === "anthropic") return "Claude";
   return "Human";
 }
 
-function OpenAiSeatControls({
+function ProviderSeatControls({
+  providerChoice,
   color,
   models,
   catalog,
@@ -937,6 +1010,7 @@ function OpenAiSeatControls({
   onModelChange,
   onEffortChange,
 }: {
+  providerChoice: HostedProviderChoice;
   color: Color;
   models: string[];
   catalog: PlayerAdapterCatalog | null;
@@ -945,14 +1019,15 @@ function OpenAiSeatControls({
   onModelChange: (model: string) => void;
   onEffortChange: (effort: EffortLevel) => void;
 }) {
+  const providerLabel = hostedProviderDetails[providerChoice].label;
   const effortOptions = models.length
-    ? loungeEffortsForModel(selectedModel, catalog)
+    ? loungeEffortsForModel(providerChoice, selectedModel, catalog)
     : [];
   return (
-    <div className="openai-seat-controls" role="group" aria-label={`${capitalize(color)} OpenAI settings`}>
+    <div className="provider-seat-controls" role="group" aria-label={`${capitalize(color)} ${providerLabel} settings`}>
       <label>
-        {capitalize(color)} OpenAI model
-        <select aria-label={`${capitalize(color)} OpenAI model`} value={selectedModel} onChange={(event) => onModelChange(event.target.value)} disabled={!models.length}>
+        {capitalize(color)} {providerLabel} model
+        <select aria-label={`${capitalize(color)} ${providerLabel} model`} value={selectedModel} onChange={(event) => onModelChange(event.target.value)} disabled={!models.length}>
           {models.map((model) => <option key={model} value={model}>{model}</option>)}
         </select>
       </label>
@@ -967,7 +1042,7 @@ function OpenAiSeatControls({
 }
 
 function createPlayerConfiguration(
-  choice: Exclude<SeatChoice, "openai">,
+  choice: Exclude<SeatChoice, HostedProviderChoice>,
   color: "white" | "black",
   stockfishElo: number,
 ): PlayerConfiguration {
@@ -1026,60 +1101,87 @@ function createSelectedPlayerConfiguration(
   requestedEffort: EffortLevel,
   catalog: PlayerAdapterCatalog | null,
 ): PlayerConfiguration {
-  if (choice !== "openai") {
+  if (!isHostedProvider(choice)) {
     return createPlayerConfiguration(choice, color, stockfishElo);
   }
 
-  const model = selectedOpenAiModel(requestedModel, selectableOpenAiModels(catalog));
-  const effortOptions = loungeEffortsForModel(model, catalog);
+  const provider = hostedProviderDetails[choice];
+  const model = selectedProviderModel(
+    requestedModel,
+    selectableProviderModels(choice, catalog),
+  );
+  const effortOptions = loungeEffortsForModel(choice, model, catalog);
   const effort = effortOptions.includes(requestedEffort)
     ? requestedEffort
-    : defaultOpenAiEffort(model, catalog);
+    : defaultProviderEffort(choice, model, catalog);
   return {
     protocol_version: catalog?.protocol_version ?? "1.0",
-    player_id: `local-openai-${color}`,
-    adapter_id: "openai",
+    player_id: `local-${choice}-${color}`,
+    adapter_id: choice,
     display_name: `${model} · ${capitalize(effort)}`,
-    provider: "OpenAI",
+    provider: provider.provider,
     model,
     connection_mode: "direct_api",
     effort,
     division: "legal_assist",
-    settings: { ...openAiPublicSettings },
+    settings: { ...hostedProviderPublicSettings },
   };
 }
 
-function selectableOpenAiModels(catalog: PlayerAdapterCatalog | null): string[] {
-  const adapter = catalog?.adapters.find((candidate) => candidate.adapter_id === "openai");
+function isHostedProvider(choice: SeatChoice): choice is HostedProviderChoice {
+  return choice === "openai" || choice === "anthropic";
+}
+
+function modelsForSeat(
+  choice: SeatChoice,
+  openAiModels: string[],
+  anthropicModels: string[],
+): string[] {
+  if (choice === "openai") return openAiModels;
+  if (choice === "anthropic") return anthropicModels;
+  return [];
+}
+
+function selectableProviderModels(
+  providerChoice: HostedProviderChoice,
+  catalog: PlayerAdapterCatalog | null,
+): string[] {
+  const adapter = catalog?.adapters.find(
+    (candidate) => candidate.adapter_id === providerChoice,
+  );
   if (!adapter) return [];
   return adapter.models.filter((model) => adapter.capabilities[model]?.selectable === true);
 }
 
-function openAiCapabilities(
+function providerCapabilities(
+  providerChoice: SeatChoice,
   model: string,
   catalog: PlayerAdapterCatalog | null,
 ): AdapterModelCapabilities | undefined {
-  return catalog?.adapters.find((candidate) => candidate.adapter_id === "openai")
+  if (!isHostedProvider(providerChoice)) return undefined;
+  return catalog?.adapters.find((candidate) => candidate.adapter_id === providerChoice)
     ?.capabilities[model];
 }
 
 function loungeEffortsForModel(
+  providerChoice: SeatChoice,
   model: string,
   catalog: PlayerAdapterCatalog | null,
 ): EffortLevel[] {
-  const advertised = openAiCapabilities(model, catalog)?.effort_levels ?? [];
+  const advertised = providerCapabilities(providerChoice, model, catalog)?.effort_levels ?? [];
   return loungeEffortLevels.filter((effort) => advertised.includes(effort));
 }
 
-function selectedOpenAiModel(requested: string, available: string[]): string {
+function selectedProviderModel(requested: string, available: string[]): string {
   return available.includes(requested) ? requested : available[0] ?? "";
 }
 
-function defaultOpenAiEffort(
+function defaultProviderEffort(
+  providerChoice: SeatChoice,
   model: string,
   catalog: PlayerAdapterCatalog | null,
 ): EffortLevel {
-  const available = loungeEffortsForModel(model, catalog);
+  const available = loungeEffortsForModel(providerChoice, model, catalog);
   return available.includes("balanced") ? "balanced" : available[0] ?? "balanced";
 }
 

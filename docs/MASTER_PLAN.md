@@ -494,17 +494,18 @@ position, reconnects recover correctly, and clock/result tests are deterministic
 
 **Goal:** Seat hosted and local models through one normalized contract.
 
-**Progress:** Stages 3A and 3B are implemented. Either color can use the versioned
-player protocol through deterministic, Stockfish, or OpenAI Responses adapters, and
-two automated seats can complete an unattended persisted match. OpenAI model and
-effort are independently selectable for both seats; its credential stays server-side.
-Stages 3C–3F add more providers and recovery policies.
+**Progress:** Stages 3A through 3C are implemented. Either color can use the versioned
+player protocol through deterministic, Stockfish, OpenAI Responses, or Anthropic
+Messages adapters, and two automated seats can complete an unattended persisted
+match. Hosted model and effort settings are independently selectable for both seats;
+provider credentials stay server-side. Stages 3D–3F add more providers and recovery
+policies.
 
 | Sub-phase | Deliverables |
 | --- | --- |
 | 3A Protocol | **Implemented:** versioned MoveRequest/MoveProposal schemas, adapter SDK, scripted fake agents, dual-seat unattended runner |
 | 3B OpenAI | **Implemented:** Responses API adapter, strict structured move output, effort mapping, usage normalization, and two-seat UI selection |
-| 3C Anthropic | Messages adapter, supported effort/thinking mapping, usage normalization |
+| 3C Anthropic | **Implemented:** Messages adapter, adaptive-thinking effort mapping, strict structured move output, usage normalization, and cross-provider UI selection |
 | 3D Google | Gemini adapter, thinking-level mapping, usage normalization |
 | 3E Open ecosystem | OpenRouter/OpenAI-compatible plus local Ollama/vLLM connections |
 | 3F Recovery | Retry, timeout, malformed/illegal move, provider outage, and rate-limit policies |

@@ -182,3 +182,124 @@ test("OpenAI seats use catalog models, selected effort, and only public settings
     ]);
   }
 });
+
+test("Claude and OpenAI can be configured as opposing provider seats", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Cross-provider setup smoke runs once on desktop.");
+
+  const allEfforts = ["fast", "balanced", "deep", "maximum"];
+  await page.route("**/api/player-adapters", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      protocol_version: "1.0",
+      adapters: [
+        {
+          adapter_id: "openai",
+          models: ["gpt-frontier-latest"],
+          capabilities: {
+            "gpt-frontier-latest": {
+              model: "gpt-frontier-latest",
+              selectable: true,
+              availability: "configured_unverified",
+              connection_mode: "direct_api",
+              effort_levels: allEfforts,
+              structured_output: true,
+              credentials_required: true,
+            },
+          },
+        },
+        {
+          adapter_id: "anthropic",
+          models: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-unavailable"],
+          capabilities: {
+            "claude-opus-5-5": {
+              model: "claude-opus-5-5",
+              selectable: true,
+              availability: "configured_unverified",
+              connection_mode: "direct_api",
+              effort_levels: allEfforts,
+              structured_output: true,
+              credentials_required: true,
+            },
+            "claude-sonnet-5-5": {
+              model: "claude-sonnet-5-5",
+              selectable: true,
+              availability: "configured_unverified",
+              connection_mode: "direct_api",
+              effort_levels: ["fast", "balanced", "deep"],
+              structured_output: true,
+              credentials_required: true,
+            },
+            "claude-unavailable": {
+              model: "claude-unavailable",
+              selectable: false,
+              availability: "credentials_missing",
+              connection_mode: "direct_api",
+              effort_levels: allEfforts,
+              structured_output: true,
+              credentials_required: true,
+            },
+          },
+        },
+      ],
+    }),
+  }));
+
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/api/games", async (route) => {
+    if (route.request().method() === "POST") {
+      submitted = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "Cross-provider payload captured by the UI test." }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.reload();
+  await expect(page.getByRole("grid", { name: "Chess board" })).toBeVisible();
+  await expect(page.getByLabel("White seat").locator('option[value="anthropic"]')).toBeEnabled();
+
+  await page.getByLabel("White seat").selectOption("anthropic");
+  await page.getByLabel("White Claude model").selectOption("claude-opus-5-5");
+  await page.getByLabel("White effort").selectOption("maximum");
+  await expect(page.getByLabel("White Claude model").locator('option[value="claude-unavailable"]')).toHaveCount(0);
+
+  await page.getByLabel("Black seat").selectOption("openai");
+  await page.getByLabel("Black OpenAI model").selectOption("gpt-frontier-latest");
+  await page.getByLabel("Black effort").selectOption("deep");
+  await page.getByRole("button", { name: "New match" }).click();
+
+  await expect(page.getByRole("alert")).toContainText("Cross-provider payload captured");
+  expect(submitted).toMatchObject({
+    white_player: {
+      adapter_id: "anthropic",
+      provider: "Anthropic",
+      model: "claude-opus-5-5",
+      connection_mode: "direct_api",
+      effort: "maximum",
+      division: "legal_assist",
+      settings: {
+        move_timeout_ms: 20_000,
+        spectator_delay_ms: 180,
+      },
+    },
+    black_player: {
+      adapter_id: "openai",
+      provider: "OpenAI",
+      model: "gpt-frontier-latest",
+      connection_mode: "direct_api",
+      effort: "deep",
+      division: "legal_assist",
+      settings: {
+        move_timeout_ms: 20_000,
+        spectator_delay_ms: 180,
+      },
+    },
+  });
+  expect(JSON.stringify(submitted).toLowerCase()).not.toContain("api_key");
+  expect(JSON.stringify(submitted).toLowerCase()).not.toContain("authorization");
+});

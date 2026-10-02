@@ -569,7 +569,7 @@ h2 {
   letter-spacing: 0.04em;
 }
 
-.openai-seat-controls {
+.provider-seat-controls {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -580,11 +580,11 @@ h2 {
   background: rgba(85, 214, 156, 0.035);
 }
 
-.openai-seat-controls label {
+.provider-seat-controls label {
   min-width: 0;
 }
 
-.openai-seat-controls select {
+.provider-seat-controls select {
   min-width: 0;
   text-overflow: ellipsis;
 }
@@ -1862,7 +1862,7 @@ select {
     padding: 16px;
   }
 
-  .openai-seat-controls {
+  .provider-seat-controls {
     grid-template-columns: minmax(0, 1fr);
   }
 
