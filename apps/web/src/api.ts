@@ -1,5 +1,8 @@
 import type {
   ApiError,
+  AssistanceDivision,
+  ConnectionMode,
+  EffortLevel,
   GameAnalysis,
   GameSnapshot,
   PlayerAdapterCatalog,
@@ -76,6 +79,10 @@ export function createRunnerPairing(input: {
   displayName: string;
   provider: string;
   model: string;
+  connectionMode?: ConnectionMode;
+  division?: AssistanceDivision;
+  effort?: EffortLevel | null;
+  moveTimeoutMs?: number;
 }): Promise<RunnerPairingResponse> {
   return request<RunnerPairingResponse>("/api/runner-pairings", {
     method: "POST",
@@ -83,6 +90,10 @@ export function createRunnerPairing(input: {
       display_name: input.displayName,
       provider: input.provider,
       model: input.model,
+      ...(input.connectionMode ? { connection_mode: input.connectionMode } : {}),
+      ...(input.division ? { division: input.division } : {}),
+      ...(input.effort !== undefined ? { effort: input.effort } : {}),
+      ...(input.moveTimeoutMs ? { move_timeout_ms: input.moveTimeoutMs } : {}),
     }),
   });
 }

@@ -198,8 +198,20 @@ class PlayerConfiguration(BaseModel):
                 raise ValueError("Remote runner_id must be a safe identifier of 8-120 characters.")
             if runner_id != self.player_id:
                 raise ValueError("Remote runner_id must match the scoped player_id.")
-            if self.connection_mode is not ConnectionMode.REMOTE_RUNNER:
-                raise ValueError("Remote runner seats must use remote_runner connection mode.")
+            if self.connection_mode not in {
+                ConnectionMode.REMOTE_RUNNER,
+                ConnectionMode.SUBSCRIPTION_BRIDGE,
+            }:
+                raise ValueError(
+                    "Remote runner seats must use remote_runner or subscription_bridge mode."
+                )
+            if self.connection_mode is ConnectionMode.SUBSCRIPTION_BRIDGE:
+                if self.provider != "OpenAI":
+                    raise ValueError("Codex subscription bridge seats must disclose OpenAI.")
+                if self.effort is not None:
+                    raise ValueError("Subscription bridge seats use provider-default effort.")
+                if self.division is not AssistanceDivision.OPEN_AGENTIC:
+                    raise ValueError("Subscription bridge seats require the open_agentic division.")
             move_timeout_ms = self.settings.get("move_timeout_ms", 30_000)
             if type(move_timeout_ms) is not int or not 1 <= move_timeout_ms <= 120_000:
                 raise ValueError("Remote runner move_timeout_ms must be between 1 and 120000.")

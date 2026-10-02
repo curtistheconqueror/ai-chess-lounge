@@ -1,79 +1,104 @@
-# Project pickup checkpoint
+# AI Chess Lounge contributor pickup
 
-Read this file after `AGENTS.md`. It records the durable handoff; the originating
-chat and local worktree are not required.
+Updated: 2026-10-02. Read this file, AGENTS.md, README.md, MASTER_PLAN.md, and ADR 0018.
 
 ## Last completed phase
 
-- **Phase:** Stage 5B — Python and TypeScript remote-runner SDKs, with WebSocket shutdown correction
-- **Status:** merged and verified
-- **SDK PR:** [#10](https://github.com/curtistheconqueror/ai-chess-lounge/pull/10)
-- **SDK merge:** `27e6821ed469041f17b4bd74022fcb4a26d39913`
-- **Correction PR:** [#11](https://github.com/curtistheconqueror/ai-chess-lounge/pull/11)
-- **Latest verified merge:** `df25071881490881cecfea967e2cab689713e741`
-- **Retained contributors:** `feat/stage-5b-runner-sdk`, `fix/stage-5b-websocket-cleanup`
-- **Original immutable pickup:** `pickup/stage-5b-complete` at the SDK merge above
-- **Recommended immutable pickup:** `pickup/stage-5b-cleanup-complete` at the correction merge above
+Stage 5C — local MCP facade — is merged in PR #12:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/12
 
-Stage 5B adds separately packageable Python and TypeScript clients for pairing,
-heartbeat, authenticated HTTP long-polling, bound proposal builders, cross-language
-canonical HMAC signing, and same-payload idempotent submission retries. Both reject
-plaintext non-loopback servers and include a deterministic Legal Assist sample bot.
-Agents replace one move handler to supply their own model or inference connection.
+Verified merge/base: `689b0581cc35ac56bd76cb120e46cff1aa0e1aca`.
+Immutable checkpoint: `pickup/stage-5c-complete` at that merge.
+Retained 5C contributor: `feat/stage-5c-mcp-facade` (postmerge handoff at
+`c1e8d32f668ddfaa8a00497387f40bd6597c55bc`).
 
-The post-merge run for PR #10 caught intermittent WebSocket cancellation cleanup.
-PR #11 cancels and awaits both child tasks even when the connection is cancelled,
-shields cleanup from repeated ASGI cancellation, and always clears connected presence.
-The cancellation regression fails on the previous implementation and passes with the
-fix; the exact heartbeat/disconnect case passed 20 independent local runs.
+5C PR CI run 37051541641 and postmerge run 37051818985 passed.
+Postmerge CI: 148 Python passed, 2 missing-Stockfish skips; 3 TypeScript tests;
+web build; 13 browser tests passed, 32 intentional viewport-duplicate skips.
+Local 5C Python: 149 passed, 1 PostgreSQL-environment skip.
 
-## Verification evidence
+## Current work — Stage 5D live gate passed; merge verification pending
 
-- SDK PR CI: run `37035465208`, passed.
-- Correction PR CI: run `37036887876`, passed.
-- Correction post-merge CI: run `37037347924`, passed.
-- Final CI: 139 Python tests passed; two engine tests skipped because the hosted
-  runner has no Stockfish binary. PostgreSQL integration and both database migration
-  gates passed.
-- TypeScript SDK: build and all three contract tests passed.
-- Web: production build and 13 Chromium tests passed. The 45-case project matrix
-  intentionally skips 32 repeated interaction cases outside the desktop project;
-  these are not 45 executed tests.
-- Local SDK verification also built the Python wheel, checked npm packaging, and
-  passed lint/format and the SQLite migration round trip.
+Contributor: `feat/stage-5d-subscription-bridge`, based on the verified 5C merge.
+PR #13: https://github.com/curtistheconqueror/ai-chess-lounge/pull/13
+Published implementation: `d116e5399fc1d3e642c8e620348dc8814c8b23c4`.
+Reviewed source checkpoint (includes final-turn fix and regression):
+`6fbf562172b43ef81bb6afe9e196d7eeeaa60c43`.
+The live-game gate has passed. Finish updated-head CI and merge verification,
+then create `pickup/stage-5d-complete` at the verified merge. Keep this contributor
+branch after merge.
 
-## Current work and exact next target
+Implemented:
 
-Stage 5C — MCP facade is implemented on `feat/stage-5c-mcp-facade`, based on
-verified remote main `df25071881490881cecfea967e2cab689713e741`. Publication and
-merge verification are in progress; do not treat this as a completed checkpoint.
+- Optional Python local sidecar and `lounge-subscription-bridge doctor/run` CLI.
+- Official Codex CLI capability check, sanitized subscription login status,
+  explicit next-match grant, exact profile match, bounded turns/time.
+- Strict final JSON response, short public summaries, signed runner submissions,
+  exact duplicate reuse, process-group timeout/cancellation/output cleanup.
+- No OAuth extraction, provider keys, CLI output, or private reasoning sent to the
+  Lounge. Child environment excludes provider API keys and Lounge secrets.
+- Subscription pairing/UI disclosure: OpenAI, exact model, provider-default
+  effort, open_agentic only; independent runner defaults preserved.
+- ADR 0018 and package setup/limitations documentation.
+- Deterministic two-CLI-fixture game reaches checkmate through the real arbiter;
+  subprocess overflow, timeout, cancellation, parsing, scope, and profile tests.
 
-It adds an optional local stdio package with join/watch/poll/submit/heartbeat tools,
-opt-in human/remote game creation, snapshot/FEN/PGN resources, safe credential
-handling, bounded delivery caching, and deterministic two-client full-game tests.
-Read `packages/mcp-server/README.md` and ADR 0017 for setup and boundaries.
+## Live acceptance passed — previous diagnosis corrected
 
-Next: require green CI, merge, retain the contributor branch, and create immutable
-`pickup/stage-5c-complete` at the verified merge. Record exact evidence here.
+The user authorized a fresh retry on 2026-10-02. A 120-second retry showed
+connection/reconnect failures, with no explicit HTTP 429 or quota message.
+The previous classifier matched bare digits and was too broad; the earlier
+claim of a usage-limit blocker is superseded.
 
-Stage 5D follows with the authorized subscription sidecar and official provider
-CLI/SDK bridges. Stage 5E adds revocation, audit events, runner limits, and reconnect
-rules. Multi-user public hosting remains deferred until ownership/visibility controls.
+Root cause: the child environment removed the hosted runtime's required outbound
+proxy routing. Preserving existing credential-free HTTP(S) proxy URLs fixed the
+connection. Credential-bearing URLs and API keys remain excluded. Diagnostic
+classification now requires contextual status codes and distinguishes explicit
+quota errors from rate limiting and transport failures.
+
+A live official Codex CLI 0.160.0 / gpt-6.1-sol subscription game then completed
+unattended after one grant: `1. f3 e5 2. g4 Qh4# 0-1`. The real CLI played Black
+against a declared deterministic opponent. Both proposals traversed the signed
+runner protocol and real arbiter. No provider credentials or raw reasoning were
+read, copied, or retained. Full evidence and public PGN are in
+`docs/verification/stage5d-live.md` and `stage5d-live.pgn`.
+
+## Verification
+
+After the proxy/classifier fix: 185 Python tests passed, 1 PostgreSQL-environment skip;
+3 TypeScript runner tests passed; Ruff format/lint, web typecheck, and production
+build passed. Optional package editable install and CLI entry point passed.
+Local Playwright could not launch because its Chromium revision was absent;
+the official download returned a truncated/invalid archive. Browser results
+were verified by PR CI run `37066364849`, job `111035002777`, which passed:
+170 Python tests, 2 missing-Stockfish skips; PostgreSQL and SQLite migrations;
+3 TypeScript tests; production build; 14 browser tests passed and 36 intentional
+viewport-duplicate skips.
+
+Luna extra-high independently reviewed the bridge and found the final-turn limit
+edge case. It is fixed, with the full fake-CLI game now constrained to exactly
+two moves per side. All 31 bridge tests and Ruff passed after the proxy/classifier regressions. Updated
+PR CI must remain green at its current head; consult PR #13 Checks. Run `make test`, `make build`, and
+`cd apps/web && npm run e2e` after any changes. PostgreSQL is verified in CI;
+local runs may skip it when TEST_POSTGRES_URL is unset.
+
+## Exact next target
+
+1. Verify CI on the current PR #13 head containing the proxy/classifier fixes.
+2. Mark the PR ready, merge, verify postmerge CI, and create the immutable
+   `pickup/stage-5d-complete` branch at that merge commit.
+3. Update this retained contributor handoff with merge/CI/checkpoint evidence.
+4. Begin Stage 5E trust controls: server-scoped match grants, audit events,
+   limits, revocation/reconnect/forfeit rules. Existing session revoke remains
+   available, but the one-match grant is currently local-sidecar enforcement.
 
 ## Known boundaries
 
-- SDK packages are in the repository, not published to PyPI/npm registries.
-- The SDK sample chooses the first legal move; it is not an LLM strength benchmark.
-- Subscription authorization and MCP host approval policies are not implemented by
-  the SDK itself.
-- App deployment remains loopback-only until Stage 2E access controls are implemented.
-- Pending runner delivery/presence is process-local until Stage 5E.
-- The original Stage 5B pickup remains unchanged; use the cleanup pickup for new work.
-- Local commits were published through GitHub UI and have different IDs from the
-  remote commits. Use the remote merge SHA above as the contributor base.
-
-## Pickup policy
-
-Retain every contributor branch. At each completed phase, create an immutable
-`pickup/<phase>-complete` branch at its verified merge and update this document in
-the active contributor branch. Never repoint or delete an existing pickup branch.
+Codex is the first CLI adapter, not a ChatGPT-only architecture. Existing direct
+API, OpenRouter, local, human, Stockfish, MCP and external runner paths remain.
+Claude third-party subscription product permissions need approval/clarification;
+Google consumer CLI subscription login is sunset. Do not implement either by
+copying OAuth credentials. Consult the dated official sources in the package README.
+Native effort selection is intentionally provider-default until capabilities can
+be verified. POSIX only; Windows process-tree cleanup remains unsupported.
+Public multiuser deployment/account auth is still deferred to the final stage.

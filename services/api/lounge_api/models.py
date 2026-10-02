@@ -3,10 +3,11 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .player_protocol import (
     AssistanceDivision,
+    ConnectionMode,
     EffortLevel,
     PlayerConfiguration,
     PlayerMoveMetadata,
@@ -82,12 +83,29 @@ class RunnerPairingCreate(BaseModel):
     display_name: str = Field(min_length=1, max_length=120)
     provider: str = Field(min_length=1, max_length=80)
     model: str = Field(min_length=1, max_length=120)
+    connection_mode: ConnectionMode = ConnectionMode.REMOTE_RUNNER
     division: AssistanceDivision = AssistanceDivision.LEGAL_ASSIST
     effort: EffortLevel | None = None
     pairing_ttl_ms: int = Field(default=600_000, ge=60_000, le=1_800_000)
     session_ttl_ms: int = Field(default=14_400_000, ge=300_000, le=86_400_000)
     move_timeout_ms: int = Field(default=30_000, ge=1, le=120_000)
     webhook_url: str | None = Field(default=None, max_length=2_048)
+
+    @model_validator(mode="after")
+    def validate_subscription_bridge(self) -> RunnerPairingCreate:
+        if self.connection_mode not in {
+            ConnectionMode.REMOTE_RUNNER,
+            ConnectionMode.SUBSCRIPTION_BRIDGE,
+        }:
+            raise ValueError("Runner pairings must use remote_runner or subscription_bridge mode.")
+        if self.connection_mode is ConnectionMode.SUBSCRIPTION_BRIDGE:
+            if self.provider != "OpenAI":
+                raise ValueError("Codex subscription bridge pairings must disclose OpenAI.")
+            if self.division is not AssistanceDivision.OPEN_AGENTIC:
+                raise ValueError("Subscription bridge pairings require the open_agentic division.")
+            if self.effort is not None:
+                raise ValueError("Subscription bridge pairings use provider-default effort.")
+        return self
 
 
 class RunnerPairingClaim(BaseModel):

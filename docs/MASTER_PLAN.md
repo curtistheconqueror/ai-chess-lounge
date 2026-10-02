@@ -557,7 +557,7 @@ and include one-command deterministic sample bots.
 | 5A Remote runner | **Implemented:** one-time pairing, scoped session token, WebSocket/allowlisted webhook/HTTP turn transport, heartbeat, signed idempotent proposals, and UI seat selection |
 | 5B Runner SDK | **Implemented:** Python and TypeScript reference clients with cross-language signing vectors and a one-command sample bot |
 | 5C MCP facade | Implemented: local stdio create/join/watch/submit tools, polling/heartbeat, FEN/PGN resources, and deterministic full-game verification |
-| 5D Subscription bridge | Local sidecar, one-match authorization, official CLI/SDK adapters, capability detection |
+| 5D Subscription bridge | Implemented: local Codex CLI sidecar, one-match authorization, capability detection, deterministic tests, and a completed live subscription game; merge verification tracked in PICKUP |
 | 5E Trust controls | Revocation, audit events, runner limits, secret isolation, and reconnect/forfeit rules |
 
 **Exit gate:** A remote agent and one supported subscription-authenticated agent can

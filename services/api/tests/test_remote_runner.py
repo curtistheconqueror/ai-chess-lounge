@@ -7,6 +7,7 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi import WebSocketDisconnect
+from lounge_api.adapters import AdapterError
 from lounge_api.manager import GameManager
 from lounge_api.models import (
     CreateGameRequest,
@@ -17,11 +18,13 @@ from lounge_api.models import (
 from lounge_api.persistence import DatabaseStore
 from lounge_api.player_protocol import MoveProposal, MoveRequest, UsageMetrics
 from lounge_api.remote_runner import (
+    RemoteRunnerAdapter,
     RemoteRunnerBroker,
     RunnerAuthenticationError,
     RunnerPairingError,
     RunnerSubmissionError,
 )
+from pydantic import ValidationError
 
 SECRET = b"stage-5a-test-secret-is-at-least-32-bytes"
 
@@ -95,6 +98,82 @@ def pairing_request(**overrides: object) -> RunnerPairingCreate:
             **overrides,
         }
     )
+
+
+def subscription_pairing_request(**overrides: object) -> RunnerPairingCreate:
+    return pairing_request(
+        **{
+            "provider": "OpenAI",
+            "model": "codex-cli-test-model",
+            "connection_mode": "subscription_bridge",
+            "division": "open_agentic",
+            "effort": None,
+            "move_timeout_ms": 120_000,
+            **overrides,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"provider": "Anthropic"},
+        {"division": "legal_assist"},
+        {"effort": "balanced"},
+        {"connection_mode": "direct_api"},
+    ],
+)
+def test_subscription_pairing_rejects_unapproved_profiles(overrides: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        subscription_pairing_request(**overrides)
+
+
+def test_subscription_pairing_profile_is_fixed_and_bound_to_the_session() -> None:
+    async def run() -> None:
+        store = DatabaseStore("sqlite+aiosqlite:///:memory:")
+        broker = RemoteRunnerBroker(store, secret=SECRET)
+        await store.initialize()
+        try:
+            pairing = await broker.create_pairing(subscription_pairing_request())
+            credentials = await broker.claim_pairing(pairing.pairing_id, pairing.pairing_code)
+
+            assert pairing.player == credentials.player
+            assert pairing.player.provider == "OpenAI"
+            assert pairing.player.model == "codex-cli-test-model"
+            assert pairing.player.connection_mode.value == "subscription_bridge"
+            assert pairing.player.division.value == "open_agentic"
+            assert pairing.player.effort is None
+            assert pairing.player.settings["move_timeout_ms"] == 120_000
+
+            adapter = RemoteRunnerAdapter(broker)
+            adapter.validate_configuration(pairing.player)
+            assert adapter.capabilities("paired-runner")["connection_modes"] == [
+                "remote_runner",
+                "subscription_bridge",
+            ]
+
+            changed_profile = pairing.player.model_copy(
+                update={"model": "different-unapproved-model"}
+            )
+            request = MoveRequest(
+                match_id="match-1",
+                position_version=0,
+                color="white",
+                fen="startpos",
+                moves_uci=[],
+                pgn="",
+                legal_moves=["e2e4"],
+                remaining_ms=30_000,
+                move_deadline_ms=30_000,
+                division=pairing.player.division,
+            )
+            with pytest.raises(AdapterError, match="does not match the paired runner profile"):
+                await broker.request_turn(request, changed_profile)
+        finally:
+            await broker.close()
+            await store.close()
+
+    asyncio.run(run())
 
 
 def test_signature_uses_language_neutral_decimal_numbers() -> None:
