@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 import chess
 from sqlalchemy import (
@@ -15,23 +16,38 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     delete,
+    or_,
     select,
     text,
     update,
 )
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
 
 from .domain import GameSession
-from .models import EngineSummary, MatchEvent, MatchState, MoveRecord, OpponentKind
+from .models import EngineSummary, MatchEvent, MatchState, MoveRecord, OpponentKind, TurnLease
+from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0002_authoritative_clocks"
+SCHEMA_REVISION = "0004_player_seats"
 
 
 class ConcurrentGameUpdate(RuntimeError):
     """Raised when another process changed a match before this write committed."""
+
+
+class IdempotencyConflict(RuntimeError):
+    """Raised when an idempotency key is reused for a different command."""
+
+
+class TurnLeaseUnavailable(RuntimeError):
+    """Raised when another worker owns the active turn lease."""
 
 
 class Base(DeclarativeBase):
@@ -61,6 +77,17 @@ class MatchRow(Base):
     resigned_by: Mapped[str | None] = mapped_column(String(5), nullable=True)
     adjudicated_result: Mapped[str | None] = mapped_column(String(7), nullable=True)
     engine_summary: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    white_player: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    black_player: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    turn_lease_owner: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    turn_lease_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    turn_lease_position_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    turn_lease_acquired_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    turn_lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -86,6 +113,7 @@ class MoveRow(Base):
     elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     white_remaining_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     black_remaining_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    player_metadata: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
 
 
 class EventRow(Base):
@@ -103,6 +131,29 @@ class EventRow(Base):
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
     position_version: Mapped[int] = mapped_column(Integer, nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class IdempotencyRow(Base):
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (
+        UniqueConstraint(
+            "match_id",
+            "operation",
+            "idempotency_key",
+            name="uq_idempotency_match_operation_key",
+        ),
+        Index("ix_idempotency_match_created", "match_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    match_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("matches.id", ondelete="CASCADE"), nullable=False
+    )
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    applied_revision: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
@@ -162,6 +213,10 @@ class DatabaseStore:
         await self.initialize()
         async with self.sessions.begin() as session:
             session.add(self._match_row(game))
+            # The event rows reference the match, but the ORM models intentionally
+            # do not expose relationship properties. Flush the parent explicitly
+            # so PostgreSQL never batches the child inserts ahead of it.
+            await session.flush()
             session.add_all(self._event_rows(game.id, events))
 
     async def record_move(
@@ -171,14 +226,28 @@ class DatabaseStore:
         events: list[MatchEvent],
         *,
         expected_revision: int,
+        idempotency_key: str | None = None,
+        request_hash: str | None = None,
+        turn_lease: TurnLease | None = None,
+        lease_now: datetime | None = None,
     ) -> None:
         await self.initialize()
         async with self.sessions.begin() as session:
-            result = await session.execute(
-                update(MatchRow)
-                .where(MatchRow.id == game.id, MatchRow.revision == expected_revision)
-                .values(**self._match_values(game))
+            values = {**self._match_values(game), **self._cleared_lease_values()}
+            statement = update(MatchRow).where(
+                MatchRow.id == game.id,
+                MatchRow.revision == expected_revision,
             )
+            if turn_lease is not None:
+                if lease_now is None:
+                    raise ValueError("lease_now is required with a turn lease.")
+                statement = statement.where(
+                    MatchRow.turn_lease_owner == turn_lease.owner_id,
+                    MatchRow.turn_lease_token == turn_lease.token,
+                    MatchRow.turn_lease_position_version == turn_lease.position_version,
+                    MatchRow.turn_lease_expires_at > lease_now,
+                )
+            result = await session.execute(statement.values(**values))
             if result.rowcount != 1:
                 raise ConcurrentGameUpdate(game.id)
             session.add(
@@ -194,9 +263,28 @@ class DatabaseStore:
                     elapsed_ms=move.elapsed_ms,
                     white_remaining_ms=move.white_remaining_ms,
                     black_remaining_ms=move.black_remaining_ms,
+                    player_metadata=(
+                        move.player_metadata.model_dump(mode="json")
+                        if move.player_metadata
+                        else None
+                    ),
                 )
             )
             session.add_all(self._event_rows(game.id, events))
+            if idempotency_key is not None:
+                if request_hash is None:
+                    raise ValueError("request_hash is required with an idempotency key.")
+                session.add(
+                    IdempotencyRow(
+                        match_id=game.id,
+                        operation="move",
+                        idempotency_key=idempotency_key,
+                        request_hash=request_hash,
+                        applied_revision=game.revision,
+                        created_at=game.updated_at,
+                    )
+                )
+            await self._flush_mutation(session)
 
     async def record_action(
         self,
@@ -207,14 +295,118 @@ class DatabaseStore:
     ) -> None:
         await self.initialize()
         async with self.sessions.begin() as session:
+            values = {**self._match_values(game), **self._cleared_lease_values()}
             result = await session.execute(
                 update(MatchRow)
                 .where(MatchRow.id == game.id, MatchRow.revision == expected_revision)
-                .values(**self._match_values(game))
+                .values(**values)
             )
             if result.rowcount != 1:
                 raise ConcurrentGameUpdate(game.id)
             session.add_all(self._event_rows(game.id, events))
+            await self._flush_mutation(session)
+
+    async def get_idempotency_hash(
+        self,
+        match_id: str,
+        operation: str,
+        idempotency_key: str,
+    ) -> str | None:
+        await self.initialize()
+        async with self.sessions() as session:
+            return await session.scalar(
+                select(IdempotencyRow.request_hash).where(
+                    IdempotencyRow.match_id == match_id,
+                    IdempotencyRow.operation == operation,
+                    IdempotencyRow.idempotency_key == idempotency_key,
+                )
+            )
+
+    async def acquire_turn_lease(
+        self,
+        match_id: str,
+        owner_id: str,
+        position_version: int,
+        *,
+        now: datetime,
+        lease_ms: int,
+    ) -> TurnLease:
+        await self.initialize()
+        token = str(uuid4())
+        expires_at = now + timedelta(milliseconds=lease_ms)
+        async with self.sessions.begin() as session:
+            result = await session.execute(
+                update(MatchRow)
+                .where(
+                    MatchRow.id == match_id,
+                    MatchRow.lifecycle == MatchState.RUNNING.value,
+                    MatchRow.position_version == position_version,
+                    or_(
+                        MatchRow.turn_lease_expires_at.is_(None),
+                        MatchRow.turn_lease_expires_at <= now,
+                    ),
+                )
+                .values(
+                    turn_lease_owner=owner_id,
+                    turn_lease_token=token,
+                    turn_lease_position_version=position_version,
+                    turn_lease_acquired_at=now,
+                    turn_lease_expires_at=expires_at,
+                )
+            )
+            if result.rowcount != 1:
+                raise TurnLeaseUnavailable(
+                    "The turn is stale, unavailable, or already leased by another worker."
+                )
+        return TurnLease(
+            match_id=match_id,
+            owner_id=owner_id,
+            token=token,
+            position_version=position_version,
+            acquired_at=now.isoformat(),
+            expires_at=expires_at.isoformat(),
+        )
+
+    async def renew_turn_lease(
+        self,
+        lease: TurnLease,
+        *,
+        now: datetime,
+        lease_ms: int,
+    ) -> TurnLease:
+        await self.initialize()
+        expires_at = now + timedelta(milliseconds=lease_ms)
+        async with self.sessions.begin() as session:
+            result = await session.execute(
+                update(MatchRow)
+                .where(
+                    MatchRow.id == lease.match_id,
+                    MatchRow.position_version == lease.position_version,
+                    MatchRow.turn_lease_owner == lease.owner_id,
+                    MatchRow.turn_lease_token == lease.token,
+                    MatchRow.turn_lease_position_version == lease.position_version,
+                    MatchRow.turn_lease_expires_at > now,
+                )
+                .values(turn_lease_expires_at=expires_at)
+            )
+            if result.rowcount != 1:
+                raise TurnLeaseUnavailable("The turn lease expired or no longer owns this turn.")
+        return lease.model_copy(update={"expires_at": expires_at.isoformat()})
+
+    async def release_turn_lease(self, lease: TurnLease) -> bool:
+        await self.initialize()
+        async with self.sessions.begin() as session:
+            result = await session.execute(
+                update(MatchRow)
+                .where(
+                    MatchRow.id == lease.match_id,
+                    MatchRow.turn_lease_owner == lease.owner_id,
+                    MatchRow.turn_lease_token == lease.token,
+                    MatchRow.turn_lease_position_version == lease.position_version,
+                )
+                .values(**self._cleared_lease_values())
+            )
+            return result.rowcount == 1
 
     async def load_game(self, game_id: str) -> GameSession | None:
         await self.initialize()
@@ -235,6 +427,28 @@ class DatabaseStore:
                 ).all()
             )
             return self._restore_game(row, moves)
+
+    async def load_revision(self, game_id: str) -> tuple[int, int] | None:
+        await self.initialize()
+        async with self.sessions() as session:
+            row = (
+                await session.execute(
+                    select(MatchRow.generation, MatchRow.revision).where(MatchRow.id == game_id)
+                )
+            ).one_or_none()
+            return (row.generation, row.revision) if row is not None else None
+
+    async def load_position_marker(self, game_id: str) -> tuple[int, int] | None:
+        await self.initialize()
+        async with self.sessions() as session:
+            row = (
+                await session.execute(
+                    select(MatchRow.generation, MatchRow.position_version).where(
+                        MatchRow.id == game_id
+                    )
+                )
+            ).one_or_none()
+            return (row.generation, row.position_version) if row is not None else None
 
     async def load_recoverable_games(self) -> list[GameSession]:
         await self.initialize()
@@ -291,9 +505,14 @@ class DatabaseStore:
         """Delete test data while preserving the schema."""
         await self.initialize()
         async with self.sessions.begin() as session:
+            await session.execute(delete(IdempotencyRow))
             await session.execute(delete(EventRow))
             await session.execute(delete(MoveRow))
             await session.execute(delete(MatchRow))
+
+    async def _flush_mutation(self, session: AsyncSession) -> None:
+        """Flush once inside the transaction; tests replace this to inject a crash."""
+        await session.flush()
 
     @staticmethod
     def _match_row(game: GameSession) -> MatchRow:
@@ -323,8 +542,24 @@ class DatabaseStore:
             "engine_summary": (
                 game.engine_summary.model_dump(mode="json") if game.engine_summary else None
             ),
+            "white_player": (
+                game.white_player.model_dump(mode="json") if game.white_player else None
+            ),
+            "black_player": (
+                game.black_player.model_dump(mode="json") if game.black_player else None
+            ),
             "created_at": game.created_at,
             "updated_at": game.updated_at,
+        }
+
+    @staticmethod
+    def _cleared_lease_values() -> dict[str, object | None]:
+        return {
+            "turn_lease_owner": None,
+            "turn_lease_token": None,
+            "turn_lease_position_version": None,
+            "turn_lease_acquired_at": None,
+            "turn_lease_expires_at": None,
         }
 
     @staticmethod
@@ -363,6 +598,11 @@ class DatabaseStore:
                     elapsed_ms=persisted.elapsed_ms,
                     white_remaining_ms=persisted.white_remaining_ms,
                     black_remaining_ms=persisted.black_remaining_ms,
+                    player_metadata=(
+                        PlayerMoveMetadata.model_validate(persisted.player_metadata)
+                        if persisted.player_metadata
+                        else None
+                    ),
                 )
             )
         if board.fen() != row.current_fen:
@@ -395,4 +635,10 @@ class DatabaseStore:
                 _utc(row.turn_started_at) if row.turn_started_at is not None else None
             ),
             timed_out_by=row.timed_out_by,
+            white_player=(
+                PlayerConfiguration.model_validate(row.white_player) if row.white_player else None
+            ),
+            black_player=(
+                PlayerConfiguration.model_validate(row.black_player) if row.black_player else None
+            ),
         )

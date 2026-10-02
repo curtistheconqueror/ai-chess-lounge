@@ -18,6 +18,7 @@ from .models import (
     MoveRecord,
     OpponentKind,
 )
+from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 
 
 class MoveRejected(ValueError):
@@ -81,12 +82,34 @@ class GameSession:
     black_remaining_ms: int | None = None
     turn_started_at: datetime | None = None
     timed_out_by: str | None = None
+    white_player: PlayerConfiguration | None = None
+    black_player: PlayerConfiguration | None = None
 
     def __post_init__(self) -> None:
         if self.white_remaining_ms is None:
             self.white_remaining_ms = self.initial_time_ms
         if self.black_remaining_ms is None:
             self.black_remaining_ms = self.initial_time_ms
+        if self.white_player is None:
+            self.white_player = PlayerConfiguration.human("white")
+        if self.black_player is None:
+            self.black_player = (
+                PlayerConfiguration.stockfish(
+                    "black",
+                    target_elo=self.stockfish_elo,
+                    move_time_ms=self.engine_move_time_ms,
+                )
+                if self.opponent is OpponentKind.STOCKFISH
+                else PlayerConfiguration.human("black")
+            )
+
+    def player_for_color(self, color: str) -> PlayerConfiguration:
+        player = self.white_player if color == "white" else self.black_player
+        assert player is not None
+        return player
+
+    def active_player(self) -> PlayerConfiguration:
+        return self.player_for_color("white" if self.board.turn is chess.WHITE else "black")
 
     @property
     def status(self) -> GameStatus:
@@ -140,6 +163,7 @@ class GameSession:
         position_version: int | None = None,
         started_at: float | None = None,
         now: datetime | None = None,
+        player_metadata: PlayerMoveMetadata | None = None,
     ) -> MoveRecord:
         action_time = self._normalize_now(now)
         if self.lifecycle is not MatchState.RUNNING or self.status is not GameStatus.ACTIVE:
@@ -180,6 +204,7 @@ class GameSession:
             elapsed_ms=elapsed_ms,
             white_remaining_ms=self._stored_remaining("white"),
             black_remaining_ms=self._stored_remaining("black"),
+            player_metadata=player_metadata,
         )
         self.moves.append(record)
         if self.status is not GameStatus.ACTIVE:
@@ -389,12 +414,8 @@ class GameSession:
         game.headers["Site"] = "AI Chess Lounge"
         game.headers["Date"] = self.created_at.strftime("%Y.%m.%d")
         game.headers["Round"] = "-"
-        game.headers["White"] = "Human"
-        game.headers["Black"] = (
-            f"Stockfish ({self.stockfish_elo})"
-            if self.opponent is OpponentKind.STOCKFISH
-            else "Human"
-        )
+        game.headers["White"] = self.player_for_color("white").display_name
+        game.headers["Black"] = self.player_for_color("black").display_name
         game.headers["Result"] = self.result
         return str(game)
 
@@ -404,12 +425,14 @@ class GameSession:
         side = "white" if self.board.turn is chess.WHITE else "black"
         if status is not GameStatus.ACTIVE:
             banner = self._finished_banner(status)
-        elif side == "white":
-            banner = "Your move — claim space, create a threat, and keep your king safe."
-        elif self.opponent is OpponentKind.STOCKFISH:
-            banner = f"Stockfish is calculating at target Elo {self.stockfish_elo}."
         else:
-            banner = "Black to move."
+            active_player = self.player_for_color(side)
+            banner = (
+                f"{active_player.display_name} to move."
+                if active_player.is_human
+                else f"{active_player.display_name} is calculating through "
+                f"{active_player.provider}."
+            )
 
         return GameSnapshot(
             id=self.id,
@@ -431,10 +454,12 @@ class GameSession:
             can_move=(
                 self.lifecycle is MatchState.RUNNING
                 and status is GameStatus.ACTIVE
-                and side == "white"
+                and self.player_for_color(side).is_human
             ),
             opponent=self.opponent,
             engine=self.engine_summary,
+            white_player=self.player_for_color("white"),
+            black_player=self.player_for_color("black"),
             clock=self.clock_snapshot(snapshot_time),
             strategy_banner=banner,
             created_at=self.created_at.isoformat(),

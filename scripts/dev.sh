@@ -17,7 +17,7 @@ trap cleanup EXIT INT TERM
 .venv/bin/uvicorn lounge_api.main:app \
   --app-dir services/api \
   --reload \
-  --host 0.0.0.0 \
+  --host 127.0.0.1 \
   --port 8000 &
 api_pid=$!
 

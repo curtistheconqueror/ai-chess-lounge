@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-chess-lounge.dev/protocol/1.0/move-request.schema.json",
+  "title": "AI Chess Lounge MoveRequest 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "match_id",
+    "position_version",
+    "color",
+    "fen",
+    "moves_uci",
+    "pgn",
+    "remaining_ms",
+    "move_deadline_ms",
+    "division",
+    "public_summary_required"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "request_id": { "type": "string", "minLength": 1 },
+    "match_id": { "type": "string", "minLength": 1 },
+    "position_version": { "type": "integer", "minimum": 0 },
+    "color": { "enum": ["white", "black"] },
+    "fen": { "type": "string", "minLength": 1 },
+    "moves_uci": { "type": "array", "items": { "type": "string" } },
+    "pgn": { "type": "string" },
+    "legal_moves": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "array", "items": { "type": "string", "minLength": 4, "maxLength": 5 } }
+      ]
+    },
+    "remaining_ms": { "type": "integer", "minimum": 0 },
+    "move_deadline_ms": { "type": "integer", "minimum": 1 },
+    "division": {
+      "enum": [
+        "pure_reasoning",
+        "legal_assist",
+        "tactical_metadata",
+        "engine_assisted",
+        "open_agentic",
+        "human_ai_team"
+      ]
+    },
+    "public_summary_required": { "type": "boolean" }
+  }
+}

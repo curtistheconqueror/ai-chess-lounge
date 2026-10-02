@@ -15,7 +15,7 @@ build:
 	cd apps/web && npm run build
 
 api:
-	.venv/bin/uvicorn lounge_api.main:app --app-dir services/api --reload --host 0.0.0.0 --port 8000
+	.venv/bin/uvicorn lounge_api.main:app --app-dir services/api --reload --host 127.0.0.1 --port 8000
 
 web:
 	cd apps/web && npm run dev

@@ -26,8 +26,9 @@ at the deadline is an explicit timeout result, recorded through `clock.timeout` 
 `match.completed` events in the same compare-and-swap write.
 
 The browser receives remaining times, the turn anchor, deadline, and server snapshot
-time. It may animate that projection locally, but only a server snapshot or event can
-declare a timeout. On startup the API restores active anchors, schedules future
+time. It anchors animation to the local receipt time instead of assuming the browser
+and server wall clocks agree, but only a server snapshot or event can declare a
+timeout. On startup the API restores active anchors, schedules future
 deadlines, and adjudicates an already elapsed deadline on the next authoritative read.
 
 ## Consequences

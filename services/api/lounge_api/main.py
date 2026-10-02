@@ -1,27 +1,37 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from dotenv import load_dotenv
+from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .adapters import AdapterConfigurationError
 from .domain import ClockExpired, MatchTransitionRejected, MoveRejected, StalePosition
-from .manager import GameManager, GameNotFound
+from .engine import EngineFailure
+from .manager import AnalysisSuperseded, GameManager, GameNotFound
 from .models import (
     AdjudicateRequest,
     CreateGameRequest,
+    GameAnalysis,
     GameSnapshot,
     HealthResponse,
     MatchEvent,
     MoveRequest,
 )
-from .persistence import ConcurrentGameUpdate
+from .persistence import ConcurrentGameUpdate, IdempotencyConflict
+from .player_protocol import PROTOCOL_VERSION
 
 web_dist = Path(__file__).resolve().parents[3] / "apps" / "web" / "dist"
+repository_root = Path(__file__).resolve().parents[3]
+load_dotenv(repository_root / ".env.local", override=False)
+load_dotenv(repository_root / ".env", override=False)
 
 
 def create_app(game_manager: GameManager | None = None) -> FastAPI:
@@ -53,10 +63,19 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             version=__version__, stockfish_available=active_manager.engine.available
         )
 
+    @application.get("/api/player-adapters")
+    async def player_adapters() -> dict[str, object]:
+        return {
+            "protocol_version": PROTOCOL_VERSION,
+            "adapters": active_manager.adapters.catalog(),
+        }
+
     @application.post("/api/games", response_model=GameSnapshot, status_code=201)
     async def create_game(request: CreateGameRequest) -> GameSnapshot:
         try:
             game = await active_manager.create(request)
+        except AdapterConfigurationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         return await active_manager.snapshot(game.id)
@@ -75,15 +94,43 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
 
+    @application.get("/api/games/{game_id}/analysis", response_model=GameAnalysis)
+    async def get_analysis(game_id: str) -> GameAnalysis:
+        try:
+            return await active_manager.analysis(game_id)
+        except GameNotFound as exc:
+            raise HTTPException(status_code=404, detail="Game not found.") from exc
+        except EngineFailure as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except AnalysisSuperseded as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     @application.post("/api/games/{game_id}/moves", response_model=GameSnapshot)
-    async def make_move(game_id: str, request: MoveRequest) -> GameSnapshot:
+    async def make_move(
+        game_id: str,
+        request: MoveRequest,
+        idempotency_key: Annotated[
+            str | None,
+            Header(
+                alias="Idempotency-Key",
+                min_length=8,
+                max_length=128,
+                pattern=r"^[A-Za-z0-9._:-]+$",
+            ),
+        ] = None,
+    ) -> GameSnapshot:
         try:
             return await active_manager.make_human_move(
-                game_id, request.move, request.position_version
+                game_id,
+                request.move,
+                request.position_version,
+                idempotency_key,
             )
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
         except (ClockExpired, StalePosition, ConcurrentGameUpdate) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except IdempotencyConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except MoveRejected as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -148,13 +195,26 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     @application.websocket("/ws/games/{game_id}")
     async def game_socket(websocket: WebSocket, game_id: str) -> None:
         try:
-            await active_manager.subscribe(game_id, websocket)
+            snapshot = await active_manager.subscribe(game_id, websocket)
         except GameNotFound:
             await websocket.close(code=4404, reason="Game not found")
             return
+        marker = (snapshot.generation, snapshot.revision)
         try:
             while True:
-                await websocket.receive_text()
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=0.25)
+                except TimeoutError:
+                    next_marker = await active_manager.revision(game_id)
+                    if next_marker > marker:
+                        snapshot = await active_manager.snapshot(game_id)
+                        await websocket.send_json(
+                            {
+                                "type": "snapshot",
+                                "payload": snapshot.model_dump(mode="json"),
+                            }
+                        )
+                        marker = next_marker
         except WebSocketDisconnect:
             active_manager.unsubscribe(game_id, websocket)
 

@@ -1,6 +1,6 @@
 # AI Chess Lounge — Master Product and Execution Plan
 
-**Status:** Stage 2 in progress — 2A persistence, 2B lifecycle, and 2C clocks implemented
+**Status:** Stage 2A–2D, Stage 3A–3B, and the Stage 4 broadcast slice implemented; additional provider adapters pending
 
 **Working repository:** `curtistheconqueror/ai-chess-lounge`
 
@@ -473,11 +473,11 @@ reload the page, replay it, and export valid PGN. CI is green.
 
 **Goal:** Turn the prototype into a reliable match service.
 
-**Progress:** 2A through 2C are implemented. PostgreSQL is the production store,
+**Progress:** 2A through 2D are implemented. PostgreSQL is the production store,
 SQLite is the contributor/test fallback, immutable events are sequence ordered,
 match writes use a durable revision compare-and-swap, and restart-safe Fischer
-clocks use server time. Complete multi-process recovery and accounts remain later
-Stage 2 increments.
+clocks use server time. Idempotency records and fenced expiring turn leases coordinate
+retries and workers. Minimal accounts remain the final Stage 2 increment.
 
 | Sub-phase | Deliverables |
 | --- | --- |
@@ -494,10 +494,16 @@ position, reconnects recover correctly, and clock/result tests are deterministic
 
 **Goal:** Seat hosted and local models through one normalized contract.
 
+**Progress:** Stages 3A and 3B are implemented. Either color can use the versioned
+player protocol through deterministic, Stockfish, or OpenAI Responses adapters, and
+two automated seats can complete an unattended persisted match. OpenAI model and
+effort are independently selectable for both seats; its credential stays server-side.
+Stages 3C–3F add more providers and recovery policies.
+
 | Sub-phase | Deliverables |
 | --- | --- |
-| 3A Protocol | Versioned MoveRequest/MoveProposal schemas, adapter SDK, scripted fake agents |
-| 3B OpenAI | Responses API adapter, structured move output, effort mapping, usage normalization |
+| 3A Protocol | **Implemented:** versioned MoveRequest/MoveProposal schemas, adapter SDK, scripted fake agents, dual-seat unattended runner |
+| 3B OpenAI | **Implemented:** Responses API adapter, strict structured move output, effort mapping, usage normalization, and two-seat UI selection |
 | 3C Anthropic | Messages adapter, supported effort/thinking mapping, usage normalization |
 | 3D Google | Gemini adapter, thinking-level mapping, usage normalization |
 | 3E Open ecosystem | OpenRouter/OpenAI-compatible plus local Ollama/vLLM connections |
@@ -510,6 +516,12 @@ corruption.
 ### Stage 4 — Lounge broadcast experience
 
 **Goal:** Make live model competition striking, legible, and shareable.
+
+**Progress:** The human-versus-Stockfish vertical slice now implements the Stage 4
+broadcast shell across 4A–4F: disclosed player cards, structured public strategy,
+local replay, isolated spectator Stockfish evaluation, stable match routes and exports,
+and a five-viewport Playwright gate. Stage 3 adapters will populate normalized model,
+effort, usage, and cost fields; Stage 2E will add explicit visibility permissions.
 
 | Sub-phase | Deliverables |
 | --- | --- |
@@ -614,6 +626,8 @@ Candidate additions, prioritized only after real use:
 
 Release branches must pass formatting, linting, unit tests, contract tests, build,
 database migration checks, and a short end-to-end game using deterministic adapters.
+Board-facing changes also pass the viewport and interaction states in
+[`UI_QA_MATRIX.md`](UI_QA_MATRIX.md).
 
 ---
 
