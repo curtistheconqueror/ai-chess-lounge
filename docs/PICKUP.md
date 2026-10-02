@@ -1,76 +1,99 @@
 # Project pickup checkpoint
 
-Read this file after `AGENTS.md`. It records the durable handoff; the originating
-chat and local worktree are not required.
+Read this file after `AGENTS.md`. The repository and this handoff are sufficient to
+resume without the originating chat. The newest handoff lives on the retained
+contributor branch; immutable pickup branches stay at their verified merge.
 
 ## Last completed phase
 
-- **Phase:** Stage 5B — Python and TypeScript remote-runner SDKs, with WebSocket shutdown correction
-- **Status:** merged and verified
-- **SDK PR:** [#10](https://github.com/curtistheconqueror/ai-chess-lounge/pull/10)
-- **SDK merge:** `27e6821ed469041f17b4bd74022fcb4a26d39913`
-- **Correction PR:** [#11](https://github.com/curtistheconqueror/ai-chess-lounge/pull/11)
-- **Latest verified merge:** `df25071881490881cecfea967e2cab689713e741`
-- **Retained contributors:** `feat/stage-5b-runner-sdk`, `fix/stage-5b-websocket-cleanup`
-- **Original immutable pickup:** `pickup/stage-5b-complete` at the SDK merge above
-- **Recommended immutable pickup:** `pickup/stage-5b-cleanup-complete` at the correction merge above
+- **Phase:** Stage 5C — provider-neutral local MCP facade
+- **Status:** merged; PR and post-merge CI passed
+- **Pull request:** [#12](https://github.com/curtistheconqueror/ai-chess-lounge/pull/12)
+- **Verified merge:** `689b0581cc35ac56bd76cb120e46cff1aa0e1aca`
+- **Retained contributor:** `feat/stage-5c-mcp-facade`
+- **Immutable pickup:** `pickup/stage-5c-complete` at that exact merge
+- **PR CI:** run `37051541641` passed
+- **Post-merge CI:** run `37051818985` passed
 
-Stage 5B adds separately packageable Python and TypeScript clients for pairing,
-heartbeat, authenticated HTTP long-polling, bound proposal builders, cross-language
-canonical HMAC signing, and same-payload idempotent submission retries. Both reject
-plaintext non-loopback servers and include a deterministic Legal Assist sample bot.
-Agents replace one move handler to supply their own model or inference connection.
+## What shipped
 
-The post-merge run for PR #10 caught intermittent WebSocket cancellation cleanup.
-PR #11 cancels and awaits both child tasks even when the connection is cancelled,
-shields cleanup from repeated ASGI cancellation, and always clears connected presence.
-The cancellation regression fails on the previous implementation and passes with the
-fix; the exact heartbeat/disconnect case passed 20 independent local runs.
+`packages/mcp-server` is an optional, installable Python stdio MCP bridge. Any
+compatible host can expose join, watch, bounded turn polling, heartbeat, signed
+submission, and optional human/remote game creation to its selected model. Resources
+provide public game JSON, FEN and PGN. Each process owns one paired runner identity;
+credentials stay local. Watch and resources exclude legal-move/engine assistance.
+The existing arbiter still controls legality, clocks, leases, and committed moves.
+
+The full-game test caught an existing concurrency issue: snapshot reads waited for
+an agent's entire thinking turn. Reads now copy the last locally committed board
+while a writer is busy, allowing watch-before-submit without stalling the agent.
+Writers still publish only after persistence; read revisions can lag a concurrent
+write. The regression fails on the old implementation and passes with the fix.
+
+Read `packages/mcp-server/README.md`, `docs/STAGE_5_EXTERNAL_AGENTS.md`, and
+`docs/adr/0017-local-mcp-facade.md` for setup, architecture and boundaries.
 
 ## Verification evidence
 
-- SDK PR CI: run `37035465208`, passed.
-- Correction PR CI: run `37036887876`, passed.
-- Correction post-merge CI: run `37037347924`, passed.
-- Final CI: 139 Python tests passed; two engine tests skipped because the hosted
-  runner has no Stockfish binary. PostgreSQL integration and both database migration
-  gates passed.
-- TypeScript SDK: build and all three contract tests passed.
-- Web: production build and 13 Chromium tests passed. The 45-case project matrix
-  intentionally skips 32 repeated interaction cases outside the desktop project;
-  these are not 45 executed tests.
-- Local SDK verification also built the Python wheel, checked npm packaging, and
-  passed lint/format and the SQLite migration round trip.
+- Local full suite: **149 passed, one PostgreSQL environment skip**.
+- Final CI: **148 Python tests passed, two missing-Stockfish skips**; PostgreSQL
+  integration and SQLite/PostgreSQL migration gates passed.
+- Nine MCP cases include two independent clients completing checkmate through the
+  real API/persistence, read-before-submit, FEN/PGN exports, duplicate/conflicting
+  proposals, stale/illegal moves, assistance boundaries, safe errors, and actual
+  stdio subprocess discovery.
+- Ruff format/lint, editable package installation, installed CLI entry point and
+  dependency consistency passed.
+- TypeScript SDK build and all **three** contract tests passed in CI.
+- Web production build and **13** responsive Chromium tests passed; the matrix
+  intentionally skips 32 repeated interactions outside the desktop project.
+- Published branch and merged source were compared against the tested local tree;
+  no source differences remained. Temporary publication files are absent from the
+  final tree. No model-provider calls or subscription charges were needed.
 
-## Current work and exact next target
+## Exact next target
 
-Stage 5C — MCP facade is implemented on `feat/stage-5c-mcp-facade`, based on
-verified remote main `df25071881490881cecfea967e2cab689713e741`. Publication and
-merge verification are in progress; do not treat this as a completed checkpoint.
+**Stage 5D — authorized subscription bridge.** Start a fresh
+`feat/stage-5d-subscription-bridge` from the verified merge above (or newer verified
+main after checking intervening work). No Stage 5D implementation has started.
 
-It adds an optional local stdio package with join/watch/poll/submit/heartbeat tools,
-opt-in human/remote game creation, snapshot/FEN/PGN resources, safe credential
-handling, bounded delivery caching, and deterministic two-client full-game tests.
-Read `packages/mcp-server/README.md` and ADR 0017 for setup and boundaries.
+1. Verify official CLI/SDK authentication and subscription support for the initial
+   provider; detect installed capabilities and available models/effort rather than
+   assuming support or inventing OAuth routes.
+2. Implement a local sidecar using the runner SDK, with explicit one-match operator
+   authorization, bounded execution, cancellation and sanitized failure handling.
+3. Keep provider credentials exclusively with the official local provider client.
+   The Lounge should receive only normalized player configuration and move proposals.
+4. Add a deterministic fake-CLI contract suite, then an explicitly authorized live
+   smoke game when the required provider login is available. Clearly distinguish
+   API-backed, subscription-backed, and local-inference access in UI/status.
+5. Require regression/CI gates, retain the contributor branch, merge, and create the
+   next immutable pickup with an updated handoff.
 
-Next: require green CI, merge, retain the contributor branch, and create immutable
-`pickup/stage-5c-complete` at the verified merge. Record exact evidence here.
-
-Stage 5D follows with the authorized subscription sidecar and official provider
-CLI/SDK bridges. Stage 5E adds revocation, audit events, runner limits, and reconnect
-rules. Multi-user public hosting remains deferred until ownership/visibility controls.
+Stage 5E follows with revocation, audit events, runner limits and reconnect rules.
+Multi-user public hosting remains deferred until ownership/visibility controls.
 
 ## Known boundaries
 
-- SDK packages are in the repository, not published to PyPI/npm registries.
-- The SDK sample chooses the first legal move; it is not an LLM strength benchmark.
-- Subscription authorization and MCP host approval policies are not implemented by
-  the SDK itself.
-- App deployment remains loopback-only until Stage 2E access controls are implemented.
-- Pending runner delivery/presence is process-local until Stage 5E.
-- The original Stage 5B pickup remains unchanged; use the cleanup pickup for new work.
-- Local commits were published through GitHub UI and have different IDs from the
-  remote commits. Use the remote merge SHA above as the contributor base.
+- Packages are in this repository; no PyPI/npm release has been published.
+- The bridge is local stdio with a loopback API, not a hosted public MCP endpoint.
+- Host permission policy, unattended-loop lifetime, model choice and effort remain
+  controlled by the MCP host. The bridge cannot bypass approval prompts or provider
+  subscription restrictions. Official subscription adapters are not yet implemented.
+- Restarting the bridge requires a new pairing. Delivery/proposal caches are bounded
+  and process-local; distributed presence/reconnect durability remains Stage 5E.
+- Strategy text is deliberately public commentary, never private chain-of-thought.
+- Development deployments remain loopback-only until Stage 2E access controls.
+- Browser publication produced remote commit IDs different from local commits.
+  Use the verified remote merge above as the base for new work.
+
+## Previous completed checkpoint
+
+Stage 5B SDKs: PR #10, merge `27e6821ed469041f17b4bd74022fcb4a26d39913`,
+`pickup/stage-5b-complete`. WebSocket cleanup: PR #11, merge
+`df25071881490881cecfea967e2cab689713e741`, `pickup/stage-5b-cleanup-complete`.
+Contributor branches `feat/stage-5b-runner-sdk` and `fix/stage-5b-websocket-cleanup`
+remain available. Those immutable checkpoints have not been moved.
 
 ## Pickup policy
 
