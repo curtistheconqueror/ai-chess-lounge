@@ -31,7 +31,8 @@ where = ["services/api"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
-testpaths = ["services/api/tests"]
+pythonpath = ["services/api", "packages/runner-sdk-python/src"]
+testpaths = ["services/api/tests", "packages/runner-sdk-python/tests"]
 
 [tool.ruff]
 line-length = 100

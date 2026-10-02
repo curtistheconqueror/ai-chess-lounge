@@ -11,6 +11,8 @@ __pycache__/
 .ruff_cache/
 .venv/
 .runtime/
+build/
+*.egg-info/
 
 # Node
 node_modules/

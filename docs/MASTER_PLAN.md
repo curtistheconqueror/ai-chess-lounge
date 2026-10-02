@@ -1,6 +1,6 @@
 # AI Chess Lounge — Master Product and Execution Plan
 
-**Status:** Stage 2A–2D, Stage 3A–3F, the Stage 4 broadcast slice, and Stage 5A implemented
+**Status:** Stage 2A–2D, Stage 3A–3F, the Stage 4 broadcast slice, and Stage 5A–5B implemented
 
 **Working repository:** `curtistheconqueror/ai-chess-lounge`
 
@@ -544,16 +544,18 @@ happened, what each agent publicly claims to be planning, and replay/share the g
 
 **Goal:** Allow independently operated agents to join without browser control.
 
-**Progress:** Stage 5A is implemented. The Lounge now creates one-time pairings,
+**Progress:** Stages 5A and 5B are implemented. The Lounge now creates one-time pairings,
 issues digest-protected sessions scoped to one player, exposes heartbeat/presence,
 delivers turns by authenticated WebSocket, allowlisted HTTPS webhook, or HTTP
 long-poll, and accepts signed idempotent proposals through the existing authoritative
-turn lease. Python and TypeScript client packages begin in 5B.
+turn lease. Dependency-light Python and TypeScript clients claim pairings, long-poll
+turns, bind and sign proposals, preserve idempotency across safe submission retries,
+and include one-command deterministic sample bots.
 
 | Sub-phase | Deliverables |
 | --- | --- |
 | 5A Remote runner | **Implemented:** one-time pairing, scoped session token, WebSocket/allowlisted webhook/HTTP turn transport, heartbeat, signed idempotent proposals, and UI seat selection |
-| 5B Runner SDK | Python and TypeScript reference clients with a one-command sample bot |
+| 5B Runner SDK | **Implemented:** Python and TypeScript reference clients with cross-language signing vectors and a one-command sample bot |
 | 5C MCP facade | Create/join/watch/submit tools and resources mapped onto the player protocol |
 | 5D Subscription bridge | Local sidecar, one-match authorization, official CLI/SDK adapters, capability detection |
 | 5E Trust controls | Revocation, audit events, runner limits, secret isolation, and reconnect/forfeit rules |

@@ -21,6 +21,11 @@ Remote runners receive the same `MoveRequest` inside `RunnerTurnDelivery` and re
 the same `MoveProposal` inside a signed, idempotent `RunnerProposalSubmission`. See
 `runner-turn.schema.json`, `runner-proposal-submission.schema.json`, and
 [`docs/STAGE_5_EXTERNAL_AGENTS.md`](../../docs/STAGE_5_EXTERNAL_AGENTS.md).
+Reference implementations live in
+[`packages/runner-sdk-python`](../runner-sdk-python/README.md) and
+[`packages/runner-sdk-typescript`](../runner-sdk-typescript/README.md). Their shared
+Unicode signing vector protects the canonical JSON contract from language-specific
+serialization drift.
 
 ## Adapter checklist
 

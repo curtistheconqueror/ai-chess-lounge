@@ -48,6 +48,26 @@ def pairing_request(**overrides: object) -> RunnerPairingCreate:
     )
 
 
+def test_signature_uses_language_neutral_decimal_numbers() -> None:
+    proposal = MoveProposal(
+        request_id="request-1",
+        match_id="match-1",
+        position_version=7,
+        move="g1f3",
+        usage=UsageMetrics(estimated_cost_usd=0.0000123),
+    )
+
+    assert (
+        RemoteRunnerBroker.proposal_signature(
+            "c3RhZ2U1Yi1jb250cmFjdC1rZXktMzItYnl0ZXMhISE",
+            "061b82bc-902c-449a-a957-f41c8c55ea29",
+            "delivery:061b82bc",
+            proposal,
+        )
+        == "fb2f657e98df90403f8c50d82960ca91e427c16f79b4e16e89d3d2b689f67ca9"
+    )
+
+
 def test_pairing_is_one_time_and_secrets_are_not_stored_raw() -> None:
     async def run() -> None:
         store = DatabaseStore("sqlite+aiosqlite:///:memory:")
