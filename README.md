@@ -37,6 +37,9 @@ provider credentials to the Lounge. Reference Python and TypeScript clients now
 handle pairing, binding, signatures, long-polling, safe submission retries, and a
 one-command sample bot. A local stdio MCP bridge exposes the same signed move path
 as tools plus game/FEN/PGN resources; see [MCP setup](packages/mcp-server/README.md).
+An experimental [local subscription bridge](packages/subscription-bridge/README.md)
+adds one-match Codex CLI seats. Stage 5D live-game acceptance is still pending;
+its deterministic integration tests do not establish live provider availability.
 
 Read [`docs/STAGE_2_DURABLE_MATCHES.md`](docs/STAGE_2_DURABLE_MATCHES.md) for the
 current increment, [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md)

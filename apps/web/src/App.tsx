@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import {
   createGame,
@@ -39,6 +39,14 @@ type AgentProviderChoice =
   | "ollama"
   | "vllm";
 type SeatChoice = "human" | "stockfish" | "scripted" | "remote_runner" | AgentProviderChoice;
+type RunnerConnectionMode = "remote_runner" | "subscription_bridge";
+const wrappedCodeStyle: CSSProperties = {
+  maxWidth: "100%",
+  overflow: "visible",
+  overflowWrap: "anywhere",
+  textOverflow: "clip",
+  whiteSpace: "normal",
+};
 type ClockSync = { gameId: string; generation: number; revision: number; receivedAt: number };
 type PromotionRequest = { from: string; to: string; candidates: string[] };
 type Color = "white" | "black";
@@ -109,6 +117,8 @@ function App() {
   const [runnerName, setRunnerName] = useState("Remote Agent");
   const [runnerProvider, setRunnerProvider] = useState("Independent Runner");
   const [runnerModel, setRunnerModel] = useState("external-model");
+  const [runnerConnectionMode, setRunnerConnectionMode] = useState<RunnerConnectionMode>("remote_runner");
+  const [subscriptionModel, setSubscriptionModel] = useState("");
   const [runnerPairing, setRunnerPairing] = useState<RunnerPairingResponse | null>(null);
   const [timeControl, setTimeControl] = useState<TimeControlKey>("5+2");
   const [panelTab, setPanelTab] = useState<PanelTab>("moves");
@@ -605,8 +615,12 @@ function App() {
     try {
       const pairing = await createRunnerPairing({
         displayName: runnerName.trim(),
-        provider: runnerProvider.trim(),
-        model: runnerModel.trim(),
+        provider: runnerConnectionMode === "subscription_bridge" ? "OpenAI" : runnerProvider.trim(),
+        model: (runnerConnectionMode === "subscription_bridge" ? subscriptionModel : runnerModel).trim(),
+        connectionMode: runnerConnectionMode,
+        division: runnerConnectionMode === "subscription_bridge" ? "open_agentic" : "legal_assist",
+        effort: null,
+        moveTimeoutMs: runnerConnectionMode === "subscription_bridge" ? 120_000 : 30_000,
       });
       setRunnerPairing(pairing);
       setNotice("One-time runner pairing created. Share only with the agent you intend to seat.");
@@ -935,24 +949,74 @@ function App() {
           <div className="runner-pairing-panel" aria-label="Remote runner pairing">
             <div className="runner-pairing-heading">
               <div>
-                <span>REMOTE RUNNER</span>
+                <span>{runnerConnectionMode === "subscription_bridge" ? "SUBSCRIPTION BRIDGE · EXPERIMENTAL" : "REMOTE RUNNER"}</span>
                 <strong>Pair once. Play unattended.</strong>
               </div>
               <button onClick={() => void refreshRunnerSessions()} disabled={busy}>Refresh</button>
             </div>
+            <label>
+              Connection type
+              <select
+                aria-label="Runner connection type"
+                value={runnerConnectionMode}
+                onChange={(event) => setRunnerConnectionMode(event.target.value as RunnerConnectionMode)}
+              >
+                <option value="remote_runner">External agent</option>
+                <option value="subscription_bridge">Subscription bridge (Codex CLI)</option>
+              </select>
+            </label>
             <div className="runner-pairing-fields">
               <label>Agent name<input aria-label="Remote agent name" value={runnerName} onChange={(event) => setRunnerName(event.target.value)} /></label>
-              <label>Provider<input aria-label="Remote agent provider" value={runnerProvider} onChange={(event) => setRunnerProvider(event.target.value)} /></label>
-              <label>Model<input aria-label="Remote agent model" value={runnerModel} onChange={(event) => setRunnerModel(event.target.value)} /></label>
+              {runnerConnectionMode === "subscription_bridge" ? (
+                <label>Provider<span>OpenAI · local Codex CLI</span></label>
+              ) : (
+                <label>Provider<input aria-label="Remote agent provider" value={runnerProvider} onChange={(event) => setRunnerProvider(event.target.value)} /></label>
+              )}
+              {runnerConnectionMode === "subscription_bridge" ? (
+                <label>Codex CLI model<input aria-label="Codex CLI model" value={subscriptionModel} onChange={(event) => setSubscriptionModel(event.target.value)} placeholder="Enter the exact CLI model name" /></label>
+              ) : (
+                <label>Model<input aria-label="Remote agent model" value={runnerModel} onChange={(event) => setRunnerModel(event.target.value)} /></label>
+              )}
             </div>
-            <button className="runner-pairing-create" onClick={() => void generateRunnerPairing()} disabled={busy || !runnerName.trim() || !runnerProvider.trim() || !runnerModel.trim()}>
+            {runnerConnectionMode === "subscription_bridge" && (
+              <p className="runner-subscription-disclosure">
+                Experimental: live-match verification is pending. Uses the OpenAI Codex CLI authorization on this machine. Subscription credentials stay local and are not uploaded to the Lounge. This runner is limited to the open_agentic division, uses provider-default effort, and requires a one-match authorization each time.
+              </p>
+            )}
+            <button className="runner-pairing-create" onClick={() => void generateRunnerPairing()} disabled={busy || !runnerName.trim() || (runnerConnectionMode === "subscription_bridge" ? !subscriptionModel.trim() : !runnerProvider.trim() || !runnerModel.trim())}>
               Generate one-time pairing
             </button>
             {runnerPairing && (
-              <div className="runner-pairing-code">
+              <div
+                className="runner-pairing-code"
+                style={runnerPairing.player.connection_mode === "subscription_bridge"
+                  ? { alignItems: "stretch", paddingRight: 10 }
+                  : undefined}
+              >
                 <span>PAIRING CODE · EXPIRES {new Date(runnerPairing.expires_at).toLocaleTimeString()}</span>
-                <code>{runnerPairing.pairing_code}</code>
-                <button onClick={() => void copyText(runnerPairing.pairing_code, "Pairing code")}>Copy code</button>
+                <code style={runnerPairing.player.connection_mode === "subscription_bridge" ? wrappedCodeStyle : undefined}>
+                  {runnerPairing.pairing_code}
+                </code>
+                <button
+                  style={runnerPairing.player.connection_mode === "subscription_bridge"
+                    ? { position: "static", transform: "none", alignSelf: "flex-start" }
+                    : undefined}
+                  onClick={() => void copyText(runnerPairing.pairing_code, "Pairing code")}
+                >Copy code</button>
+                {runnerPairing.player.connection_mode === "subscription_bridge" && (
+                  <div
+                    className="runner-subscription-instructions"
+                    aria-label="Codex CLI subscription bridge instructions"
+                    style={{ display: "grid", gap: 7, minWidth: 0, width: "100%" }}
+                  >
+                    <span>PAIRING ID</span>
+                    <code style={wrappedCodeStyle}>{runnerPairing.pairing_id}</code>
+                    <p>On the machine running the bridge, first check setup, then start it. The pairing code is prompted locally.</p>
+                    <code style={wrappedCodeStyle}>lounge-subscription-bridge doctor --model MODEL</code>
+                    <code style={wrappedCodeStyle}>lounge-subscription-bridge run --pairing-id {runnerPairing.pairing_id} --model MODEL --authorize-next-match</code>
+                    <small>Pairing model: <strong>{runnerPairing.player.model}</strong>. Use that exact model as MODEL. The next-match grant is required for each match.</small>
+                  </div>
+                )}
               </div>
             )}
             <div className="runner-presence">

@@ -7,8 +7,8 @@ setup:
 	cd packages/runner-sdk-typescript && npm ci
 
 test:
-	.venv/bin/ruff format --check services/api packages/runner-sdk-python packages/mcp-server
-	.venv/bin/ruff check services/api packages/runner-sdk-python packages/mcp-server
+	.venv/bin/ruff format --check services/api packages/runner-sdk-python packages/mcp-server packages/subscription-bridge
+	.venv/bin/ruff check services/api packages/runner-sdk-python packages/mcp-server packages/subscription-bridge
 	.venv/bin/pytest
 	cd packages/runner-sdk-typescript && npm run build && npm test
 	cd apps/web && npm run typecheck

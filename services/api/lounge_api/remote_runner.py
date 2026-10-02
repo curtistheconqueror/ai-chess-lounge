@@ -127,7 +127,7 @@ class RemoteRunnerBroker:
             display_name=request.display_name,
             provider=request.provider,
             model=request.model,
-            connection_mode=ConnectionMode.REMOTE_RUNNER,
+            connection_mode=request.connection_mode,
             effort=request.effort,
             division=request.division,
             settings={
@@ -246,6 +246,8 @@ class RemoteRunnerBroker:
         )
         if session is None:
             raise AdapterError("The paired remote runner is offline or its session expired.")
+        if session.player != player:
+            raise AdapterError("The match player profile does not match the paired runner profile.")
         if not hmac.compare_digest(session.issuer_digest, self._issuer_digest()):
             raise AdapterError("The paired remote runner session is no longer valid.")
         delivery = RunnerTurnDelivery(
@@ -621,6 +623,10 @@ class RemoteRunnerAdapter:
         return {
             "model": model,
             "connection_mode": ConnectionMode.REMOTE_RUNNER.value,
+            "connection_modes": [
+                ConnectionMode.REMOTE_RUNNER.value,
+                ConnectionMode.SUBSCRIPTION_BRIDGE.value,
+            ],
             "effort_levels": [],
             "structured_output": True,
             "credentials_required": False,
@@ -629,12 +635,28 @@ class RemoteRunnerAdapter:
         }
 
     def validate_configuration(self, player: PlayerConfiguration) -> None:
-        if player.connection_mode is not ConnectionMode.REMOTE_RUNNER:
+        if player.connection_mode not in {
+            ConnectionMode.REMOTE_RUNNER,
+            ConnectionMode.SUBSCRIPTION_BRIDGE,
+        }:
             raise AdapterConfigurationError(
-                "Remote runner players must use remote_runner connection mode."
+                "Remote runner players must use remote_runner or subscription_bridge mode."
             )
         if player.settings.get("runner_id") != player.player_id:
             raise AdapterConfigurationError("The runner_id must match the paired player_id.")
+        if player.connection_mode is ConnectionMode.SUBSCRIPTION_BRIDGE:
+            if player.provider != "OpenAI":
+                raise AdapterConfigurationError(
+                    "Codex subscription bridge players must disclose OpenAI."
+                )
+            if player.effort is not None:
+                raise AdapterConfigurationError(
+                    "Subscription bridge players use provider-default effort."
+                )
+            if player.division.value != "open_agentic":
+                raise AdapterConfigurationError(
+                    "Subscription bridge players require the open_agentic division."
+                )
 
     async def choose_move(
         self,

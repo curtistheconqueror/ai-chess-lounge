@@ -31,8 +31,8 @@ where = ["services/api"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
-pythonpath = ["services/api", "packages/runner-sdk-python/src", "packages/mcp-server/src"]
-testpaths = ["services/api/tests", "packages/runner-sdk-python/tests", "packages/mcp-server/tests"]
+pythonpath = ["services/api", "packages/runner-sdk-python/src", "packages/mcp-server/src", "packages/subscription-bridge/src"]
+testpaths = ["services/api/tests", "packages/runner-sdk-python/tests", "packages/mcp-server/tests", "packages/subscription-bridge/tests"]
 
 [tool.ruff]
 line-length = 100

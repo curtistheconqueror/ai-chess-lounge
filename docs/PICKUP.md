@@ -1,79 +1,91 @@
-# Project pickup checkpoint
+# AI Chess Lounge contributor pickup
 
-Read this file after `AGENTS.md`. It records the durable handoff; the originating
-chat and local worktree are not required.
+Updated: 2026-10-02. Read this file, AGENTS.md, README.md, MASTER_PLAN.md, and ADR 0018.
 
 ## Last completed phase
 
-- **Phase:** Stage 5B — Python and TypeScript remote-runner SDKs, with WebSocket shutdown correction
-- **Status:** merged and verified
-- **SDK PR:** [#10](https://github.com/curtistheconqueror/ai-chess-lounge/pull/10)
-- **SDK merge:** `27e6821ed469041f17b4bd74022fcb4a26d39913`
-- **Correction PR:** [#11](https://github.com/curtistheconqueror/ai-chess-lounge/pull/11)
-- **Latest verified merge:** `df25071881490881cecfea967e2cab689713e741`
-- **Retained contributors:** `feat/stage-5b-runner-sdk`, `fix/stage-5b-websocket-cleanup`
-- **Original immutable pickup:** `pickup/stage-5b-complete` at the SDK merge above
-- **Recommended immutable pickup:** `pickup/stage-5b-cleanup-complete` at the correction merge above
+Stage 5C — local MCP facade — is merged in PR #12:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/12
 
-Stage 5B adds separately packageable Python and TypeScript clients for pairing,
-heartbeat, authenticated HTTP long-polling, bound proposal builders, cross-language
-canonical HMAC signing, and same-payload idempotent submission retries. Both reject
-plaintext non-loopback servers and include a deterministic Legal Assist sample bot.
-Agents replace one move handler to supply their own model or inference connection.
+Verified merge/base: `689b0581cc35ac56bd76cb120e46cff1aa0e1aca`.
+Immutable checkpoint: `pickup/stage-5c-complete` at that merge.
+Retained 5C contributor: `feat/stage-5c-mcp-facade` (postmerge handoff at
+`c1e8d32f668ddfaa8a00497387f40bd6597c55bc`).
 
-The post-merge run for PR #10 caught intermittent WebSocket cancellation cleanup.
-PR #11 cancels and awaits both child tasks even when the connection is cancelled,
-shields cleanup from repeated ASGI cancellation, and always clears connected presence.
-The cancellation regression fails on the previous implementation and passes with the
-fix; the exact heartbeat/disconnect case passed 20 independent local runs.
+5C PR CI run 37051541641 and postmerge run 37051818985 passed.
+Postmerge CI: 148 Python passed, 2 missing-Stockfish skips; 3 TypeScript tests;
+web build; 13 browser tests passed, 32 intentional viewport-duplicate skips.
+Local 5C Python: 149 passed, 1 PostgreSQL-environment skip.
 
-## Verification evidence
+## Current work — Stage 5D remains IN PROGRESS
 
-- SDK PR CI: run `37035465208`, passed.
-- Correction PR CI: run `37036887876`, passed.
-- Correction post-merge CI: run `37037347924`, passed.
-- Final CI: 139 Python tests passed; two engine tests skipped because the hosted
-  runner has no Stockfish binary. PostgreSQL integration and both database migration
-  gates passed.
-- TypeScript SDK: build and all three contract tests passed.
-- Web: production build and 13 Chromium tests passed. The 45-case project matrix
-  intentionally skips 32 repeated interaction cases outside the desktop project;
-  these are not 45 executed tests.
-- Local SDK verification also built the Python wheel, checked npm packaging, and
-  passed lint/format and the SQLite migration round trip.
+Contributor: `feat/stage-5d-subscription-bridge`, based on the verified 5C merge.
+Do not create or label a `pickup/stage-5d-complete` branch yet. The required live
+subscription game has not passed. Keep this contributor branch for continuation.
 
-## Current work and exact next target
+Implemented:
 
-Stage 5C — MCP facade is implemented on `feat/stage-5c-mcp-facade`, based on
-verified remote main `df25071881490881cecfea967e2cab689713e741`. Publication and
-merge verification are in progress; do not treat this as a completed checkpoint.
+- Optional Python local sidecar and `lounge-subscription-bridge doctor/run` CLI.
+- Official Codex CLI capability check, sanitized subscription login status,
+  explicit next-match grant, exact profile match, bounded turns/time.
+- Strict final JSON response, short public summaries, signed runner submissions,
+  exact duplicate reuse, process-group timeout/cancellation/output cleanup.
+- No OAuth extraction, provider keys, CLI output, or private reasoning sent to the
+  Lounge. Child environment excludes provider API keys and Lounge secrets.
+- Subscription pairing/UI disclosure: OpenAI, exact model, provider-default
+  effort, open_agentic only; independent runner defaults preserved.
+- ADR 0018 and package setup/limitations documentation.
+- Deterministic two-CLI-fixture game reaches checkmate through the real arbiter;
+  subprocess overflow, timeout, cancellation, parsing, scope, and profile tests.
 
-It adds an optional local stdio package with join/watch/poll/submit/heartbeat tools,
-opt-in human/remote game creation, snapshot/FEN/PGN resources, safe credential
-handling, bounded delivery caching, and deterministic two-client full-game tests.
-Read `packages/mcp-server/README.md` and ADR 0017 for setup and boundaries.
+## Live acceptance evidence and concrete blocker
 
-Next: require green CI, merge, retain the contributor branch, and create immutable
-`pickup/stage-5c-complete` at the verified merge. Record exact evidence here.
+Official Codex CLI 0.160.0 was installed temporarily for capability verification.
+Its official login status reported ChatGPT authentication; no credentials were
+read or copied. A bounded live game using `gpt-6.1-sol` against a deterministic
+opponent produced no model move before the 120-second deadline. One shorter
+15-second diagnostic check classified the CLI's stderr as a **usage limit**
+(429 / rate-limit category). Raw output was not logged or committed. Stop live
+retries until the account/provider limit is resolved. Do not claim model access
+or a completed live game from login status alone.
 
-Stage 5D follows with the authorized subscription sidecar and official provider
-CLI/SDK bridges. Stage 5E adds revocation, audit events, runner limits, and reconnect
-rules. Multi-user public hosting remains deferred until ownership/visibility controls.
+The fake CLI fixture full game is separate evidence; it is not a real model game.
+No live acceptance gate has been waived. No automatic API billing fallback exists.
+
+## Verification
+
+Local final gates: 171 Python tests passed, 1 PostgreSQL-environment skip;
+3 TypeScript runner tests passed; Ruff format/lint, web typecheck, and production
+build passed. Optional package editable install and CLI entry point passed.
+Local Playwright could not launch because its Chromium revision was absent;
+the official download returned a truncated/invalid archive. Browser results
+must be verified by PR CI before merge. PR details and CI results are recorded
+in the subsequent contributor handoff update. Run `make test`, `make build`, and
+`cd apps/web && npm run e2e` after any changes. PostgreSQL is verified in CI;
+local runs may skip it when TEST_POSTGRES_URL is unset.
+
+## Exact next target
+
+1. Review the Stage 5D contributor PR and its CI evidence.
+2. On a machine with an eligible official Codex CLI subscription and available
+   quota, follow packages/subscription-bridge/README.md. Run doctor, pair a seat,
+   then complete an unattended live game after one explicit authorization.
+   Record provider/model, CLI version, public PGN/result, and game completion;
+   never record credentials or private reasoning.
+3. If live acceptance passes, merge the reviewed/green PR, verify postmerge CI,
+   create immutable `pickup/stage-5d-complete` at that merge, and update this
+   retained contributor handoff with exact commits and verification.
+4. Then begin Stage 5E trust controls: server-scoped match grants, audit events,
+   limits, revocation/reconnect/forfeit rules. Existing session revoke remains
+   available, but the new one-match grant is currently local-sidecar enforcement.
 
 ## Known boundaries
 
-- SDK packages are in the repository, not published to PyPI/npm registries.
-- The SDK sample chooses the first legal move; it is not an LLM strength benchmark.
-- Subscription authorization and MCP host approval policies are not implemented by
-  the SDK itself.
-- App deployment remains loopback-only until Stage 2E access controls are implemented.
-- Pending runner delivery/presence is process-local until Stage 5E.
-- The original Stage 5B pickup remains unchanged; use the cleanup pickup for new work.
-- Local commits were published through GitHub UI and have different IDs from the
-  remote commits. Use the remote merge SHA above as the contributor base.
-
-## Pickup policy
-
-Retain every contributor branch. At each completed phase, create an immutable
-`pickup/<phase>-complete` branch at its verified merge and update this document in
-the active contributor branch. Never repoint or delete an existing pickup branch.
+Codex is the first CLI adapter, not a ChatGPT-only architecture. Existing direct
+API, OpenRouter, local, human, Stockfish, MCP and external runner paths remain.
+Claude third-party subscription product permissions need approval/clarification;
+Google consumer CLI subscription login is sunset. Do not implement either by
+copying OAuth credentials. Consult the dated official sources in the package README.
+Native effort selection is intentionally provider-default until capabilities can
+be verified. POSIX only; Windows process-tree cleanup remains unsupported.
+Public multiuser deployment/account auth is still deferred to the final stage.

@@ -130,6 +130,80 @@ test("a remote agent pairs once and becomes a selectable seat", async ({ page },
   expect(JSON.stringify(submitted)).not.toContain(credentials.signing_key);
 });
 
+test("Codex subscription pairing discloses local auth and fixes the Open Agentic profile", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Subscription pairing smoke runs once on desktop.");
+
+  await page.getByLabel("Runner connection type").selectOption("subscription_bridge");
+  await page.getByLabel("Remote agent name").fill("Local Codex CLI");
+  await page.getByLabel("Codex CLI model").fill("codex-cli-test-model");
+  await expect(page.locator(".runner-subscription-disclosure")).toContainText("not uploaded to the Lounge");
+  await expect(page.locator(".runner-subscription-disclosure")).toContainText("open_agentic");
+
+  const pairingResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/runner-pairings") && response.request().method() === "POST"
+  );
+  await page.getByRole("button", { name: "Generate one-time pairing" }).click();
+  const response = await pairingResponse;
+  expect(response.ok()).toBeTruthy();
+  const body = response.request().postDataJSON() as Record<string, unknown>;
+  expect(body).toMatchObject({
+    display_name: "Local Codex CLI",
+    provider: "OpenAI",
+    model: "codex-cli-test-model",
+    connection_mode: "subscription_bridge",
+    division: "open_agentic",
+    effort: null,
+    move_timeout_ms: 120_000,
+  });
+
+  const pairing = await response.json() as {
+    pairing_id: string;
+    pairing_code: string;
+    player: {
+      provider: string;
+      model: string;
+      connection_mode: string;
+      effort: string | null;
+      division: string;
+    };
+  };
+  expect(pairing.player).toMatchObject({
+    provider: "OpenAI",
+    model: "codex-cli-test-model",
+    connection_mode: "subscription_bridge",
+    effort: null,
+    division: "open_agentic",
+  });
+  const instructions = page.locator(".runner-subscription-instructions");
+  await expect(instructions).toContainText(pairing.pairing_id);
+  await expect(instructions).toContainText("lounge-subscription-bridge doctor --model MODEL");
+  const runCommand = instructions.locator("code").nth(2);
+  await expect(runCommand).toHaveText(
+    `lounge-subscription-bridge run --pairing-id ${pairing.pairing_id} --model MODEL --authorize-next-match`,
+  );
+  const runCommandText = await runCommand.textContent();
+  expect(runCommandText).not.toContain("codex-cli-test-model");
+  expect(runCommandText).not.toContain(pairing.pairing_code);
+  await expect(instructions).toContainText("pairing code is prompted locally");
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  const mobileLayout = await page.evaluate(() => {
+    const panel = document.querySelector<HTMLElement>(".runner-pairing-panel");
+    const command = document.querySelector<HTMLElement>(".runner-subscription-instructions code:nth-of-type(3)");
+    return {
+      viewportWidth: document.documentElement.clientWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      panelWidth: panel?.clientWidth ?? 0,
+      panelScrollWidth: panel?.scrollWidth ?? 0,
+      commandWidth: command?.clientWidth ?? 0,
+      commandScrollWidth: command?.scrollWidth ?? 0,
+    };
+  });
+  expect(mobileLayout.documentWidth).toBeLessThanOrEqual(mobileLayout.viewportWidth + 1);
+  expect(mobileLayout.panelScrollWidth).toBeLessThanOrEqual(mobileLayout.panelWidth + 1);
+  expect(mobileLayout.commandScrollWidth).toBeLessThanOrEqual(mobileLayout.commandWidth + 1);
+});
+
 test("paused automated turns expose an audited operator retry", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Recovery smoke runs once on desktop.");
 
