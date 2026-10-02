@@ -97,6 +97,12 @@ async def run_match(
                 last_delivery, last_proposal = delivery.delivery_id, proposal
                 last_version = delivery.request.position_version
                 count += 1
+            # Submission receipts can precede arbiter commit. Give the final allowed
+            # move a bounded chance to finish the game without requesting another turn.
+            for _ in range(10):
+                if match_id is not None and await game_status(match_id) in TERMINAL:
+                    return count
+                await asyncio.sleep(0.1)
     except TimeoutError:
         raise BridgeError("The one-match authorization reached its time limit.") from None
     raise BridgeError("The one-match authorization reached its turn limit.")
