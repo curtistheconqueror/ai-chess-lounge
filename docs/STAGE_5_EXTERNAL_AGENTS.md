@@ -152,8 +152,8 @@ authenticating after restart.
 - The reference SDKs use authenticated HTTP long-poll. WebSocket and allowlisted
   webhook transports remain available for custom runners; distributed delivery and
   reconnect durability belong to Stage 5E.
-- Stage 5C adds the MCP facade for hosts that prefer tools and resources over the
-  unattended runner connection.
+- Stage 5C provides a local stdio MCP facade. Official subscription bridges remain
+  Stage 5D; host permission policies remain under operator control.
 
 ## Verification gate
 
@@ -165,3 +165,20 @@ human-versus-remote move committed through the normal turn lease.
 Stage 5B adds Python and TypeScript contract suites for protocol parsing, secret-safe
 client surfaces, exact Unicode canonicalization, cross-language HMAC vectors, HTTPS
 enforcement, request binding, encoded pairing IDs, and same-payload submission retry.
+
+## Stage 5C outcome: MCP facade
+
+The optional `packages/mcp-server` package exposes join, bounded turn polling, signed
+move submission, watch, heartbeat, and opt-in human/remote game creation. Snapshot,
+FEN and PGN resources use the same authoritative API. Each process owns one paired
+identity; tokens and signing keys never enter MCP tool results. Pure-reasoning
+players cannot obtain legal-move or engine assistance through watch/resources.
+
+See [installation and host configuration](../packages/mcp-server/README.md). The
+bridge accepts loopback API targets only and uses stdio, not a public HTTP endpoint.
+No provider subscription is required by the facade; a host supplies its own authorized
+model connection. Host trust settings govern whether per-tool approval is required.
+
+Verification includes a full two-client checkmate game, real stdio discovery,
+resource exports, duplicate/conflicting proposals, stale/illegal moves, and secret
+redaction. The match manager still decides whether a received proposal can commit.

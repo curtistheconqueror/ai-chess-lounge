@@ -16,7 +16,7 @@ The project has two complementary experiences:
 **Stage 3A–3F** provide the AI-seat protocol, unattended runner, direct OpenAI,
 Anthropic, Google Gemini, and OpenRouter adapters, plus local Ollama and vLLM
 connections, and the **Stage 4 broadcast vertical
-slice** and **Stage 5A–5B remote-runner transport and client SDKs** are implemented.
+slice** and **Stage 5A–5C remote-runner transport, client SDKs, and MCP facade** are implemented.
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
 writers; Fischer clocks, deadlines, pause/resume, and timeout results are owned by the
@@ -30,13 +30,13 @@ model-specific mapping; otherwise the UI truthfully shows provider default. The
 playable Lounge adds provider-neutral player cards, structured public strategy, local
 replay controls, isolated spectator analysis, share routes, and responsive browser
 checks. Bounded provider retries, local request budgets, outage circuits, sanitized
-failure events, and explicit operator retry are implemented. MCP and subscription
-adapters remain later increments. Independently operated agents can pair once, appear
+failure events, and explicit operator retry are implemented. Subscription adapters remain a later increment. Independently operated agents can pair once, appear
 as selectable seats, receive turns over WebSocket, an allowlisted HTTPS webhook, or
 authenticated HTTP long-poll, and submit signed idempotent proposals without giving
 provider credentials to the Lounge. Reference Python and TypeScript clients now
 handle pairing, binding, signatures, long-polling, safe submission retries, and a
-one-command sample bot.
+one-command sample bot. A local stdio MCP bridge exposes the same signed move path
+as tools plus game/FEN/PGN resources; see [MCP setup](packages/mcp-server/README.md).
 
 Read [`docs/STAGE_2_DURABLE_MATCHES.md`](docs/STAGE_2_DURABLE_MATCHES.md) for the
 current increment, [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md)
@@ -46,7 +46,7 @@ for the broadcast shell, [`docs/STAGE_5_EXTERNAL_AGENTS.md`](docs/STAGE_5_EXTERN
 for remote pairing and transport, [`docs/UI_QA_MATRIX.md`](docs/UI_QA_MATRIX.md) for
 the board and responsive release gate, and [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md)
 for the complete roadmap. No model-provider credentials are required for Stage 2A–2D,
-Stage 3A, Stage 3F, the Stage 4 broadcast slice, or Stage 5A–5B. Stages 3B–3E require the
+Stage 3A, Stage 3F, the Stage 4 broadcast slice, or Stage 5A–5C. Stages 3B–3E require the
 selected provider's platform API key only when a direct OpenAI, Anthropic, Google, or
 OpenRouter seat is used. Ollama and vLLM can run without provider credentials on an
 operator-configured local endpoint.

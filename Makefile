@@ -2,13 +2,13 @@
 
 setup:
 	python3 -m venv .venv
-	.venv/bin/pip install -r requirements.lock
+	.venv/bin/pip install -r requirements.lock -r packages/mcp-server/requirements.lock
 	cd apps/web && npm ci
 	cd packages/runner-sdk-typescript && npm ci
 
 test:
-	.venv/bin/ruff format --check services/api packages/runner-sdk-python
-	.venv/bin/ruff check services/api packages/runner-sdk-python
+	.venv/bin/ruff format --check services/api packages/runner-sdk-python packages/mcp-server
+	.venv/bin/ruff check services/api packages/runner-sdk-python packages/mcp-server
 	.venv/bin/pytest
 	cd packages/runner-sdk-typescript && npm run build && npm test
 	cd apps/web && npm run typecheck
