@@ -59,8 +59,8 @@ jobs:
         env:
           TEST_POSTGRES_URL: postgresql+asyncpg://lounge:lounge@127.0.0.1:5432/lounge_test
         run: |
-          ruff format --check services/api packages/runner-sdk-python packages/mcp-server
-          ruff check services/api packages/runner-sdk-python packages/mcp-server
+          ruff format --check services/api packages/runner-sdk-python packages/mcp-server packages/subscription-bridge
+          ruff check services/api packages/runner-sdk-python packages/mcp-server packages/subscription-bridge
           pytest
 
       - name: Set up Node
