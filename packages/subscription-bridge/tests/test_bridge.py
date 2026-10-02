@@ -307,3 +307,58 @@ def test_doctor_rejects_api_auth_and_old_cli(tmp_path):
     executable.write_text(executable.read_text().replace("--ignore-user-config", "--old-config"))
     with pytest.raises(BridgeError, match="lacks required"):
         asyncio.run(provider.doctor())
+
+
+def test_credential_free_proxy_routing_is_preserved(monkeypatch):
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
+    monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1")
+    assert child_environment()["HTTPS_PROXY"] == "http://proxy.example:8080"
+    assert child_environment()["NO_PROXY"] == "localhost,127.0.0.1"
+
+
+@pytest.mark.parametrize(
+    "proxy",
+    [
+        "http://user:secret@proxy.example",
+        "https://proxy.example/?token=secret",
+        "https://proxy.example/private-token",
+        "https://proxy.example/#secret",
+        "not-a-url",
+        "http://[invalid",
+    ],
+)
+def test_unsafe_proxy_values_are_not_inherited(monkeypatch, proxy):
+    monkeypatch.setenv("HTTPS_PROXY", proxy)
+    assert "HTTPS_PROXY" not in child_environment()
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"2026-10-02T22:03:37.429Z error sending request",
+        b"trace_id=abcd429abcd401 connection reset",
+        b"HTTP request failed; request_id=abc429xyz",
+    ],
+)
+def test_diagnostic_digits_are_not_http_statuses(raw):
+    from lounge_subscription.process import diagnostic_hint
+
+    hint = diagnostic_hint(raw)
+    assert "rate limiting" not in hint
+    assert "authentication failure" not in hint
+    assert "quota error" not in hint
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        (b"unexpected status 429 Too Many Requests", "rate limiting"),
+        (b"HTTP/1.1 401 Unauthorized", "authentication failure"),
+        (b"status code: 403", "access denial"),
+        (b'{"code":"usage_limit_reached"}', "quota error"),
+    ],
+)
+def test_diagnostic_status_and_quota_categories_are_distinct(raw, expected):
+    from lounge_subscription.process import diagnostic_hint
+
+    assert expected in diagnostic_hint(raw)

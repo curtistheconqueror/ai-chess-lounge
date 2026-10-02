@@ -1,6 +1,6 @@
 # ADR 0018: Local one-match subscription CLI bridge
 
-Status: Accepted for the Stage 5D implementation; live acceptance tracked in PICKUP.
+Status: Accepted; live CLI acceptance passed on 2026-10-02 (see verification/stage5d-live.md).
 
 ## Context
 
@@ -23,7 +23,8 @@ open_agentic assistance. This is additive to protocol 1.0: the connection mode
 already exists in its enum. Existing remote runner defaults do not change.
 
 The child gets only board data, ephemeral working files, and a narrow environment
-that retains official auth locations but excludes API keys and Lounge secrets.
+that retains official auth locations and credential-free outbound proxy routing,
+but excludes API keys, credential-bearing proxy URLs, and Lounge secrets.
 Use read-only sandbox, forced ChatGPT auth, no user config, disabled shell/web,
 no private-reasoning logs, bounded output, deadline and cancellation cleanup.
 Reject unknown response fields and malformed moves; never repair with Stockfish.

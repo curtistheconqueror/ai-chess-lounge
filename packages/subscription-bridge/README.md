@@ -64,7 +64,9 @@ process-tree cleanup currently uses POSIX process groups.
   reads OAuth files, exchanges tokens, or sends provider credentials to the API.
 - Runner credentials exist only in the parent process memory. The child receives
   board data, not pairing codes or runner credentials. Its environment excludes
-  API keys, access tokens, and credential-bearing proxy configuration.
+  API keys, access tokens, and credential-bearing proxy configuration. Standard
+  credential-free HTTP(S) proxy URLs and NO_PROXY routing are preserved so hosted
+  environments can reach the official service without bypassing their network setup.
 - Each turn starts a new ephemeral CLI session in a temporary directory with a
   read-only sandbox and no user configuration. ChatGPT login is forced; shell,
   unified execution, and web search are disabled by configuration. Required
@@ -115,4 +117,5 @@ Official sources checked 2026-10-02:
 Tests use an explicitly fake executable for reproducible full-game integration,
 plus strict parsing, auth/environment boundaries, cancellation, bounded output,
 one-match scope, and exact replay. Live account verification is recorded
-separately in `docs/PICKUP.md`; fake CLI success is not live-provider evidence.
+separately in `docs/verification/stage5d-live.md`; fake CLI success is not
+live-provider evidence. The initial live acceptance passed on 2026-10-02.

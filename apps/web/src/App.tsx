@@ -980,7 +980,7 @@ function App() {
             </div>
             {runnerConnectionMode === "subscription_bridge" && (
               <p className="runner-subscription-disclosure">
-                Experimental: live-match verification is pending. Uses the OpenAI Codex CLI authorization on this machine. Subscription credentials stay local and are not uploaded to the Lounge. This runner is limited to the open_agentic division, uses provider-default effort, and requires a one-match authorization each time.
+                Uses the official OpenAI Codex CLI authorization on the bridge machine. Subscription credentials stay local and are not uploaded to the Lounge. This runner is limited to the open_agentic division, uses provider-default effort, and requires a one-match authorization each time.
               </p>
             )}
             <button className="runner-pairing-create" onClick={() => void generateRunnerPairing()} disabled={busy || !runnerName.trim() || (runnerConnectionMode === "subscription_bridge" ? !subscriptionModel.trim() : !runnerProvider.trim() || !runnerModel.trim())}>

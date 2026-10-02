@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import signal
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 class BridgeError(RuntimeError):
@@ -29,7 +31,32 @@ def child_environment() -> dict[str, str]:
         "SSL_CERT_FILE",
         "SSL_CERT_DIR",
     }
-    return {key: value for key, value in os.environ.items() if key in allowed}
+    environment = {key: value for key, value in os.environ.items() if key in allowed}
+    # Hosted environments may require their configured outbound proxy. Preserve
+    # ordinary routing, but never pass a credential-bearing proxy URL to the child.
+    for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+        value = os.environ.get(key)
+        if not value:
+            continue
+        try:
+            parsed = urlsplit(value)
+            safe = (
+                parsed.scheme in {"http", "https"}
+                and bool(parsed.hostname)
+                and parsed.username is None
+                and parsed.password is None
+                and parsed.path in {"", "/"}
+                and not parsed.query
+                and not parsed.fragment
+            )
+            if safe:
+                environment[key] = value
+        except ValueError:
+            continue
+    for key in ("NO_PROXY", "no_proxy"):
+        if key in os.environ:
+            environment[key] = os.environ[key]
+    return environment
 
 
 async def run_process(
@@ -113,10 +140,20 @@ async def run_process(
 def diagnostic_hint(stderr: bytes) -> str:
     """Classify locally; never interpolate raw diagnostics, paths, or server bodies."""
     normalized = stderr.lower()
-    if b"401" in normalized or b"unauthorized" in normalized:
+    statuses = set(
+        re.findall(
+            rb"\b(?:http(?:/\d(?:\.\d)?)?|status(?: code)?)\s*[:=]?\s*(401|403|429)\b",
+            normalized,
+        )
+    )
+    if b"401" in statuses or b"unauthorized" in normalized:
         return "The CLI reported an authentication failure."
-    if b"429" in normalized or b"rate limit" in normalized:
-        return "The CLI reported a usage limit."
+    if b"403" in statuses:
+        return "The CLI reported an access denial."
+    if b"429" in statuses or b"rate limit" in normalized or b"too many requests" in normalized:
+        return "The CLI reported rate limiting; account quota exhaustion is not established."
+    if b"usage_limit_reached" in normalized or b"insufficient_quota" in normalized:
+        return "The CLI reported a quota error; check the official account usage information."
     if b"error sending request" in normalized or b"connection" in normalized:
         return "The CLI reported a connection problem."
     if b"schema" in normalized and b"invalid" in normalized:
