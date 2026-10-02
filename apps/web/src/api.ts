@@ -4,6 +4,8 @@ import type {
   GameSnapshot,
   PlayerAdapterCatalog,
   PlayerConfigurationInput,
+  RunnerPairingResponse,
+  RunnerSessionStatus,
 } from "./types";
 
 const apiBase = import.meta.env.VITE_API_BASE ?? "";
@@ -68,6 +70,25 @@ export function fetchAnalysis(gameId: string): Promise<GameAnalysis> {
 
 export function fetchPlayerAdapters(): Promise<PlayerAdapterCatalog> {
   return request<PlayerAdapterCatalog>("/api/player-adapters");
+}
+
+export function createRunnerPairing(input: {
+  displayName: string;
+  provider: string;
+  model: string;
+}): Promise<RunnerPairingResponse> {
+  return request<RunnerPairingResponse>("/api/runner-pairings", {
+    method: "POST",
+    body: JSON.stringify({
+      display_name: input.displayName,
+      provider: input.provider,
+      model: input.model,
+    }),
+  });
+}
+
+export function fetchRunnerSessions(): Promise<RunnerSessionStatus[]> {
+  return request<RunnerSessionStatus[]>("/api/runner-sessions");
 }
 
 export function submitMove(

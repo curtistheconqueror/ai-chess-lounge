@@ -18,3 +18,5 @@ Current revisions:
 - `0003_concurrency_guards` adds idempotency records and fenced expiring turn leases.
 - `0004_player_seats` adds nullable normalized White/Black player documents and
   privacy-safe per-move player metadata.
+- `0005_remote_runners` adds one-time runner pairings and scoped, expiring
+  remote-runner sessions without storing bearer tokens or signing keys.

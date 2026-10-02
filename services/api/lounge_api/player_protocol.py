@@ -69,6 +69,13 @@ PUBLIC_SETTINGS_BY_ADAPTER: dict[str, frozenset[str]] = {
             "spectator_delay_ms",
         }
     ),
+    "remote_runner": frozenset(
+        {
+            "runner_id",
+            "move_timeout_ms",
+            "spectator_delay_ms",
+        }
+    ),
 }
 
 
@@ -182,6 +189,20 @@ class PlayerConfiguration(BaseModel):
             move_timeout_ms = self.settings.get("move_timeout_ms", 20_000)
             if type(move_timeout_ms) is not int or not 1 <= move_timeout_ms <= 120_000:
                 raise ValueError(f"{self.adapter_id} move_timeout_ms must be between 1 and 120000.")
+
+        if self.adapter_id == "remote_runner":
+            runner_id = self.settings.get("runner_id")
+            if not isinstance(runner_id, str) or not re.fullmatch(
+                r"[A-Za-z0-9][A-Za-z0-9._:-]{7,119}", runner_id
+            ):
+                raise ValueError("Remote runner_id must be a safe identifier of 8-120 characters.")
+            if runner_id != self.player_id:
+                raise ValueError("Remote runner_id must match the scoped player_id.")
+            if self.connection_mode is not ConnectionMode.REMOTE_RUNNER:
+                raise ValueError("Remote runner seats must use remote_runner connection mode.")
+            move_timeout_ms = self.settings.get("move_timeout_ms", 30_000)
+            if type(move_timeout_ms) is not int or not 1 <= move_timeout_ms <= 120_000:
+                raise ValueError("Remote runner move_timeout_ms must be between 1 and 120000.")
 
         if self.adapter_id == "scripted":
             moves = self.settings.get("moves", [])

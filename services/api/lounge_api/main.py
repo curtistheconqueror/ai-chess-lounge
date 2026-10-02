@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,9 +24,23 @@ from .models import (
     HealthResponse,
     MatchEvent,
     MoveRequest,
+    RunnerPairingClaim,
+    RunnerPairingCreate,
+    RunnerPairingResponse,
+    RunnerProposalReceipt,
+    RunnerProposalSubmission,
+    RunnerSessionCredentials,
+    RunnerSessionStatus,
+    RunnerTurnDelivery,
 )
 from .persistence import ConcurrentGameUpdate, IdempotencyConflict
 from .player_protocol import PROTOCOL_VERSION
+from .remote_runner import (
+    RunnerAuthenticationError,
+    RunnerPairingError,
+    RunnerSubmissionError,
+    bearer_token,
+)
 
 web_dist = Path(__file__).resolve().parents[3] / "apps" / "web" / "dist"
 repository_root = Path(__file__).resolve().parents[3]
@@ -73,6 +87,112 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     @application.get("/api/player-adapters/reliability")
     async def player_adapter_reliability() -> dict[str, object]:
         return active_manager.provider_reliability_status()
+
+    @application.post(
+        "/api/runner-pairings",
+        response_model=RunnerPairingResponse,
+        status_code=201,
+    )
+    async def create_runner_pairing(request: RunnerPairingCreate) -> RunnerPairingResponse:
+        try:
+            return await active_manager.remote_runners.create_pairing(request)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @application.post(
+        "/api/runner-pairings/{pairing_id}/claim",
+        response_model=RunnerSessionCredentials,
+    )
+    async def claim_runner_pairing(
+        pairing_id: str,
+        request: RunnerPairingClaim,
+    ) -> RunnerSessionCredentials:
+        try:
+            return await active_manager.remote_runners.claim_pairing(
+                pairing_id,
+                request.pairing_code,
+            )
+        except RunnerPairingError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @application.get(
+        "/api/runner-sessions",
+        response_model=list[RunnerSessionStatus],
+    )
+    async def runner_sessions() -> list[RunnerSessionStatus]:
+        return await active_manager.remote_runners.statuses()
+
+    def runner_token(authorization: str | None) -> str:
+        try:
+            return bearer_token(authorization)
+        except RunnerAuthenticationError as exc:
+            raise HTTPException(
+                status_code=401,
+                detail=str(exc),
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+
+    @application.post(
+        "/api/runner-sessions/heartbeat",
+        response_model=RunnerSessionStatus,
+    )
+    async def runner_heartbeat(
+        authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    ) -> RunnerSessionStatus:
+        try:
+            return await active_manager.remote_runners.heartbeat(runner_token(authorization))
+        except RunnerAuthenticationError as exc:
+            raise HTTPException(
+                status_code=401,
+                detail=str(exc),
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+
+    @application.get(
+        "/api/runner-sessions/turns/next",
+        response_model=RunnerTurnDelivery,
+        responses={204: {"description": "No turn is currently pending."}},
+    )
+    async def next_runner_turn(
+        wait_ms: Annotated[int, Query(ge=0, le=25_000)] = 0,
+        authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    ) -> RunnerTurnDelivery | Response:
+        try:
+            delivery = await active_manager.remote_runners.next_turn(
+                runner_token(authorization),
+                wait_ms=wait_ms,
+            )
+        except RunnerAuthenticationError as exc:
+            raise HTTPException(
+                status_code=401,
+                detail=str(exc),
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+        return delivery if delivery is not None else Response(status_code=204)
+
+    @application.post(
+        "/api/runner-sessions/turns/{delivery_id}/proposal",
+        response_model=RunnerProposalReceipt,
+    )
+    async def submit_runner_proposal(
+        delivery_id: str,
+        request: RunnerProposalSubmission,
+        authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    ) -> RunnerProposalReceipt:
+        try:
+            return await active_manager.remote_runners.submit_proposal(
+                runner_token(authorization),
+                delivery_id,
+                request,
+            )
+        except RunnerAuthenticationError as exc:
+            raise HTTPException(
+                status_code=401,
+                detail=str(exc),
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+        except RunnerSubmissionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @application.post("/api/games", response_model=GameSnapshot, status_code=201)
     async def create_game(request: CreateGameRequest) -> GameSnapshot:
@@ -225,6 +345,14 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
                         marker = next_marker
         except WebSocketDisconnect:
             active_manager.unsubscribe(game_id, websocket)
+
+    @application.websocket("/ws/runners")
+    async def runner_socket(websocket: WebSocket) -> None:
+        try:
+            token = bearer_token(websocket.headers.get("authorization"))
+            await active_manager.remote_runners.socket_loop(websocket, token)
+        except RunnerAuthenticationError:
+            await websocket.close(code=4401, reason="Runner authentication failed")
 
     if web_dist.is_dir():
         assets = web_dist / "assets"

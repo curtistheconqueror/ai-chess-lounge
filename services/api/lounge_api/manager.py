@@ -64,6 +64,7 @@ from .provider_reliability import (
     ProviderRecoveryRequired,
     ProviderReliabilityController,
 )
+from .remote_runner import RemoteRunnerAdapter, RemoteRunnerBroker
 
 
 class GameNotFound(KeyError):
@@ -101,12 +102,19 @@ class GameManager:
         clock: Callable[[], datetime] | None = None,
         adapters: AdapterRegistry | None = None,
         provider_reliability: ProviderReliabilityController | None = None,
+        remote_runners: RemoteRunnerBroker | None = None,
         *,
         schedule_timeouts: bool = True,
         schedule_agents: bool = True,
     ) -> None:
         self.engine = engine or StockfishService()
         self.analysis_engine = analysis_engine or StockfishService()
+        self.store = store or DatabaseStore()
+        self._clock = clock or (lambda: datetime.now(UTC))
+        self.remote_runners = remote_runners or RemoteRunnerBroker(
+            self.store,
+            clock=self._clock,
+        )
         self.adapters = adapters or AdapterRegistry(
             [
                 ScriptedPlayerAdapter(),
@@ -117,13 +125,12 @@ class GameManager:
                 OpenRouterChatAdapter(),
                 OllamaChatAdapter(),
                 VLLMChatAdapter(),
+                RemoteRunnerAdapter(self.remote_runners),
             ]
         )
         self.provider_reliability = provider_reliability or ProviderReliabilityController()
-        self.store = store or DatabaseStore()
         self.games: dict[str, GameSession] = {}
         self._game_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
-        self._clock = clock or (lambda: datetime.now(UTC))
         self._schedule_timeouts_enabled = schedule_timeouts
         self._schedule_agents_enabled = schedule_agents
         self._timeout_tasks: dict[str, asyncio.Task[None]] = {}
@@ -574,6 +581,7 @@ class GameManager:
         await self.engine.close()
         if self.analysis_engine is not self.engine:
             await self.analysis_engine.close()
+        await self.remote_runners.close()
         await self.store.close()
 
     async def _complete_agent_turn(self, game: GameSession) -> bool:

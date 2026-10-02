@@ -30,7 +30,10 @@ class MutableClock:
         self.current += timedelta(**kwargs)
 
 
-def test_player_seat_migration_upgrades_and_downgrades(tmp_path: Path, monkeypatch) -> None:
+def test_player_and_runner_migrations_upgrade_and_downgrade(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     repository = Path(__file__).resolve().parents[3]
     database_path = tmp_path / "migration.db"
     monkeypatch.setenv("DATABASE_URL", database_url(database_path))
@@ -47,6 +50,15 @@ def test_player_seat_migration_upgrades_and_downgrades(tmp_path: Path, monkeypat
                 for row in connection.execute(f'PRAGMA table_info("{table}")').fetchall()
             }
 
+    def tables() -> set[str]:
+        with sqlite3.connect(database_path) as connection:
+            return {
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                ).fetchall()
+            }
+
     command.upgrade(config, "0003_concurrency_guards")
     assert "white_player" not in columns("matches")
     assert "player_metadata" not in columns("moves")
@@ -54,6 +66,16 @@ def test_player_seat_migration_upgrades_and_downgrades(tmp_path: Path, monkeypat
     command.upgrade(config, "0004_player_seats")
     assert {"white_player", "black_player"}.issubset(columns("matches"))
     assert "player_metadata" in columns("moves")
+
+    command.upgrade(config, "0005_remote_runners")
+    assert {"runner_pairings", "runner_sessions"}.issubset(tables())
+    assert {"player_id", "token_digest", "issuer_digest", "last_heartbeat_at"}.issubset(
+        columns("runner_sessions")
+    )
+
+    command.downgrade(config, "0004_player_seats")
+    assert "runner_pairings" not in tables()
+    assert "runner_sessions" not in tables()
 
     command.downgrade(config, "0003_concurrency_guards")
     assert "white_player" not in columns("matches")

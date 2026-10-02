@@ -5,7 +5,18 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
+from .player_protocol import (
+    AssistanceDivision,
+    EffortLevel,
+    PlayerConfiguration,
+    PlayerMoveMetadata,
+)
+from .player_protocol import (
+    MoveProposal as PlayerMoveProposal,
+)
+from .player_protocol import (
+    MoveRequest as PlayerMoveRequest,
+)
 
 
 class OpponentKind(StrEnum):
@@ -65,6 +76,106 @@ class AdjudicateRequest(BaseModel):
         if value not in {"1-0", "0-1", "1/2-1/2"}:
             raise ValueError("Result must be 1-0, 0-1, or 1/2-1/2.")
         return value
+
+
+class RunnerPairingCreate(BaseModel):
+    display_name: str = Field(min_length=1, max_length=120)
+    provider: str = Field(min_length=1, max_length=80)
+    model: str = Field(min_length=1, max_length=120)
+    division: AssistanceDivision = AssistanceDivision.LEGAL_ASSIST
+    effort: EffortLevel | None = None
+    pairing_ttl_ms: int = Field(default=600_000, ge=60_000, le=1_800_000)
+    session_ttl_ms: int = Field(default=14_400_000, ge=300_000, le=86_400_000)
+    move_timeout_ms: int = Field(default=30_000, ge=1, le=120_000)
+    webhook_url: str | None = Field(default=None, max_length=2_048)
+
+
+class RunnerPairingClaim(BaseModel):
+    pairing_code: str = Field(min_length=12, max_length=128)
+
+
+class RunnerPairingRecord(BaseModel):
+    pairing_id: str
+    code_digest: str
+    player: PlayerConfiguration
+    session_ttl_ms: int
+    webhook_url: str | None
+    created_at: str
+    expires_at: str
+    claimed_at: str | None = None
+
+
+class RunnerPairingResponse(BaseModel):
+    pairing_id: str
+    pairing_code: str
+    expires_at: str
+    player: PlayerConfiguration
+
+
+class RunnerSessionRecord(BaseModel):
+    session_id: str
+    pairing_id: str
+    player: PlayerConfiguration
+    token_digest: str
+    issuer_digest: str
+    permissions: list[str]
+    webhook_url: str | None
+    created_at: str
+    expires_at: str
+    last_heartbeat_at: str
+    revoked_at: str | None = None
+
+
+class RunnerSessionCredentials(BaseModel):
+    session_id: str
+    runner_token: str
+    signing_key: str
+    permissions: list[str]
+    expires_at: str
+    player: PlayerConfiguration
+    websocket_path: str = "/ws/runners"
+    next_turn_path: str = "/api/runner-sessions/turns/next"
+    proposal_path_template: str = "/api/runner-sessions/turns/{delivery_id}/proposal"
+    heartbeat_path: str = "/api/runner-sessions/heartbeat"
+
+
+class RunnerSessionStatus(BaseModel):
+    session_id: str
+    player: PlayerConfiguration
+    player_id: str
+    display_name: str
+    provider: str
+    model: str
+    permissions: list[str]
+    transport: str
+    connected: bool
+    created_at: str
+    expires_at: str
+    last_heartbeat_at: str
+    expired: bool
+    revoked: bool
+
+
+class RunnerTurnDelivery(BaseModel):
+    delivery_id: str
+    expires_at: str
+    request: PlayerMoveRequest
+
+
+class RunnerProposalSubmission(BaseModel):
+    idempotency_key: str = Field(
+        min_length=8,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
+    proposal: PlayerMoveProposal
+    signature: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class RunnerProposalReceipt(BaseModel):
+    delivery_id: str
+    accepted: bool = True
+    duplicate: bool = False
 
 
 class MoveRecord(BaseModel):

@@ -13,8 +13,14 @@ checks UCI legality, and commits through the durable turn lease. `plan`, `threat
 Credentials, raw provider responses, prompts, cookies, and subscription sessions are
 outside this protocol. Direct API adapters use credential references; subscription
 bridges keep provider authorization on the user's machine and receive a scoped Lounge
-runner token in Stage 5. Every value in `PlayerConfiguration.settings` is public and
-is rejected unless its adapter registers it in the core public-settings allowlist.
+runner token through the implemented Stage 5A pairing flow. Every value in
+`PlayerConfiguration.settings` is public and is rejected unless its adapter registers
+it in the core public-settings allowlist.
+
+Remote runners receive the same `MoveRequest` inside `RunnerTurnDelivery` and return
+the same `MoveProposal` inside a signed, idempotent `RunnerProposalSubmission`. See
+`runner-turn.schema.json`, `runner-proposal-submission.schema.json`, and
+[`docs/STAGE_5_EXTERNAL_AGENTS.md`](../../docs/STAGE_5_EXTERNAL_AGENTS.md).
 
 ## Adapter checklist
 

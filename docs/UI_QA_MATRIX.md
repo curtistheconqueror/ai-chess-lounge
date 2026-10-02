@@ -40,6 +40,7 @@ viewports as Playwright projects and uploads full-page screenshot artifacts from
 | WebSocket interruption | Offline state appears, reconnect uses backoff, fresh snapshot restores live state |
 | Cross-process commit | Socket connected to another API process still observes the durable revision |
 | Provider recovery | Paused agent position stays unchanged; recovery banner and retry control appear; one `agent.retry_requested` event is recorded |
+| Remote runner pairing | One-time code appears only after explicit creation; a claimed runner becomes a selectable seat; match payload contains its public player profile but no token or signing key |
 | Reload | Active match restores from local storage and authoritative server state |
 | Copy | PGN and FEN copy exactly; clipboard failure produces a visible error |
 | Reset/resign | Controls disable while pending and terminal state cannot accept another move |
@@ -55,7 +56,9 @@ seat selectors. Mocked provider setup tests also verify that OpenAI-versus-OpenA
 Anthropic-versus-OpenAI, and Gemini-versus-Anthropic seats use catalog-enabled models,
 preserve independent model-specific effort choices, hide unselectable models, and
 submit only allowlisted public settings. A deterministic illegal automated proposal
-also pins the paused recovery banner, explicit retry action, and audit event. Check,
-timeout, promotion, and
+also pins the paused recovery banner, explicit retry action, and audit event. The
+remote-runner smoke creates and claims one pairing, refreshes presence, selects the
+paired agent, and proves its game request excludes runner secrets. Check, timeout,
+promotion, and
 post-game visual baselines remain required additions as deterministic fixture matches
 are introduced.

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-chess-lounge.dev/protocol/1.0/runner-turn.schema.json",
+  "title": "AI Chess Lounge RunnerTurnDelivery 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["delivery_id", "expires_at", "request"],
+  "properties": {
+    "delivery_id": { "type": "string", "format": "uuid" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "request": { "$ref": "move-request.schema.json" }
+  }
+}

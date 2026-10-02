@@ -242,6 +242,34 @@ def test_open_ecosystem_adapters_accept_only_public_settings(
         )
 
 
+def test_remote_runner_configuration_binds_public_runner_identity() -> None:
+    player_id = "runner-player-0001"
+    player = PlayerConfiguration(
+        player_id=player_id,
+        adapter_id="remote_runner",
+        display_name="Remote Agent",
+        provider="Independent Runner",
+        model="sample-bot-v1",
+        connection_mode=ConnectionMode.REMOTE_RUNNER,
+        division=AssistanceDivision.LEGAL_ASSIST,
+        settings={"runner_id": player_id, "move_timeout_ms": 30_000},
+    )
+
+    assert player.settings["runner_id"] == player.player_id
+    for unsafe_settings in (
+        {"runner_id": "another-runner"},
+        {"runner_id": player_id, "callback_url": "https://attacker.example"},
+        {"runner_id": player_id, "token": "secret"},
+    ):
+        with pytest.raises(ValidationError):
+            PlayerConfiguration.model_validate(
+                {
+                    **player.model_dump(),
+                    "settings": unsafe_settings,
+                }
+            )
+
+
 def test_scripted_adapter_is_deterministic_and_bound_to_request() -> None:
     async def run() -> None:
         adapter = ScriptedPlayerAdapter()
@@ -278,8 +306,18 @@ def test_published_json_schemas_pin_protocol_version() -> None:
     proposal_schema = json.loads(
         (repository / "packages/protocol/move-proposal.schema.json").read_text()
     )
+    runner_turn_schema = json.loads(
+        (repository / "packages/protocol/runner-turn.schema.json").read_text()
+    )
+    runner_submission_schema = json.loads(
+        (repository / "packages/protocol/runner-proposal-submission.schema.json").read_text()
+    )
 
     assert request_schema["properties"]["schema_version"]["const"] == PROTOCOL_VERSION
     assert proposal_schema["properties"]["schema_version"]["const"] == PROTOCOL_VERSION
     assert "position_version" in request_schema["required"]
     assert "position_version" in proposal_schema["required"]
+    assert runner_turn_schema["properties"]["request"]["$ref"] == ("move-request.schema.json")
+    assert runner_submission_schema["properties"]["proposal"]["$ref"] == (
+        "move-proposal.schema.json"
+    )

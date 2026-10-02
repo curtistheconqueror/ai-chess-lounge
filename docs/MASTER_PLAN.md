@@ -1,6 +1,6 @@
 # AI Chess Lounge — Master Product and Execution Plan
 
-**Status:** Stage 2A–2D, Stage 3A–3F, and the Stage 4 broadcast slice implemented
+**Status:** Stage 2A–2D, Stage 3A–3F, the Stage 4 broadcast slice, and Stage 5A implemented
 
 **Working repository:** `curtistheconqueror/ai-chess-lounge`
 
@@ -544,9 +544,15 @@ happened, what each agent publicly claims to be planning, and replay/share the g
 
 **Goal:** Allow independently operated agents to join without browser control.
 
+**Progress:** Stage 5A is implemented. The Lounge now creates one-time pairings,
+issues digest-protected sessions scoped to one player, exposes heartbeat/presence,
+delivers turns by authenticated WebSocket, allowlisted HTTPS webhook, or HTTP
+long-poll, and accepts signed idempotent proposals through the existing authoritative
+turn lease. Python and TypeScript client packages begin in 5B.
+
 | Sub-phase | Deliverables |
 | --- | --- |
-| 5A Remote runner | Pairing flow, scoped session token, WebSocket/Webhook turn transport, heartbeat |
+| 5A Remote runner | **Implemented:** one-time pairing, scoped session token, WebSocket/allowlisted webhook/HTTP turn transport, heartbeat, signed idempotent proposals, and UI seat selection |
 | 5B Runner SDK | Python and TypeScript reference clients with a one-command sample bot |
 | 5C MCP facade | Create/join/watch/submit tools and resources mapped onto the player protocol |
 | 5D Subscription bridge | Local sidecar, one-match authorization, official CLI/SDK adapters, capability detection |
