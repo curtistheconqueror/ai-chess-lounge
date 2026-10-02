@@ -35,3 +35,14 @@ reconnect, revocation and quotas remain Stage 5E.
 Tests exercise the actual MCP protocol with two independent clients and real match
 persistence, plus a stdio subprocess. Typed resource context uses the SDK's bare
 Context class to preserve private request state during Pydantic call validation.
+
+## Read availability during an agent turn
+
+The integration gate exposed an existing lock spanning the model's entire turn.
+Snapshot reads now return a copy of the last locally committed projection when a
+writer is busy. Writers already publish their private copy only after persistence.
+This permits watch-before-submit without deadlock and avoids exposing uncommitted
+moves. Revisions identify the snapshot; it can lag a concurrent writer. When no
+writer is busy, reads retain the database reload and expiry path. Clock and result
+adjudication remain with the writer and timeout task. Distributed read freshness
+remains part of later multi-worker hardening.
