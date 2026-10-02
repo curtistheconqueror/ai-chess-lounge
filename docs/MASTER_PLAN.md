@@ -1,6 +1,6 @@
 # AI Chess Lounge — Master Product and Execution Plan
 
-**Status:** Stage 2A–2D, Stage 3A–3B, and the Stage 4 broadcast slice implemented; additional provider adapters pending
+**Status:** Stage 2A–2D, Stage 3A–3D, and the Stage 4 broadcast slice implemented; open-ecosystem adapters pending
 
 **Working repository:** `curtistheconqueror/ai-chess-lounge`
 
@@ -494,19 +494,19 @@ position, reconnects recover correctly, and clock/result tests are deterministic
 
 **Goal:** Seat hosted and local models through one normalized contract.
 
-**Progress:** Stages 3A through 3C are implemented. Either color can use the versioned
-player protocol through deterministic, Stockfish, OpenAI Responses, or Anthropic
-Messages adapters, and two automated seats can complete an unattended persisted
-match. Hosted model and effort settings are independently selectable for both seats;
-provider credentials stay server-side. Stages 3D–3F add more providers and recovery
-policies.
+**Progress:** Stages 3A through 3D are implemented. Either color can use the versioned
+player protocol through deterministic, Stockfish, OpenAI Responses, Anthropic
+Messages, or Google Gemini Interactions adapters, and two automated seats can complete
+an unattended persisted match. Hosted model and effort settings are independently
+selectable for both seats; provider credentials stay server-side. Stages 3E–3F add
+open-ecosystem providers and recovery policies.
 
 | Sub-phase | Deliverables |
 | --- | --- |
 | 3A Protocol | **Implemented:** versioned MoveRequest/MoveProposal schemas, adapter SDK, scripted fake agents, dual-seat unattended runner |
 | 3B OpenAI | **Implemented:** Responses API adapter, strict structured move output, effort mapping, usage normalization, and two-seat UI selection |
 | 3C Anthropic | **Implemented:** Messages adapter, adaptive-thinking effort mapping, strict structured move output, usage normalization, and cross-provider UI selection |
-| 3D Google | Gemini adapter, thinking-level mapping, usage normalization |
+| 3D Google | **Implemented:** Gemini Interactions adapter, model-specific thinking-level mapping, usage normalization, and cross-provider UI selection |
 | 3E Open ecosystem | OpenRouter/OpenAI-compatible plus local Ollama/vLLM connections |
 | 3F Recovery | Retry, timeout, malformed/illegal move, provider outage, and rate-limit policies |
 

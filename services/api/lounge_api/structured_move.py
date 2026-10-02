@@ -44,6 +44,35 @@ ANTHROPIC_MOVE_OUTPUT_SCHEMA: dict[str, object] = {
     "additionalProperties": False,
 }
 
+# Gemini's structured-output subset accepts numeric bounds and
+# additionalProperties, but does not advertise regex or string-length
+# constraints. Keep those constraints in the shared local model below.
+GEMINI_MOVE_OUTPUT_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "move": {
+            "type": "string",
+            "description": "Exactly one legal move in UCI notation.",
+        },
+        "plan": {
+            "type": "string",
+            "description": "A concise public plan of no more than 280 characters.",
+        },
+        "threat": {
+            "type": "string",
+            "description": "A concise public threat of no more than 280 characters.",
+        },
+        "confidence": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "maximum": 100,
+            "description": "An integer from 0 through 100, or null.",
+        },
+    },
+    "required": ["move", "plan", "threat", "confidence"],
+    "additionalProperties": False,
+}
+
 
 class StructuredMoveOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")

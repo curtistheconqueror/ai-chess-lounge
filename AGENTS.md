@@ -36,6 +36,23 @@ Before changing code, read:
 - Add an ADR for consequential architecture choices.
 - Include verification evidence and remaining risks in the pull request.
 
+## Phase and stage handoff
+
+Every completed project phase or stage must leave a durable GitHub pickup point so a
+new contributor can resume without the originating chat or local worktree:
+
+- Keep the completed contributor branch on the remote. Do not delete it after merge.
+- After merge, create an immutable `pickup/<stage-or-phase>-complete` branch at the
+  verified merge commit. Never force-push or repoint a pickup branch.
+- Update `docs/PICKUP.md` in the active contributor branch with what shipped, the
+  pull request and commit, verification evidence, known risks, current work, and the
+  exact next target.
+- Before starting a new phase, read `docs/PICKUP.md` and confirm the documented base
+  commit still matches the repository.
+- If a phase stops before completion, push its `feat/`, `fix/`, `docs/`, `test/`, or
+  `chore/` contributor branch and mark the handoff as in progress; do not label it a
+  completed pickup checkpoint.
+
 ## Initial architecture guardrails
 
 - Python/FastAPI owns chess-domain and match orchestration code.
