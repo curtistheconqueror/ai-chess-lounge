@@ -125,6 +125,41 @@ def test_openai_configuration_accepts_only_typed_public_settings() -> None:
         )
 
 
+def test_anthropic_configuration_accepts_only_typed_public_settings() -> None:
+    safe = PlayerConfiguration(
+        adapter_id="anthropic",
+        display_name="Claude Player",
+        provider="Anthropic",
+        model="claude-opus-5-5",
+        connection_mode=ConnectionMode.DIRECT_API,
+        effort="maximum",
+        division=AssistanceDivision.LEGAL_ASSIST,
+        settings={
+            "color": "black",
+            "max_output_tokens": 16_384,
+            "move_timeout_ms": 60_000,
+            "spectator_delay_ms": 180,
+        },
+    )
+
+    assert safe.settings["max_output_tokens"] == 16_384
+    assert "credential" not in safe.model_dump_json().lower()
+    with pytest.raises(ValidationError, match="Anthropic max_output_tokens"):
+        PlayerConfiguration.model_validate(
+            {
+                **safe.model_dump(),
+                "settings": {"max_output_tokens": 128_001},
+            }
+        )
+    with pytest.raises(ValidationError, match="Anthropic move_timeout_ms"):
+        PlayerConfiguration.model_validate(
+            {
+                **safe.model_dump(),
+                "settings": {"move_timeout_ms": 120_001},
+            }
+        )
+
+
 def test_scripted_adapter_is_deterministic_and_bound_to_request() -> None:
     async def run() -> None:
         adapter = ScriptedPlayerAdapter()

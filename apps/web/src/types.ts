@@ -21,6 +21,8 @@ export interface AdapterModelCapabilities {
   availability?: "configured_unverified" | "credentials_missing" | string;
   connection_mode?: ConnectionMode;
   effort_levels?: string[];
+  provider_effort_map?: Partial<Record<EffortLevel, string>>;
+  thinking_mode?: string;
   structured_output?: boolean;
   credentials_required?: boolean;
 }

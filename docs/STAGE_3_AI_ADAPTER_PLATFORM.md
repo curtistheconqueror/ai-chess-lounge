@@ -35,6 +35,22 @@ runner applies its existing deadline, lease, position-version, and legality fenc
 | Setup UI | White and Black independently select any configured OpenAI model and advertised effort from `/api/player-adapters`; the catalog labels access as unverified until a call is made |
 | Error boundary | Provider response bodies and credentials are excluded from client-visible errors and persisted match records; a provider failure pauses after one call instead of entering a paid retry loop |
 
+## Stage 3C outcome
+
+Anthropic joins the same provider-neutral boundary through the Messages API. A Claude
+seat can face a human, Stockfish, another Claude model, or an OpenAI model without
+changing match orchestration or browser-control behavior.
+
+| Capability | Stage 3C delivery |
+| --- | --- |
+| Provider transport | Direct server-side `POST /v1/messages`; provider code remains isolated in `anthropic_adapter.py` |
+| Structured proposal | Anthropic JSON Schema output uses a provider-compatible form of the shared UCI move, public plan, public threat, and confidence contract; local Pydantic validation enforces the complete length and numeric bounds |
+| Thinking control | Current effort-capable models use adaptive thinking; the adapter omits legacy manual thinking budgets and maps Lounge `fast`, `balanced`, `deep`, and `maximum` to `low`, `medium`, `high`, and `max` |
+| Usage | Input and output tokens normalize into common move metadata; reasoning tokens stay unset because the Messages response does not expose a separate reasoning-token total |
+| Model policy | Current effort-capable defaults can be replaced with `ANTHROPIC_CHESS_MODELS` without a frontend build |
+| Setup UI | White and Black independently select catalog-enabled Claude or OpenAI models and effort, including cross-provider matches |
+| Error boundary | Refusals, incomplete output, malformed structured data, HTTP errors, and transport failures are sanitized before reaching match events or clients |
+
 ## Protocol boundary
 
 The transport-neutral JSON Schemas are published in `packages/protocol`. The
@@ -51,8 +67,9 @@ than silently changing assistance level.
 
 ## Credential boundary
 
-Stage 3A requires no provider account or API key. Stage 3B reads `OPENAI_API_KEY` from
-the server environment (including the ignored `.env.local` development file). Player
+Stage 3A requires no provider account or API key. Stage 3B reads `OPENAI_API_KEY` and
+Stage 3C reads `ANTHROPIC_API_KEY` from the server environment (including the ignored
+`.env.local` development file). Player
 settings reject credential-shaped and undisclosed fields through a fail-closed
 per-adapter public allowlist, and the repository stores only typed public
 configuration and normalized usage. The key is used only to construct the server-side
@@ -89,23 +106,23 @@ revision and lease fencing reject late work from any other process.
 - Pause cancels an in-flight automated call without accepting a late move
 - Existing human/Stockfish, clocks, concurrency, analysis, API, and UI build tests
 - Alembic `0003 → 0004 → 0003` migration exercise
-- Mock-transport contract tests for Authorization, `store: false`, strict Structured
-  Outputs, every effort mapping, usage normalization, malformed output, and sanitized
-  provider failures
+- Mock-transport contract tests for OpenAI Authorization, `store: false`, Anthropic
+  API key/version headers, strict structured outputs, every provider effort mapping,
+  usage normalization, malformed output, refusals, incomplete responses, health
+  checks, and sanitized provider failures
 - Provider failure integration test proving a paid adapter is called once and the
   match pauses without an unbounded retry loop
 - Post-call persistence-failure test proving a completed direct-API turn is never
   automatically purchased again; the match pauses for explicit recovery
 - Fenced manager integration test proving an OpenAI proposal becomes one legal move
   with normalized public metadata
-- Browser payload test proving independent model/effort choices and a secret-free
-  public settings object for both OpenAI seats
+- Browser payload tests proving independent model/effort choices and secret-free
+  public settings for OpenAI-versus-OpenAI and Anthropic-versus-OpenAI seats
 
 ## Remaining Stage 3 work
 
 | Sub-phase | Next capability |
 | --- | --- |
-| 3C | Anthropic Messages adapter and supported thinking/effort mapping |
 | 3D | Google Gemini adapter and thinking controls |
 | 3E | OpenRouter/OpenAI-compatible and local Ollama/vLLM adapters |
 | 3F | Bounded provider retries, rate limits, outage policy, and operator-facing recovery controls |

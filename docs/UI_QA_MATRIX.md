@@ -50,8 +50,9 @@ fails on horizontal overflow, a non-square board, missing grid cells, or missing
 critical controls. Desktop interaction smoke tests submit a human move, check legal-
 target rendering, exercise local replay versus live state, open analysis, verify the
 permalink, and create a credential-free automated-versus-automated match from the two
-seat selectors. A mocked provider setup test also verifies that both OpenAI seats use
-catalog-enabled models, preserve independent effort choices, hide unselectable
-models, and submit only allowlisted public settings. Check, timeout, promotion, and
+seat selectors. Mocked provider setup tests also verify that OpenAI-versus-OpenAI and
+Anthropic-versus-OpenAI seats use catalog-enabled models, preserve independent effort
+choices, hide unselectable models, and submit only allowlisted public settings. Check,
+timeout, promotion, and
 post-game visual baselines remain required additions as deterministic fixture matches
 are introduced.

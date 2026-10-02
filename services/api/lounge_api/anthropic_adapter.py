@@ -16,18 +16,16 @@ from .player_protocol import (
     PlayerConfiguration,
     UsageMetrics,
 )
-from .structured_move import MOVE_OUTPUT_SCHEMA, StructuredMoveOutput
+from .structured_move import ANTHROPIC_MOVE_OUTPUT_SCHEMA, StructuredMoveOutput
 
-OPENAI_API_BASE = "https://api.openai.com/v1"
-DEFAULT_OPENAI_MODELS = (
-    "gpt-6-astra",
-    "gpt-6-sol",
-    "gpt-6-luna",
-    "gpt-5.6-sol",
-    "gpt-5.6-terra",
-    "gpt-5.6-luna",
+ANTHROPIC_API_BASE = "https://api.anthropic.com/v1"
+ANTHROPIC_API_VERSION = "2023-06-01"
+DEFAULT_ANTHROPIC_MODELS = (
+    "claude-fable-5-1",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5",
 )
-OPENAI_EFFORT_MAP = {
+ANTHROPIC_EFFORT_MAP = {
     EffortLevel.FAST: "low",
     EffortLevel.BALANCED: "medium",
     EffortLevel.DEEP: "high",
@@ -41,31 +39,31 @@ DEFAULT_OUTPUT_BUDGETS = {
 }
 
 
-class OpenAIResponsesAdapter:
-    adapter_id = "openai"
+class AnthropicMessagesAdapter:
+    adapter_id = "anthropic"
 
     def __init__(
         self,
         *,
         api_key: str | None = None,
         models: tuple[str, ...] | None = None,
-        base_url: str = OPENAI_API_BASE,
+        base_url: str = ANTHROPIC_API_BASE,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self._api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         self._models = models or self._models_from_environment()
         self._base_url = base_url.rstrip("/")
         self._client = client
 
     @staticmethod
     def _models_from_environment() -> tuple[str, ...]:
-        configured = os.getenv("OPENAI_CHESS_MODELS", "")
+        configured = os.getenv("ANTHROPIC_CHESS_MODELS", "")
         if not configured.strip():
-            return DEFAULT_OPENAI_MODELS
+            return DEFAULT_ANTHROPIC_MODELS
         models = tuple(
             dict.fromkeys(item.strip() for item in configured.split(",") if item.strip())
         )
-        return models or DEFAULT_OPENAI_MODELS
+        return models or DEFAULT_ANTHROPIC_MODELS
 
     @property
     def configured(self) -> bool:
@@ -82,34 +80,37 @@ class OpenAIResponsesAdapter:
             "effort_levels": [effort.value for effort in EffortLevel],
             "provider_effort_map": {
                 effort.value: provider_effort
-                for effort, provider_effort in OPENAI_EFFORT_MAP.items()
+                for effort, provider_effort in ANTHROPIC_EFFORT_MAP.items()
             },
+            "thinking_mode": "adaptive",
             "structured_output": True,
             "credentials_required": True,
             "selectable": selectable,
-            "availability": ("configured_unverified" if selectable else "credentials_missing"),
+            "availability": "configured_unverified" if selectable else "credentials_missing",
         }
 
     def validate_configuration(self, player: PlayerConfiguration) -> None:
         if not self.configured:
-            raise AdapterConfigurationError("OpenAI is not configured on this Lounge server.")
+            raise AdapterConfigurationError("Anthropic is not configured on this Lounge server.")
         if player.connection_mode is not ConnectionMode.DIRECT_API:
-            raise AdapterConfigurationError("OpenAI players must use direct_api mode.")
-        if player.provider != "OpenAI":
-            raise AdapterConfigurationError("OpenAI players must disclose OpenAI as provider.")
+            raise AdapterConfigurationError("Anthropic players must use direct_api mode.")
+        if player.provider != "Anthropic":
+            raise AdapterConfigurationError(
+                "Anthropic players must disclose Anthropic as provider."
+            )
         if player.model not in self._models:
             raise AdapterConfigurationError(
-                f"OpenAI model {player.model!r} is not enabled for this Lounge server."
+                f"Anthropic model {player.model!r} is not enabled for this Lounge server."
             )
         if player.effort is None:
-            raise AdapterConfigurationError("OpenAI players require an effort level.")
+            raise AdapterConfigurationError("Anthropic players require an effort level.")
         if player.division not in {
             AssistanceDivision.PURE_REASONING,
             AssistanceDivision.LEGAL_ASSIST,
             AssistanceDivision.TACTICAL_METADATA,
         }:
             raise AdapterConfigurationError(
-                "Stage 3B OpenAI players support pure_reasoning, legal_assist, "
+                "Stage 3C Anthropic players support pure_reasoning, legal_assist, "
                 "or tactical_metadata divisions."
             )
 
@@ -119,18 +120,19 @@ class OpenAIResponsesAdapter:
         player: PlayerConfiguration,
     ) -> MoveProposal:
         self.validate_configuration(player)
-        assert player.effort is not None
         payload = self._request_payload(request, player)
         timeout_seconds = max(0.1, request.move_deadline_ms / 1_000)
-        response = await self._post_response(payload, timeout_seconds=timeout_seconds)
+        response = await self._post_message(payload, timeout_seconds=timeout_seconds)
         body = self._response_json(response)
-        if body.get("status") != "completed":
-            raise AdapterError("OpenAI returned an incomplete move response.")
+        if body.get("stop_reason") == "refusal":
+            raise AdapterError("Anthropic refused to provide a chess move.")
+        if body.get("stop_reason") != "end_turn":
+            raise AdapterError("Anthropic returned an incomplete move response.")
         output_text = self._extract_output_text(body)
         try:
             output = StructuredMoveOutput.model_validate_json(output_text)
         except ValidationError as exc:
-            raise AdapterError("OpenAI returned a malformed structured move.") from exc
+            raise AdapterError("Anthropic returned a malformed structured move.") from exc
         return MoveProposal(
             request_id=request.request_id,
             match_id=request.match_id,
@@ -167,38 +169,32 @@ class OpenAIResponsesAdapter:
         )
         return {
             "model": player.model,
-            "store": False,
-            "instructions": (
+            "max_tokens": max_output_tokens,
+            "system": (
                 "You are a chess competitor in AI Chess Lounge. Return one UCI move and "
                 "brief public-facing summaries using the required structured format."
             ),
-            "input": "\n".join(position_lines),
-            "reasoning": {"effort": OPENAI_EFFORT_MAP[player.effort]},
-            "max_output_tokens": max_output_tokens,
-            "text": {
+            "messages": [{"role": "user", "content": "\n".join(position_lines)}],
+            "output_config": {
+                "effort": ANTHROPIC_EFFORT_MAP[player.effort],
                 "format": {
                     "type": "json_schema",
-                    "name": "chess_move_proposal",
-                    "strict": True,
-                    "schema": MOVE_OUTPUT_SCHEMA,
-                }
+                    "schema": ANTHROPIC_MOVE_OUTPUT_SCHEMA,
+                },
             },
         }
 
-    async def _post_response(
+    async def _post_message(
         self,
         payload: dict[str, object],
         *,
         timeout_seconds: float,
     ) -> httpx.Response:
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = self._headers()
         try:
             if self._client is not None:
                 response = await self._client.post(
-                    f"{self._base_url}/responses",
+                    f"{self._base_url}/messages",
                     headers=headers,
                     json=payload,
                     timeout=timeout_seconds,
@@ -206,73 +202,72 @@ class OpenAIResponsesAdapter:
             else:
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
-                        f"{self._base_url}/responses",
+                        f"{self._base_url}/messages",
                         headers=headers,
                         json=payload,
                         timeout=timeout_seconds,
                     )
         except httpx.HTTPError as exc:
             raise AdapterError(
-                f"OpenAI Responses API request failed ({type(exc).__name__})."
+                f"Anthropic Messages API request failed ({type(exc).__name__})."
             ) from exc
         if not response.is_success:
-            raise AdapterError(f"OpenAI Responses API returned HTTP {response.status_code}.")
+            raise AdapterError(f"Anthropic Messages API returned HTTP {response.status_code}.")
         return response
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "x-api-key": str(self._api_key),
+            "anthropic-version": ANTHROPIC_API_VERSION,
+            "content-type": "application/json",
+        }
 
     @staticmethod
     def _response_json(response: httpx.Response) -> dict[str, Any]:
         try:
             body = response.json()
         except ValueError as exc:
-            raise AdapterError("OpenAI returned a non-JSON response.") from exc
+            raise AdapterError("Anthropic returned a non-JSON response.") from exc
         if not isinstance(body, dict):
-            raise AdapterError("OpenAI returned an invalid response envelope.")
+            raise AdapterError("Anthropic returned an invalid response envelope.")
         return body
 
     @staticmethod
     def _extract_output_text(body: dict[str, Any]) -> str:
-        for item in body.get("output", []):
-            if not isinstance(item, dict) or item.get("type") != "message":
-                continue
-            for content in item.get("content", []):
-                if not isinstance(content, dict):
-                    continue
-                if content.get("type") == "refusal":
-                    raise AdapterError("OpenAI refused to provide a chess move.")
-                if content.get("type") == "output_text" and isinstance(content.get("text"), str):
-                    return content["text"]
-        raise AdapterError("OpenAI returned no structured move output.")
+        for content in body.get("content", []):
+            if (
+                isinstance(content, dict)
+                and content.get("type") == "text"
+                and isinstance(content.get("text"), str)
+            ):
+                return content["text"]
+        raise AdapterError("Anthropic returned no structured move output.")
 
     def normalize_usage(self, usage: object) -> UsageMetrics:
         if not isinstance(usage, dict):
             return UsageMetrics()
-        output_details = usage.get("output_tokens_details")
-        reasoning_tokens = (
-            output_details.get("reasoning_tokens") if isinstance(output_details, dict) else None
-        )
         return UsageMetrics(
             input_tokens=self._nonnegative_int(usage.get("input_tokens")),
             output_tokens=self._nonnegative_int(usage.get("output_tokens")),
-            reasoning_tokens=self._nonnegative_int(reasoning_tokens),
+            reasoning_tokens=None,
             estimated_cost_usd=None,
         )
 
     async def healthcheck(self) -> bool:
         if not self.configured or not self._models:
             return False
-        headers = {"Authorization": f"Bearer {self._api_key}"}
         try:
             if self._client is not None:
                 response = await self._client.get(
                     f"{self._base_url}/models/{self._models[0]}",
-                    headers=headers,
+                    headers=self._headers(),
                     timeout=5,
                 )
             else:
                 async with httpx.AsyncClient() as client:
                     response = await client.get(
                         f"{self._base_url}/models/{self._models[0]}",
-                        headers=headers,
+                        headers=self._headers(),
                         timeout=5,
                     )
         except httpx.HTTPError:

@@ -29,6 +29,14 @@ PUBLIC_SETTINGS_BY_ADAPTER: dict[str, frozenset[str]] = {
             "spectator_delay_ms",
         }
     ),
+    "anthropic": frozenset(
+        {
+            "color",
+            "max_output_tokens",
+            "move_timeout_ms",
+            "spectator_delay_ms",
+        }
+    ),
 }
 
 
@@ -116,6 +124,14 @@ class PlayerConfiguration(BaseModel):
             move_timeout_ms = self.settings.get("move_timeout_ms", 20_000)
             if type(move_timeout_ms) is not int or not 1 <= move_timeout_ms <= 120_000:
                 raise ValueError("OpenAI move_timeout_ms must be between 1 and 120000.")
+
+        if self.adapter_id == "anthropic":
+            max_output_tokens = self.settings.get("max_output_tokens", 4_096)
+            if type(max_output_tokens) is not int or not 256 <= max_output_tokens <= 128_000:
+                raise ValueError("Anthropic max_output_tokens must be between 256 and 128000.")
+            move_timeout_ms = self.settings.get("move_timeout_ms", 20_000)
+            if type(move_timeout_ms) is not int or not 1 <= move_timeout_ms <= 120_000:
+                raise ValueError("Anthropic move_timeout_ms must be between 1 and 120000.")
 
         if self.adapter_id == "scripted":
             moves = self.settings.get("moves", [])

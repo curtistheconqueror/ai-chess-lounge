@@ -13,19 +13,19 @@ The project has two complementary experiences:
 ## Project status
 
 **Stage 2: Durable Match Platform** has sub-phases 2A through 2D implemented,
-**Stage 3A–3B** now provide the AI-seat protocol, unattended runner, and first live
-provider adapter, and the **Stage 4 broadcast vertical slice** is implemented.
+**Stage 3A–3C** now provide the AI-seat protocol, unattended runner, and direct OpenAI
+and Anthropic provider adapters, and the **Stage 4 broadcast vertical slice** is implemented.
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
 writers; Fischer clocks, deadlines, pause/resume, and timeout results are owned by the
 server; and idempotent move commands plus fenced turn leases coordinate retries and
 workers. Either color can now be Human, Stockfish, or a deterministic reference agent;
-two automated seats complete games without browser control. OpenAI Responses players
-can occupy either seat with independently selected model and effort settings. The
+two automated seats complete games without browser control. OpenAI Responses and
+Anthropic Messages players can occupy either seat with independently selected model
+and effort settings, including cross-provider matches. The
 playable Lounge adds provider-neutral player cards, structured public strategy, local
 replay controls, isolated spectator analysis, share routes, and responsive browser
-checks. Anthropic, Google, open-ecosystem, and subscription adapters remain later
-increments.
+checks. Google, open-ecosystem, and subscription adapters remain later increments.
 
 Read [`docs/STAGE_2_DURABLE_MATCHES.md`](docs/STAGE_2_DURABLE_MATCHES.md) for the
 current increment, [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md)
@@ -34,8 +34,8 @@ for the AI-seat contract, [`docs/STAGE_4_BROADCAST_EXPERIENCE.md`](docs/STAGE_4_
 for the broadcast shell, [`docs/UI_QA_MATRIX.md`](docs/UI_QA_MATRIX.md) for the
  board and responsive release gate, and [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md)
 for the complete roadmap. No model-provider credentials are required for Stage 2A–2D,
-Stage 3A, or the current Stage 4 broadcast slice. Stage 3B requires an OpenAI Platform
-API key only when an OpenAI seat is selected.
+Stage 3A, or the current Stage 4 broadcast slice. Stages 3B and 3C require the selected
+provider's platform API key only when a direct OpenAI or Anthropic seat is used.
 
 ## Core match types
 
@@ -75,6 +75,11 @@ To enable OpenAI seats, copy `.env.example` to an ignored `.env.local`, set
 `OPENAI_API_KEY`, and optionally set the comma-separated `OPENAI_CHESS_MODELS`
 allowlist. The key remains server-side and is never included in player configuration,
 match events, exports, or browser payloads.
+
+To enable Claude seats, set `ANTHROPIC_API_KEY` in the same ignored `.env.local` and
+optionally set `ANTHROPIC_CHESS_MODELS`. The built-in allowlist contains current
+effort-capable Claude models. Anthropic credentials remain behind the identical
+server-only boundary.
 
 The provided native and Compose development commands bind to loopback because Stage
 2E authentication and quotas are not implemented yet. Do not expose a key-enabled
