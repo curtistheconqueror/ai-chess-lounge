@@ -16,6 +16,7 @@ from decimal import Decimal
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
+import anyio
 import httpx
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
@@ -373,19 +374,23 @@ class RemoteRunnerBroker:
         session = await self.authenticate(runner_token)
         await websocket.accept()
         self._connected.add(session.session_id)
-        await self.store.touch_runner_session(session.session_id, now=self._clock())
         try:
+            await self.store.touch_runner_session(session.session_id, now=self._clock())
             while True:
                 receive_task = asyncio.create_task(websocket.receive_json())
                 delivery_task = asyncio.create_task(self._queues[session.session_id].get())
-                done, pending_tasks = await asyncio.wait(
-                    {receive_task, delivery_task},
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                for task in pending_tasks:
-                    task.cancel()
-                if pending_tasks:
-                    await asyncio.gather(*pending_tasks, return_exceptions=True)
+                tasks = {receive_task, delivery_task}
+                try:
+                    done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                finally:
+                    # ASGI cancellation can interrupt the wait itself. Drain both
+                    # children even then, without a second cancellation interrupting
+                    # cleanup or losing the original cancellation scope identity.
+                    with anyio.CancelScope(shield=True):
+                        for task in tasks:
+                            if not task.done():
+                                task.cancel()
+                        await asyncio.gather(*tasks, return_exceptions=True)
                 if receive_task in done:
                     message = receive_task.result()
                     await self._handle_socket_message(websocket, runner_token, message)
