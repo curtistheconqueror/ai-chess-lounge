@@ -68,6 +68,28 @@ another enabled Gemini model without a provider-specific game mode.
 | Setup UI | Both seats discover Gemini models and model-specific effort options from `/api/player-adapters`; unsupported levels are absent, not simulated |
 | Error boundary | Failed, cancelled, incomplete, malformed, HTTP, and transport responses are sanitized; a paid failure pauses after one call |
 
+## Stage 3E outcome
+
+Stage 3E opens the same match contract to a routed hosted provider and two local
+serving stacks. OpenRouter, Ollama, and vLLM seats use the existing fenced turn runner;
+there is no browser-control loop or per-move approval.
+
+| Capability | Stage 3E delivery |
+| --- | --- |
+| OpenRouter | Server-side Chat Completions adapter with bearer authentication, strict JSON Schema, structured-capability routing, normalized usage, and verified per-model effort mappings |
+| Broad model access | `OPENROUTER_CHESS_MODELS` can enable additional router model IDs without a frontend rebuild; models without a verified mapping use an explicit provider-default effort instead of a fabricated comparison label |
+| Ollama | Native `/api/chat` adapter with JSON Schema format, non-streaming moves, configured model allowlist, and prompt/evaluation token normalization |
+| vLLM | OpenAI-compatible `/v1/chat/completions` adapter with strict JSON Schema, configured local models, and optional server-side API token |
+| Local trust boundary | Base URLs, model allowlists, and optional vLLM token come only from the server environment; player payloads cannot supply destinations, headers, or credentials |
+| Setup UI | Either seat can choose OpenRouter, Ollama, or vLLM from the common catalog; local models show `Provider default` when no portable effort mapping exists |
+| Failure boundary | HTTP bodies, credentials, raw outputs, and private reasoning remain outside snapshots and event records; malformed or incomplete responses are rejected before legality checks |
+
+The local adapters deliberately require an explicit model allowlist. This prevents a
+fresh Lounge process from claiming that a model exists merely because an Ollama or
+vLLM default URL is present. The default URLs are loopback-only; Compose provides the
+`host.docker.internal` host-gateway alias for an operator who intentionally runs the
+model server on the Docker host.
+
 ## Protocol boundary
 
 The transport-neutral JSON Schemas are published in `packages/protocol`. The
@@ -85,12 +107,14 @@ than silently changing assistance level.
 ## Credential boundary
 
 Stage 3A requires no provider account or API key. Stage 3B reads `OPENAI_API_KEY`,
-Stage 3C reads `ANTHROPIC_API_KEY`, and Stage 3D reads `GEMINI_API_KEY` from the server
+Stage 3C reads `ANTHROPIC_API_KEY`, Stage 3D reads `GEMINI_API_KEY`, and Stage 3E reads
+`OPENROUTER_API_KEY` plus optional local endpoint configuration from the server
 environment (including the ignored `.env.local` development file). Player
 settings reject credential-shaped and undisclosed fields through a fail-closed
 per-adapter public allowlist, and the repository stores only typed public
-configuration and normalized usage. The key is used only to construct the server-side
-Authorization header and is never accepted from a game-creation payload.
+configuration and normalized usage. Credentials are used only to construct
+provider-specific server-side headers, and neither credentials nor endpoint URLs are
+accepted from a game-creation payload.
 Subscription-backed agents remain on the user's machine behind the Stage 5 bridge and
 will receive only a short-lived Lounge runner token.
 
@@ -128,6 +152,10 @@ revision and lease fencing reject late work from any other process.
   outputs, every provider effort mapping, usage normalization, malformed output,
   refusals or failed interactions, incomplete responses, health checks, and sanitized
   provider failures
+- OpenRouter contract tests for bearer authentication, strict schema routing,
+  verified and provider-default effort behavior, usage, health, and sanitized errors
+- Ollama and vLLM contract tests for local paths, structured output, absent invented
+  effort, optional authentication boundaries, usage, malformed output, and health
 - Provider failure integration test proving a paid adapter is called once and the
   match pauses without an unbounded retry loop
 - Post-call persistence-failure test proving a completed direct-API turn is never
@@ -136,11 +164,11 @@ revision and lease fencing reject late work from any other process.
   with normalized public metadata
 - Browser payload tests proving independent model/effort choices and secret-free
   public settings for OpenAI-versus-OpenAI, Anthropic-versus-OpenAI, and
-  Gemini-versus-Anthropic seats
+  Gemini-versus-Anthropic seats, plus OpenRouter-versus-Ollama with provider-default
+  local effort
 
 ## Remaining Stage 3 work
 
 | Sub-phase | Next capability |
 | --- | --- |
-| 3E | OpenRouter/OpenAI-compatible and local Ollama/vLLM adapters |
 | 3F | Bounded provider retries, rate limits, outage policy, and operator-facing recovery controls |

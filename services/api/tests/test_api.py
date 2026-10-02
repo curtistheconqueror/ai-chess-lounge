@@ -58,8 +58,11 @@ def test_adapter_catalog_and_human_vs_scripted_game(client: TestClient) -> None:
         "anthropic",
         "google",
         "openai",
+        "openrouter",
+        "ollama",
         "scripted",
         "stockfish",
+        "vllm",
     }
     openai = next(item for item in catalog.json()["adapters"] if item["adapter_id"] == "openai")
     assert openai["models"]
@@ -87,6 +90,17 @@ def test_adapter_catalog_and_human_vs_scripted_game(client: TestClient) -> None:
         "balanced",
         "deep",
     ]
+    openrouter = next(
+        item for item in catalog.json()["adapters"] if item["adapter_id"] == "openrouter"
+    )
+    assert openrouter["models"]
+    first_openrouter_model = openrouter["models"][0]
+    assert openrouter["capabilities"][first_openrouter_model]["connection_mode"] == ("direct_api")
+    assert openrouter["capabilities"][first_openrouter_model]["credentials_required"] is True
+    ollama = next(item for item in catalog.json()["adapters"] if item["adapter_id"] == "ollama")
+    vllm = next(item for item in catalog.json()["adapters"] if item["adapter_id"] == "vllm")
+    assert ollama["models"] == []
+    assert vllm["models"] == []
     assert "key" not in catalog.text.lower()
 
     scripted_black = {

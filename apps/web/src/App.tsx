@@ -26,8 +26,14 @@ import type {
 
 type PanelTab = "moves" | "analysis" | "pgn" | "fen";
 type TimeControlKey = "1+0" | "3+2" | "5+2" | "10+5";
-type HostedProviderChoice = "openai" | "anthropic" | "google";
-type SeatChoice = "human" | "stockfish" | "scripted" | HostedProviderChoice;
+type AgentProviderChoice =
+  | "openai"
+  | "anthropic"
+  | "google"
+  | "openrouter"
+  | "ollama"
+  | "vllm";
+type SeatChoice = "human" | "stockfish" | "scripted" | AgentProviderChoice;
 type ClockSync = { gameId: string; generation: number; revision: number; receivedAt: number };
 type PromotionRequest = { from: string; to: string; candidates: string[] };
 type Color = "white" | "black";
@@ -64,14 +70,17 @@ const promotionCodes: Record<PromotionPiece, string> = {
 
 const savedGameKey = "ai-chess-lounge:active-game";
 const loungeEffortLevels: EffortLevel[] = ["fast", "balanced", "deep", "maximum"];
-const hostedProviderPublicSettings = {
+const providerPublicSettings = {
   move_timeout_ms: 20_000,
   spectator_delay_ms: 180,
 } as const;
-const hostedProviderDetails: Record<HostedProviderChoice, { label: string; provider: string }> = {
+const providerDetails: Record<AgentProviderChoice, { label: string; provider: string }> = {
   openai: { label: "OpenAI", provider: "OpenAI" },
   anthropic: { label: "Claude", provider: "Anthropic" },
   google: { label: "Gemini", provider: "Google" },
+  openrouter: { label: "OpenRouter", provider: "OpenRouter" },
+  ollama: { label: "Ollama", provider: "Ollama" },
+  vllm: { label: "vLLM", provider: "vLLM" },
 };
 
 function App() {
@@ -103,17 +112,17 @@ function App() {
   const clockSyncRef = useRef<ClockSync | null>(null);
   const initialEloRef = useRef(stockfishElo);
   const initialTimeControlRef = useRef(timeControl);
-  const initialWhiteSeatRef = useRef<Exclude<SeatChoice, HostedProviderChoice>>("human");
-  const initialBlackSeatRef = useRef<Exclude<SeatChoice, HostedProviderChoice>>("stockfish");
+  const initialWhiteSeatRef = useRef<Exclude<SeatChoice, AgentProviderChoice>>("human");
+  const initialBlackSeatRef = useRef<Exclude<SeatChoice, AgentProviderChoice>>("stockfish");
 
   const whiteProviderModels = useMemo(
-    () => isHostedProvider(whiteSeat)
+    () => isAgentProvider(whiteSeat)
       ? selectableProviderModels(whiteSeat, playerAdapters)
       : [],
     [playerAdapters, whiteSeat],
   );
   const blackProviderModels = useMemo(
-    () => isHostedProvider(blackSeat)
+    () => isAgentProvider(blackSeat)
       ? selectableProviderModels(blackSeat, playerAdapters)
       : [],
     [blackSeat, playerAdapters],
@@ -756,7 +765,7 @@ function App() {
                 />
               </select>
             </label>
-            {isHostedProvider(whiteSeat) && (
+            {isAgentProvider(whiteSeat) && (
               <ProviderSeatControls
                 providerChoice={whiteSeat}
                 color="white"
@@ -771,7 +780,7 @@ function App() {
                 onEffortChange={setWhiteEffort}
               />
             )}
-            {isHostedProvider(blackSeat) && (
+            {isAgentProvider(blackSeat) && (
               <ProviderSeatControls
                 providerChoice={blackSeat}
                 color="black"
@@ -945,9 +954,9 @@ function SeatOptions({ catalog }: { catalog: PlayerAdapterCatalog | null }) {
       <option value="human">Human player</option>
       <option value="stockfish">Stockfish</option>
       <option value="scripted">Deterministic agent</option>
-      {(Object.keys(hostedProviderDetails) as HostedProviderChoice[]).map((choice) => {
+      {(Object.keys(providerDetails) as AgentProviderChoice[]).map((choice) => {
         const selectable = selectableProviderModels(choice, catalog).length > 0;
-        const label = hostedProviderDetails[choice].label;
+        const label = providerDetails[choice].label;
         return (
           <option key={choice} value={choice} disabled={!selectable}>
             {label} model{selectable ? "" : " · not configured"}
@@ -964,6 +973,9 @@ function seatChoiceLabel(choice: SeatChoice): string {
   if (choice === "openai") return "OpenAI";
   if (choice === "anthropic") return "Claude";
   if (choice === "google") return "Gemini";
+  if (choice === "openrouter") return "OpenRouter";
+  if (choice === "ollama") return "Ollama";
+  if (choice === "vllm") return "vLLM";
   return "Human";
 }
 
@@ -977,7 +989,7 @@ function ProviderSeatControls({
   onModelChange,
   onEffortChange,
 }: {
-  providerChoice: HostedProviderChoice;
+  providerChoice: AgentProviderChoice;
   color: Color;
   models: string[];
   catalog: PlayerAdapterCatalog | null;
@@ -986,7 +998,7 @@ function ProviderSeatControls({
   onModelChange: (model: string) => void;
   onEffortChange: (effort: EffortLevel) => void;
 }) {
-  const providerLabel = hostedProviderDetails[providerChoice].label;
+  const providerLabel = providerDetails[providerChoice].label;
   const effortOptions = models.length
     ? loungeEffortsForModel(providerChoice, selectedModel, catalog)
     : [];
@@ -1000,7 +1012,8 @@ function ProviderSeatControls({
       </label>
       <label>
         {capitalize(color)} effort
-        <select aria-label={`${capitalize(color)} effort`} value={selectedEffort} onChange={(event) => onEffortChange(event.target.value as EffortLevel)} disabled={!effortOptions.length}>
+        <select aria-label={`${capitalize(color)} effort`} value={effortOptions.length ? selectedEffort : ""} onChange={(event) => onEffortChange(event.target.value as EffortLevel)} disabled={!effortOptions.length}>
+          {!effortOptions.length && <option value="">Provider default</option>}
           {effortOptions.map((effort) => <option key={effort} value={effort}>{capitalize(effort)}</option>)}
         </select>
       </label>
@@ -1009,7 +1022,7 @@ function ProviderSeatControls({
 }
 
 function createPlayerConfiguration(
-  choice: Exclude<SeatChoice, HostedProviderChoice>,
+  choice: Exclude<SeatChoice, AgentProviderChoice>,
   color: "white" | "black",
   stockfishElo: number,
 ): PlayerConfiguration {
@@ -1068,11 +1081,11 @@ function createSelectedPlayerConfiguration(
   requestedEffort: EffortLevel,
   catalog: PlayerAdapterCatalog | null,
 ): PlayerConfiguration {
-  if (!isHostedProvider(choice)) {
+  if (!isAgentProvider(choice)) {
     return createPlayerConfiguration(choice, color, stockfishElo);
   }
 
-  const provider = hostedProviderDetails[choice];
+  const provider = providerDetails[choice];
   const model = selectedProviderModel(
     requestedModel,
     selectableProviderModels(choice, catalog),
@@ -1080,27 +1093,30 @@ function createSelectedPlayerConfiguration(
   const effortOptions = loungeEffortsForModel(choice, model, catalog);
   const effort = effortOptions.includes(requestedEffort)
     ? requestedEffort
-    : defaultProviderEffort(choice, model, catalog);
+    : effortOptions.length
+      ? defaultProviderEffort(choice, model, catalog)
+      : null;
+  const capabilities = providerCapabilities(choice, model, catalog);
   return {
     protocol_version: catalog?.protocol_version ?? "1.0",
     player_id: `local-${choice}-${color}`,
     adapter_id: choice,
-    display_name: `${model} · ${capitalize(effort)}`,
+    display_name: `${model} · ${effort ? capitalize(effort) : "Provider default"}`,
     provider: provider.provider,
     model,
-    connection_mode: "direct_api",
+    connection_mode: capabilities?.connection_mode ?? "direct_api",
     effort,
     division: "legal_assist",
-    settings: { ...hostedProviderPublicSettings },
+    settings: { ...providerPublicSettings },
   };
 }
 
-function isHostedProvider(choice: SeatChoice): choice is HostedProviderChoice {
-  return choice === "openai" || choice === "anthropic" || choice === "google";
+function isAgentProvider(choice: SeatChoice): choice is AgentProviderChoice {
+  return choice in providerDetails;
 }
 
 function selectableProviderModels(
-  providerChoice: HostedProviderChoice,
+  providerChoice: AgentProviderChoice,
   catalog: PlayerAdapterCatalog | null,
 ): string[] {
   const adapter = catalog?.adapters.find(
@@ -1115,7 +1131,7 @@ function providerCapabilities(
   model: string,
   catalog: PlayerAdapterCatalog | null,
 ): AdapterModelCapabilities | undefined {
-  if (!isHostedProvider(providerChoice)) return undefined;
+  if (!isAgentProvider(providerChoice)) return undefined;
   return catalog?.adapters.find((candidate) => candidate.adapter_id === providerChoice)
     ?.capabilities[model];
 }

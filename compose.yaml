@@ -20,6 +20,8 @@ services:
         required: false
     ports:
       - "127.0.0.1:8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DATABASE_URL: postgresql+asyncpg://lounge:lounge@postgres:5432/lounge
       STOCKFISH_PATH: /usr/games/stockfish
