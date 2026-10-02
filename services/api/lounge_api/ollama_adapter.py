@@ -7,7 +7,12 @@ import httpx
 from pydantic import ValidationError
 
 from .adapter_prompt import SYSTEM_INSTRUCTION, move_prompt
-from .adapters import AdapterConfigurationError, AdapterError
+from .adapters import (
+    AdapterConfigurationError,
+    AdapterError,
+    provider_http_error,
+    provider_transport_error,
+)
 from .openai_compatible_adapter import DEFAULT_OUTPUT_BUDGET, models_from_environment
 from .player_protocol import (
     AssistanceDivision,
@@ -156,9 +161,9 @@ class OllamaChatAdapter:
                         timeout=timeout_seconds,
                     )
         except httpx.HTTPError as exc:
-            raise AdapterError(f"Ollama chat request failed ({type(exc).__name__}).") from exc
+            raise provider_transport_error("Ollama chat API", exc) from exc
         if not response.is_success:
-            raise AdapterError(f"Ollama chat API returned HTTP {response.status_code}.")
+            raise provider_http_error("Ollama chat API", response)
         return response
 
     @staticmethod

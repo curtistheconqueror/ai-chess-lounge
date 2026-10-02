@@ -39,6 +39,7 @@ viewports as Playwright projects and uploads full-page screenshot artifacts from
 | Stale response | Lower generation/revision snapshot cannot roll the UI backward |
 | WebSocket interruption | Offline state appears, reconnect uses backoff, fresh snapshot restores live state |
 | Cross-process commit | Socket connected to another API process still observes the durable revision |
+| Provider recovery | Paused agent position stays unchanged; recovery banner and retry control appear; one `agent.retry_requested` event is recorded |
 | Reload | Active match restores from local storage and authoritative server state |
 | Copy | PGN and FEN copy exactly; clipboard failure produces a visible error |
 | Reset/resign | Controls disable while pending and terminal state cannot accept another move |
@@ -53,6 +54,8 @@ permalink, and create a credential-free automated-versus-automated match from th
 seat selectors. Mocked provider setup tests also verify that OpenAI-versus-OpenAI,
 Anthropic-versus-OpenAI, and Gemini-versus-Anthropic seats use catalog-enabled models,
 preserve independent model-specific effort choices, hide unselectable models, and
-submit only allowlisted public settings. Check, timeout, promotion, and
+submit only allowlisted public settings. A deterministic illegal automated proposal
+also pins the paused recovery banner, explicit retry action, and audit event. Check,
+timeout, promotion, and
 post-game visual baselines remain required additions as deterministic fixture matches
 are introduced.

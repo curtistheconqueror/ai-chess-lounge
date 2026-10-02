@@ -6,7 +6,12 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-from .adapters import AdapterConfigurationError, AdapterError
+from .adapters import (
+    AdapterConfigurationError,
+    AdapterError,
+    provider_http_error,
+    provider_transport_error,
+)
 from .player_protocol import (
     AssistanceDivision,
     ConnectionMode,
@@ -208,11 +213,9 @@ class AnthropicMessagesAdapter:
                         timeout=timeout_seconds,
                     )
         except httpx.HTTPError as exc:
-            raise AdapterError(
-                f"Anthropic Messages API request failed ({type(exc).__name__})."
-            ) from exc
+            raise provider_transport_error("Anthropic Messages API", exc) from exc
         if not response.is_success:
-            raise AdapterError(f"Anthropic Messages API returned HTTP {response.status_code}.")
+            raise provider_http_error("Anthropic Messages API", response)
         return response
 
     def _headers(self) -> dict[str, str]:

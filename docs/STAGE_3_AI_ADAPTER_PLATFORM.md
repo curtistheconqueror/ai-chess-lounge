@@ -90,6 +90,26 @@ vLLM default URL is present. The default URLs are loopback-only; Compose provide
 `host.docker.internal` host-gateway alias for an operator who intentionally runs the
 model server on the Docker host.
 
+## Stage 3F outcome
+
+Provider failures now pass through one bounded reliability policy before the
+server-authoritative match runner decides whether the turn can continue.
+
+| Capability | Stage 3F delivery |
+| --- | --- |
+| Failure taxonomy | Transport failures, HTTP 429, and HTTP 408/409/425/5xx outage statuses are retryable; authentication/configuration errors, refusals, malformed output, stale responses, and illegal moves are not |
+| Retry budget | Two attempts by default, with capped exponential delay and provider `Retry-After` handling, all inside the original move deadline and existing fenced lease |
+| Local rate limit | Each adapter/model pair has a configurable process-local requests-per-minute budget; exhaustion pauses the match without calling the provider |
+| Outage circuit | Repeated exhausted turns open a configurable adapter/model circuit; the circuit blocks automatic calls during cooldown |
+| Match policy | Exhaustion, local rate limits, and open circuits preserve the board and pause the match; the Lounge never substitutes Stockfish or silently forfeits |
+| Recovery controls | `POST /api/games/{id}/retry-agent` records `agent.retry_requested`, permits an operator probe, resumes clocks, and schedules the preserved automated turn |
+| Observability | Accepted move metadata records the successful attempt number; `agent.failed` records only sanitized category, attempts, retry delay, and recovery action; `/api/player-adapters/reliability` exposes safe policy/circuit state |
+
+The policy is deliberately bounded. A successful provider response followed by a
+database failure is still never purchased again automatically. That position pauses
+for explicit recovery because the server cannot prove that repeating the completed
+call is safe.
+
 ## Protocol boundary
 
 The transport-neutral JSON Schemas are published in `packages/protocol`. The
@@ -156,8 +176,11 @@ revision and lease fencing reject late work from any other process.
   verified and provider-default effort behavior, usage, health, and sanitized errors
 - Ollama and vLLM contract tests for local paths, structured output, absent invented
   effort, optional authentication boundaries, usage, malformed output, and health
-- Provider failure integration test proving a paid adapter is called once and the
-  match pauses without an unbounded retry loop
+- Provider failure integration tests proving transient failures use at most the
+  configured attempt budget, preserve the original deadline, and pause without an
+  unbounded retry loop
+- Rate-limit and circuit-breaker tests proving local budgets block calls, exhausted
+  outages open a cooldown, and an explicit operator retry is audited
 - Post-call persistence-failure test proving a completed direct-API turn is never
   automatically purchased again; the match pauses for explicit recovery
 - Fenced manager integration test proving an OpenAI proposal becomes one legal move
@@ -167,8 +190,8 @@ revision and lease fencing reject late work from any other process.
   Gemini-versus-Anthropic seats, plus OpenRouter-versus-Ollama with provider-default
   local effort
 
-## Remaining Stage 3 work
+## Stage 3 completion
 
-| Sub-phase | Next capability |
-| --- | --- |
-| 3F | Bounded provider retries, rate limits, outage policy, and operator-facing recovery controls |
+Stages 3A–3F are implemented. Remote agents, MCP compatibility, and officially
+supported subscription runners begin in Stage 5 and reuse this same normalized,
+fenced move contract.

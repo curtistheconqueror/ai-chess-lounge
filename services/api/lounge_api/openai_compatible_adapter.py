@@ -7,7 +7,12 @@ import httpx
 from pydantic import ValidationError
 
 from .adapter_prompt import SYSTEM_INSTRUCTION, move_prompt
-from .adapters import AdapterConfigurationError, AdapterError
+from .adapters import (
+    AdapterConfigurationError,
+    AdapterError,
+    provider_http_error,
+    provider_transport_error,
+)
 from .player_protocol import (
     AssistanceDivision,
     ConnectionMode,
@@ -226,6 +231,7 @@ class OpenAICompatibleChatAdapter:
         *,
         timeout_seconds: float,
     ) -> httpx.Response:
+        operation = f"{self.provider_name} chat-completions API"
         try:
             if self._client is not None:
                 response = await self._client.post(
@@ -243,13 +249,9 @@ class OpenAICompatibleChatAdapter:
                         timeout=timeout_seconds,
                     )
         except httpx.HTTPError as exc:
-            raise AdapterError(
-                f"{self.provider_name} chat-completions request failed ({type(exc).__name__})."
-            ) from exc
+            raise provider_transport_error(operation, exc) from exc
         if not response.is_success:
-            raise AdapterError(
-                f"{self.provider_name} chat-completions API returned HTTP {response.status_code}."
-            )
+            raise provider_http_error(operation, response)
         return response
 
     def _response_json(self, response: httpx.Response) -> dict[str, Any]:

@@ -1,6 +1,6 @@
 # AI Chess Lounge — Master Product and Execution Plan
 
-**Status:** Stage 2A–2D, Stage 3A–3E, and the Stage 4 broadcast slice implemented; provider recovery policy pending
+**Status:** Stage 2A–2D, Stage 3A–3F, and the Stage 4 broadcast slice implemented
 
 **Working repository:** `curtistheconqueror/ai-chess-lounge`
 
@@ -494,14 +494,16 @@ position, reconnects recover correctly, and clock/result tests are deterministic
 
 **Goal:** Seat hosted and local models through one normalized contract.
 
-**Progress:** Stages 3A through 3E are implemented. Either color can use the versioned
+**Progress:** Stages 3A through 3F are implemented. Either color can use the versioned
 player protocol through deterministic, Stockfish, OpenAI Responses, Anthropic
 Messages, Google Gemini Interactions, OpenRouter Chat Completions, Ollama, or vLLM
 adapters, and two automated seats can complete
 an unattended persisted match. Hosted model and effort settings are independently
 selectable for both seats when the model exposes a verified mapping; provider
-credentials and local endpoint configuration stay server-side. Stage 3F adds bounded
-recovery policies.
+credentials and local endpoint configuration stay server-side. Transient provider
+failures now use a bounded retry budget inside the original chess clock; local request
+budgets, outage circuits, sanitized recovery metadata, and an explicit operator retry
+action prevent silent loops and unsafe substitutions.
 
 | Sub-phase | Deliverables |
 | --- | --- |
@@ -510,7 +512,7 @@ recovery policies.
 | 3C Anthropic | **Implemented:** Messages adapter, adaptive-thinking effort mapping, strict structured move output, usage normalization, and cross-provider UI selection |
 | 3D Google | **Implemented:** Gemini Interactions adapter, model-specific thinking-level mapping, usage normalization, and cross-provider UI selection |
 | 3E Open ecosystem | **Implemented:** OpenRouter/OpenAI-compatible plus local Ollama/vLLM connections, structured moves, honest effort disclosure, and hosted-versus-local UI setup |
-| 3F Recovery | Retry, timeout, malformed/illegal move, provider outage, and rate-limit policies |
+| 3F Recovery | **Implemented:** bounded transient retries, rate limits, outage circuit, sanitized failure policy, reliability status, and operator retry control |
 
 **Exit gate:** Two configured models can complete an unattended game; every move
 has latency/usage metadata; failures produce an explicit result without board

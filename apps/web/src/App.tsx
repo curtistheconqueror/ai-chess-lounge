@@ -7,6 +7,7 @@ import {
   fetchPlayerAdapters,
   resignGame,
   resetGame,
+  retryAgentTurn,
   submitMove,
   websocketUrl,
 } from "./api";
@@ -577,6 +578,19 @@ function App() {
     }
   }
 
+  async function onRetryAgentTurn() {
+    if (!game || game.lifecycle !== "paused") return;
+    setBusy(true);
+    try {
+      acceptSnapshot(await retryAgentTurn(game.id));
+      setNotice("Agent retry requested from the preserved position.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Agent retry failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function selectPly(ply: number) {
     setReplayRunning(false);
     setReplayPly(Math.max(0, Math.min(game?.moves.length ?? 0, ply)));
@@ -659,6 +673,15 @@ function App() {
     blackConfiguration,
     clocks.black,
   );
+  const activePlayer = game?.turn === "black" ? game.black_player : game?.white_player;
+  const canRetryAgent = Boolean(
+    game?.lifecycle === "paused" && activePlayer && activePlayer.adapter_id !== "human",
+  );
+  const broadcastLabel = game?.status === "active"
+    ? "LIVE EXHIBITION"
+    : game?.lifecycle === "paused"
+      ? "RECOVERY PAUSED"
+      : "MATCH COMPLETE";
 
   return (
     <main className="app-shell">
@@ -681,7 +704,7 @@ function App() {
 
       <section className="broadcast-ribbon" aria-label="Match broadcast status">
         <span className={game?.status === "active" ? "live-pulse" : "result-pulse"} />
-        <strong>{game?.status === "active" ? "LIVE EXHIBITION" : "MATCH COMPLETE"}</strong>
+        <strong>{broadcastLabel}</strong>
         <span>Table 01</span>
         <span>{game ? `${Math.round(game.clock.initial_time_ms / 60_000)}+${game.clock.increment_ms / 1_000}` : "—"}</span>
         <span>Server authoritative</span>
@@ -862,6 +885,11 @@ function App() {
           </div>
 
           <div className="secondary-actions">
+            {canRetryAgent && (
+              <button onClick={() => void onRetryAgentTurn()} disabled={busy}>
+                Retry agent turn
+              </button>
+            )}
             <button onClick={() => void onReset()} disabled={!game || busy}>Reset</button>
             <button onClick={() => void onResign()} disabled={!game || busy || game.status !== "active"}>Resign</button>
             <button onClick={() => game && void copyText(permalink(game.id), "Match link")}>Copy link</button>

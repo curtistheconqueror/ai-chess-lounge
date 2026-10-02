@@ -72,6 +72,51 @@ test("two credential-free agents start an unattended match", async ({ page }, te
   );
 });
 
+test("paused automated turns expose an audited operator retry", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Recovery smoke runs once on desktop.");
+
+  const created = await page.request.post("/api/games", {
+    data: {
+      opponent: "human",
+      white_player: {
+        adapter_id: "scripted",
+        display_name: "Recovery Test Agent",
+        provider: "Lounge Test Harness",
+        model: "deterministic-v1",
+        connection_mode: "local",
+        division: "legal_assist",
+        settings: { moves: ["a1a8"], spectator_delay_ms: 0 },
+      },
+      black_player: {
+        adapter_id: "human",
+        display_name: "Human Black",
+        provider: "Human seat",
+        model: "Manual input",
+        connection_mode: "human",
+        division: "legal_assist",
+        settings: {},
+      },
+    },
+  });
+  expect(created.ok()).toBeTruthy();
+  const game = await created.json() as { id: string };
+
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/games/${game.id}`);
+    return (await response.json() as { lifecycle: string }).lifecycle;
+  }).toBe("paused");
+
+  await page.goto(`/games/${game.id}`);
+  await expect(page.locator(".broadcast-ribbon")).toContainText("RECOVERY PAUSED");
+  await page.getByRole("button", { name: "Retry agent turn" }).click();
+
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/games/${game.id}/events`);
+    const events = await response.json() as Array<{ type: string }>;
+    return events.filter((event) => event.type === "agent.retry_requested").length;
+  }).toBe(1);
+});
+
 test("OpenAI seats use catalog models, selected effort, and only public settings", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Provider setup smoke runs once on desktop.");
 
