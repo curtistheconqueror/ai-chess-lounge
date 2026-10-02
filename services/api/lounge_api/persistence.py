@@ -213,6 +213,10 @@ class DatabaseStore:
         await self.initialize()
         async with self.sessions.begin() as session:
             session.add(self._match_row(game))
+            # The event rows reference the match, but the ORM models intentionally
+            # do not expose relationship properties. Flush the parent explicitly
+            # so PostgreSQL never batches the child inserts ahead of it.
+            await session.flush()
             session.add_all(self._event_rows(game.id, events))
 
     async def record_move(
