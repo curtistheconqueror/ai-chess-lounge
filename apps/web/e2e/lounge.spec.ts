@@ -429,3 +429,92 @@ test("Gemini exposes model-specific effort and can face Claude", async ({ page }
   expect(JSON.stringify(submitted).toLowerCase()).not.toContain("api_key");
   expect(JSON.stringify(submitted).toLowerCase()).not.toContain("x-goog-api-key");
 });
+
+test("OpenRouter can face a local Ollama model without invented effort", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Open ecosystem setup smoke runs once on desktop.");
+
+  await page.route("**/api/player-adapters", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      protocol_version: "1.0",
+      adapters: [
+        {
+          adapter_id: "openrouter",
+          models: ["openai/gpt-6.1-sol"],
+          capabilities: {
+            "openai/gpt-6.1-sol": {
+              model: "openai/gpt-6.1-sol",
+              selectable: true,
+              availability: "configured_unverified",
+              connection_mode: "direct_api",
+              effort_levels: ["fast", "balanced", "deep", "maximum"],
+              structured_output: true,
+              credentials_required: true,
+            },
+          },
+        },
+        {
+          adapter_id: "ollama",
+          models: ["llama-chess:latest"],
+          capabilities: {
+            "llama-chess:latest": {
+              model: "llama-chess:latest",
+              selectable: true,
+              availability: "configured_unverified",
+              connection_mode: "local",
+              effort_levels: [],
+              structured_output: true,
+              credentials_required: false,
+            },
+          },
+        },
+      ],
+    }),
+  }));
+
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/api/games", async (route) => {
+    if (route.request().method() === "POST") {
+      submitted = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "Open ecosystem payload captured by the UI test." }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.reload();
+  await page.getByLabel("White seat").selectOption("openrouter");
+  await page.getByLabel("White OpenRouter model").selectOption("openai/gpt-6.1-sol");
+  await page.getByLabel("White effort").selectOption("deep");
+  await page.getByLabel("Black seat").selectOption("ollama");
+  await page.getByLabel("Black Ollama model").selectOption("llama-chess:latest");
+  await expect(page.getByLabel("Black effort")).toBeDisabled();
+  await expect(page.getByLabel("Black effort")).toHaveValue("");
+  await page.getByRole("button", { name: "New match" }).click();
+
+  await expect(page.getByRole("alert")).toContainText("Open ecosystem payload captured");
+  expect(submitted).toMatchObject({
+    white_player: {
+      adapter_id: "openrouter",
+      provider: "OpenRouter",
+      model: "openai/gpt-6.1-sol",
+      connection_mode: "direct_api",
+      effort: "deep",
+    },
+    black_player: {
+      adapter_id: "ollama",
+      provider: "Ollama",
+      model: "llama-chess:latest",
+      connection_mode: "local",
+      effort: null,
+    },
+  });
+  expect(JSON.stringify(submitted).toLowerCase()).not.toContain("api_key");
+  expect(JSON.stringify(submitted).toLowerCase()).not.toContain("base_url");
+  expect(JSON.stringify(submitted).toLowerCase()).not.toContain("authorization");
+});

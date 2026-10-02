@@ -195,6 +195,53 @@ def test_gemini_configuration_accepts_only_typed_public_settings() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("adapter_id", "provider", "connection_mode"),
+    [
+        ("openrouter", "OpenRouter", ConnectionMode.DIRECT_API),
+        ("ollama", "Ollama", ConnectionMode.LOCAL),
+        ("vllm", "vLLM", ConnectionMode.LOCAL),
+    ],
+)
+def test_open_ecosystem_adapters_accept_only_public_settings(
+    adapter_id: str,
+    provider: str,
+    connection_mode: ConnectionMode,
+) -> None:
+    safe = PlayerConfiguration(
+        adapter_id=adapter_id,
+        display_name=f"{provider} Player",
+        provider=provider,
+        model="example-model",
+        connection_mode=connection_mode,
+        effort=None,
+        division=AssistanceDivision.LEGAL_ASSIST,
+        settings={
+            "color": "white",
+            "max_output_tokens": 4_096,
+            "move_timeout_ms": 30_000,
+            "spectator_delay_ms": 180,
+        },
+    )
+
+    assert safe.settings["max_output_tokens"] == 4_096
+    for forbidden in ("api_key", "base_url", "headers"):
+        with pytest.raises(ValidationError, match="cannot contain credentials"):
+            PlayerConfiguration.model_validate(
+                {
+                    **safe.model_dump(),
+                    "settings": {forbidden: "server-owned"},
+                }
+            )
+    with pytest.raises(ValidationError, match="max_output_tokens"):
+        PlayerConfiguration.model_validate(
+            {
+                **safe.model_dump(),
+                "settings": {"max_output_tokens": 131_073},
+            }
+        )
+
+
 def test_scripted_adapter_is_deterministic_and_bound_to_request() -> None:
     async def run() -> None:
         adapter = ScriptedPlayerAdapter()

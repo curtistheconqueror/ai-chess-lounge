@@ -43,7 +43,9 @@ from .models import (
     OpponentKind,
     TurnLease,
 )
+from .ollama_adapter import OllamaChatAdapter
 from .openai_adapter import OpenAIResponsesAdapter
+from .openai_compatible_adapter import OpenRouterChatAdapter, VLLMChatAdapter
 from .persistence import (
     ConcurrentGameUpdate,
     DatabaseStore,
@@ -98,6 +100,9 @@ class GameManager:
                 OpenAIResponsesAdapter(),
                 AnthropicMessagesAdapter(),
                 GeminiInteractionsAdapter(),
+                OpenRouterChatAdapter(),
+                OllamaChatAdapter(),
+                VLLMChatAdapter(),
             ]
         )
         self.store = store or DatabaseStore()

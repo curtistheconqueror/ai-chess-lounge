@@ -13,8 +13,9 @@ The project has two complementary experiences:
 ## Project status
 
 **Stage 2: Durable Match Platform** has sub-phases 2A through 2D implemented,
-**Stage 3A–3D** now provide the AI-seat protocol, unattended runner, and direct OpenAI,
-Anthropic, and Google Gemini provider adapters, and the **Stage 4 broadcast vertical
+**Stage 3A–3E** now provide the AI-seat protocol, unattended runner, direct OpenAI,
+Anthropic, Google Gemini, and OpenRouter adapters, plus local Ollama and vLLM
+connections, and the **Stage 4 broadcast vertical
 slice** is implemented.
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
@@ -22,11 +23,13 @@ writers; Fischer clocks, deadlines, pause/resume, and timeout results are owned 
 server; and idempotent move commands plus fenced turn leases coordinate retries and
 workers. Either color can now be Human, Stockfish, or a deterministic reference agent;
 two automated seats complete games without browser control. OpenAI Responses,
-Anthropic Messages, and Gemini Interactions players can occupy either seat with
-independently selected model and effort settings, including cross-provider matches. The
+Anthropic Messages, Gemini Interactions, OpenRouter Chat Completions, Ollama, and vLLM
+players can occupy either seat, including cross-provider and hosted-versus-local
+matches. Effort is independently selectable only where the adapter has a verified
+model-specific mapping; otherwise the UI truthfully shows provider default. The
 playable Lounge adds provider-neutral player cards, structured public strategy, local
 replay controls, isolated spectator analysis, share routes, and responsive browser
-checks. Open-ecosystem and subscription adapters remain later increments.
+checks. Recovery policy, MCP, and subscription adapters remain later increments.
 
 Read [`docs/STAGE_2_DURABLE_MATCHES.md`](docs/STAGE_2_DURABLE_MATCHES.md) for the
 current increment, [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md)
@@ -35,9 +38,10 @@ for the AI-seat contract, [`docs/STAGE_4_BROADCAST_EXPERIENCE.md`](docs/STAGE_4_
 for the broadcast shell, [`docs/UI_QA_MATRIX.md`](docs/UI_QA_MATRIX.md) for the
  board and responsive release gate, and [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md)
 for the complete roadmap. No model-provider credentials are required for Stage 2A–2D,
-Stage 3A, or the current Stage 4 broadcast slice. Stages 3B–3D require the selected
-provider's platform API key only when a direct OpenAI, Anthropic, or Google seat is
-used.
+Stage 3A, or the current Stage 4 broadcast slice. Stages 3B–3E require the selected
+provider's platform API key only when a direct OpenAI, Anthropic, Google, or OpenRouter
+seat is used. Ollama and vLLM can run without provider credentials on an
+operator-configured local endpoint.
 
 ## Core match types
 
@@ -88,6 +92,19 @@ To enable Gemini seats, set `GEMINI_API_KEY` and optionally
 models whose API supports minimal thinking also advertise maximum. Unsupported
 effort choices are omitted rather than silently emulated. An override model without
 an explicit verified thinking-level map remains disabled in the catalog.
+
+To enable OpenRouter seats, set `OPENROUTER_API_KEY` and optionally
+`OPENROUTER_CHESS_MODELS`. Known models expose only verified effort mappings;
+additional allowlisted models remain playable with provider-default effort. The
+adapter requires structured-output-capable routing and keeps the bearer key entirely
+server-side.
+
+To enable local models, set `OLLAMA_CHESS_MODELS` or `VLLM_CHESS_MODELS` to the exact
+installed model identifiers. The default endpoints are `http://127.0.0.1:11434` for
+Ollama and `http://127.0.0.1:8000/v1` for vLLM; override the matching `*_API_BASE`
+only in server configuration. vLLM may also use an optional server-side
+`VLLM_API_KEY`. Local adapters currently label effort as provider default because
+those servers do not expose one portable cross-model effort contract.
 
 The provided native and Compose development commands bind to loopback because Stage
 2E authentication and quotas are not implemented yet. Do not expose a key-enabled
