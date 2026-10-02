@@ -98,6 +98,12 @@ def test_two_mcp_agents_complete_game_and_export():
                 turn = await call(agent, "lounge_next_turn", wait_ms=1000)
                 assert turn["pending"]
                 assert move in turn["request"]["legal_moves"]
+                # A host must be able to watch while the arbiter awaits its move.
+                # Previously the writer lock blocked this until the turn timed out.
+                async with asyncio.timeout(2):
+                    thinking = await call(agent, "lounge_watch", game_id=game["id"])
+                assert len(thinking["moves"]) == ply - 1
+                assert thinking["fen"] == turn["request"]["fen"]
                 receipt = await call(
                     agent,
                     "lounge_submit_move",
