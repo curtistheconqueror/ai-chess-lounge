@@ -335,7 +335,7 @@ def test_anthropic_adapter_completes_a_fenced_manager_turn() -> None:
     asyncio.run(run())
 
 
-def test_anthropic_provider_failure_pauses_without_paid_retry_loop() -> None:
+def test_anthropic_rate_limit_uses_bounded_retry_then_pauses() -> None:
     async def run() -> None:
         calls = 0
 
@@ -371,11 +371,13 @@ def test_anthropic_provider_failure_pauses_without_paid_retry_loop() -> None:
                 await asyncio.sleep(0.6)
                 events = await manager.events(game.id)
 
-                assert calls == 1
+                assert calls == 2
                 assert snapshot.lifecycle.value == "paused"
                 assert snapshot.moves == []
                 assert events[-2].type == "agent.failed"
-                assert events[-2].payload["reason"] == "adapter_error"
+                assert events[-2].payload["reason"] == "provider_retry_exhausted"
+                assert events[-2].payload["category"] == "rate_limited"
+                assert events[-2].payload["attempts"] == 2
                 assert "sensitive rate limit detail" not in str(events[-2].payload)
             finally:
                 await manager.close()

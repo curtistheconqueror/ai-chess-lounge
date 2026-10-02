@@ -30,7 +30,13 @@ from .adapters import (
     StockfishPlayerAdapter,
 )
 from .anthropic_adapter import AnthropicMessagesAdapter
-from .domain import ClockExpired, GameSession, MoveRejected, StalePosition
+from .domain import (
+    ClockExpired,
+    GameSession,
+    MatchTransitionRejected,
+    MoveRejected,
+    StalePosition,
+)
 from .engine import EngineAnalysis, EngineFailure, StockfishService
 from .gemini_adapter import GeminiInteractionsAdapter
 from .models import (
@@ -52,8 +58,12 @@ from .persistence import (
     IdempotencyConflict,
     TurnLeaseUnavailable,
 )
-from .player_protocol import ConnectionMode, PlayerConfiguration, PlayerMoveMetadata
 from .player_protocol import MoveRequest as PlayerMoveRequest
+from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
+from .provider_reliability import (
+    ProviderRecoveryRequired,
+    ProviderReliabilityController,
+)
 
 
 class GameNotFound(KeyError):
@@ -77,6 +87,9 @@ RETRYABLE_AGENT_TURN_ERRORS = (
     TurnLeaseUnavailable,
     *RETRYABLE_DATABASE_ERRORS,
 )
+PROVIDER_RETRY_ADAPTERS = frozenset(
+    {"openai", "anthropic", "google", "openrouter", "ollama", "vllm"}
+)
 
 
 class GameManager:
@@ -87,6 +100,7 @@ class GameManager:
         store: DatabaseStore | None = None,
         clock: Callable[[], datetime] | None = None,
         adapters: AdapterRegistry | None = None,
+        provider_reliability: ProviderReliabilityController | None = None,
         *,
         schedule_timeouts: bool = True,
         schedule_agents: bool = True,
@@ -105,6 +119,7 @@ class GameManager:
                 VLLMChatAdapter(),
             ]
         )
+        self.provider_reliability = provider_reliability or ProviderReliabilityController()
         self.store = store or DatabaseStore()
         self.games: dict[str, GameSession] = {}
         self._game_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -345,6 +360,41 @@ class GameManager:
         self._schedule_agent_runner(game)
         return snapshot
 
+    async def retry_agent_turn(self, game_id: str) -> GameSnapshot:
+        """Explicitly resume a paused automated turn as an operator recovery action."""
+
+        self._cancel_agent_runner(game_id)
+        await self.get(game_id)
+        async with self._game_locks[game_id]:
+            game = deepcopy(await self._reload(game_id))
+            if game.lifecycle is not MatchState.PAUSED:
+                raise MatchTransitionRejected("Only a paused match can retry an agent turn.")
+            player = game.active_player()
+            if player.is_human:
+                raise MatchTransitionRejected("The active seat is human-controlled.")
+            expected_revision = game.revision
+            now = self._clock()
+            self.provider_reliability.allow_manual_probe(player.adapter_id, player.model)
+            game.transition(MatchState.RUNNING, now=now)
+            events = [
+                game.event(
+                    "agent.retry_requested",
+                    {
+                        "player_id": player.player_id,
+                        "adapter_id": player.adapter_id,
+                        "position_version": game.version,
+                    },
+                    now=now,
+                ),
+                game.event("match.resumed", self._clock_payload(game, now), now=now),
+            ]
+            await self._record_action(game, events, expected_revision)
+            self._schedule_timeout(game)
+            snapshot = game.snapshot(now=now)
+            await self.broadcast(game, now=now)
+            self._schedule_agent_runner(game)
+            return snapshot
+
     async def abort(self, game_id: str) -> GameSnapshot:
         self._cancel_agent_runner(game_id)
         return await self._transition(game_id, MatchState.ABORTED, "match.aborted")
@@ -375,6 +425,33 @@ class GameManager:
         if events is None:
             raise GameNotFound(game_id)
         return events
+
+    def provider_reliability_status(self) -> dict[str, object]:
+        policy = self.provider_reliability.policy
+        providers: list[dict[str, object]] = []
+        for entry in self.adapters.catalog():
+            adapter_id = str(entry["adapter_id"])
+            if adapter_id not in PROVIDER_RETRY_ADAPTERS:
+                continue
+            for model in entry["models"]:
+                providers.append(
+                    {
+                        "adapter_id": adapter_id,
+                        "model": model,
+                        **self.provider_reliability.status(adapter_id, model),
+                    }
+                )
+        return {
+            "policy": {
+                "max_attempts": policy.max_attempts,
+                "base_delay_ms": policy.base_delay_ms,
+                "max_delay_ms": policy.max_delay_ms,
+                "requests_per_minute": policy.requests_per_minute,
+                "outage_threshold": policy.outage_threshold,
+                "outage_cooldown_ms": policy.outage_cooldown_ms,
+            },
+            "providers": providers,
+        }
 
     async def analysis(self, game_id: str) -> GameAnalysis:
         async with self._analysis_locks[game_id]:
@@ -537,7 +614,8 @@ class GameManager:
             await self._recover_engine_turn(game.id, retry_fallback)
             return False
         try:
-            direct_provider_call_started = False
+            provider_call_started = False
+            attempt = 1
             try:
                 legal_moves = [move.uci() for move in game.board.legal_moves]
                 request = PlayerMoveRequest(
@@ -555,15 +633,25 @@ class GameManager:
                     division=player.division,
                 )
                 started = perf_counter()
-                direct_provider_call_started = player.connection_mode is ConnectionMode.DIRECT_API
-                proposal, lease = await self._call_adapter_with_lease(
-                    adapter,
-                    request,
-                    player,
-                    lease,
-                    lease_ms=lease_ms,
-                    timeout_ms=max(1, move_deadline_ms),
-                )
+                provider_call_started = player.adapter_id in PROVIDER_RETRY_ADAPTERS
+                if provider_call_started:
+                    proposal, lease, attempt = await self._call_provider_adapter_with_policy(
+                        adapter,
+                        request,
+                        player,
+                        lease,
+                        lease_ms=lease_ms,
+                        timeout_ms=max(1, move_deadline_ms),
+                    )
+                else:
+                    proposal, lease = await self._call_adapter_with_lease(
+                        adapter,
+                        request,
+                        player,
+                        lease,
+                        lease_ms=lease_ms,
+                        timeout_ms=max(1, move_deadline_ms),
+                    )
                 elapsed_ms = max(0, round((perf_counter() - started) * 1_000))
                 if (
                     proposal.request_id != request.request_id
@@ -604,6 +692,7 @@ class GameManager:
                     threat=proposal.threat,
                     confidence=proposal.confidence,
                     usage=proposal.usage,
+                    attempt=attempt,
                 )
                 move = game.apply_uci(
                     proposal.move,
@@ -628,14 +717,32 @@ class GameManager:
                 self._schedule_timeout(game)
                 await self.broadcast(game, now=now)
                 return True
+            except ProviderRecoveryRequired as exc:
+                await self._pause_for_invalid_proposal(
+                    game,
+                    expected_revision,
+                    player,
+                    exc.reason,
+                    details={
+                        "category": exc.category,
+                        "attempts": exc.attempts,
+                        "retry_after_ms": exc.retry_after_ms,
+                        "operator_action": "retry_agent_turn",
+                    },
+                )
+                return False
             except RETRYABLE_AGENT_TURN_ERRORS:
-                if direct_provider_call_started:
+                if provider_call_started:
                     try:
                         await self._pause_for_invalid_proposal(
                             retry_fallback,
                             expected_revision,
                             player,
                             "provider_turn_interrupted",
+                            details={
+                                "attempts": attempt,
+                                "operator_action": "retry_agent_turn",
+                            },
                         )
                     except (*RETRYABLE_DATABASE_ERRORS, ConcurrentGameUpdate):
                         # The provider call may already be billable. Never dispatch it
@@ -658,6 +765,81 @@ class GameManager:
             except SQLAlchemyError:
                 # The expiring lease is recoverable even when release cannot reach the DB.
                 pass
+
+    async def _call_provider_adapter_with_policy(
+        self,
+        adapter: PlayerAdapter,
+        request: PlayerMoveRequest,
+        player: PlayerConfiguration,
+        lease: TurnLease,
+        *,
+        lease_ms: int,
+        timeout_ms: int,
+    ):
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_ms / 1_000
+        policy = self.provider_reliability.policy
+        current_lease = lease
+        attempts = 0
+        failure_category = "transient"
+        retry_after_ms: int | None = None
+
+        while attempts < policy.max_attempts:
+            remaining_ms = max(0, round((deadline - loop.time()) * 1_000))
+            if remaining_ms <= 0:
+                break
+            try:
+                self.provider_reliability.before_attempt(player.adapter_id, player.model)
+            except ProviderRecoveryRequired as exc:
+                if attempts == 0:
+                    raise
+                raise ProviderRecoveryRequired(
+                    str(exc),
+                    reason=exc.reason,
+                    category=exc.category,
+                    attempts=attempts,
+                    retry_after_ms=exc.retry_after_ms,
+                ) from exc
+            attempts += 1
+            try:
+                proposal, current_lease = await self._call_adapter_with_lease(
+                    adapter,
+                    request,
+                    player,
+                    current_lease,
+                    lease_ms=lease_ms,
+                    timeout_ms=remaining_ms,
+                )
+            except RetryableAdapterError as exc:
+                failure_category = exc.category
+                retry_after_ms = exc.retry_after_ms
+                if attempts >= policy.max_attempts:
+                    break
+                if retry_after_ms is not None and retry_after_ms > policy.max_delay_ms:
+                    break
+                delay_ms = policy.retry_delay_ms(attempts, retry_after_ms)
+                remaining_after_delay_ms = round((deadline - loop.time()) * 1_000) - delay_ms
+                if remaining_after_delay_ms < 100:
+                    break
+                if delay_ms:
+                    await asyncio.sleep(delay_ms / 1_000)
+                continue
+            self.provider_reliability.record_success(player.adapter_id, player.model)
+            return proposal, current_lease, attempts
+
+        circuit_retry_after_ms = self.provider_reliability.record_failure(
+            player.adapter_id,
+            player.model,
+        )
+        if circuit_retry_after_ms is not None:
+            retry_after_ms = max(retry_after_ms or 0, circuit_retry_after_ms)
+        raise ProviderRecoveryRequired(
+            "The provider retry budget was exhausted.",
+            reason="provider_retry_exhausted",
+            category=failure_category,
+            attempts=attempts,
+            retry_after_ms=retry_after_ms,
+        )
 
     async def _call_adapter_with_lease(
         self,
@@ -707,17 +889,24 @@ class GameManager:
         expected_revision: int,
         player: PlayerConfiguration,
         reason: str,
+        *,
+        details: dict[str, object] | None = None,
     ) -> None:
         now = self._clock()
         game.pause(now=now)
+        failure_payload: dict[str, object] = {
+            "player_id": player.player_id,
+            "adapter_id": player.adapter_id,
+            "reason": reason,
+        }
+        if details:
+            failure_payload.update(
+                {key: value for key, value in details.items() if value is not None}
+            )
         events = [
             game.event(
                 "agent.failed",
-                {
-                    "player_id": player.player_id,
-                    "adapter_id": player.adapter_id,
-                    "reason": reason,
-                },
+                failure_payload,
                 now=now,
             ),
             game.event("match.paused", self._clock_payload(game, now), now=now),

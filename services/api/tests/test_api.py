@@ -132,6 +132,32 @@ def test_adapter_catalog_and_human_vs_scripted_game(client: TestClient) -> None:
     assert snapshot["moves"][1]["player_metadata"]["plan"]
 
 
+def test_provider_reliability_status_is_public_and_secret_free(client: TestClient) -> None:
+    response = client.get("/api/player-adapters/reliability")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["policy"]["max_attempts"] == 2
+    assert payload["policy"]["requests_per_minute"] >= 1
+    assert {entry["adapter_id"] for entry in payload["providers"]} >= {
+        "anthropic",
+        "google",
+        "openai",
+        "openrouter",
+    }
+    assert "key" not in response.text.lower()
+
+
+def test_retry_agent_endpoint_rejects_a_human_turn(client: TestClient) -> None:
+    game = client.post("/api/games", json={"opponent": "human"}).json()
+    paused = client.post(f"/api/games/{game['id']}/pause")
+    retried = client.post(f"/api/games/{game['id']}/retry-agent")
+
+    assert paused.status_code == 200
+    assert retried.status_code == 409
+    assert retried.json()["detail"] == "The active seat is human-controlled."
+
+
 def test_websocket_sends_reconnect_snapshot(client: TestClient) -> None:
     created = client.post("/api/games", json={"opponent": "human"}).json()
     with client.websocket_connect(f"/ws/games/{created['id']}") as websocket:

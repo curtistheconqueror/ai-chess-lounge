@@ -13,7 +13,7 @@ The project has two complementary experiences:
 ## Project status
 
 **Stage 2: Durable Match Platform** has sub-phases 2A through 2D implemented,
-**Stage 3A–3E** now provide the AI-seat protocol, unattended runner, direct OpenAI,
+**Stage 3A–3F** now provide the AI-seat protocol, unattended runner, direct OpenAI,
 Anthropic, Google Gemini, and OpenRouter adapters, plus local Ollama and vLLM
 connections, and the **Stage 4 broadcast vertical
 slice** is implemented.
@@ -29,7 +29,9 @@ matches. Effort is independently selectable only where the adapter has a verifie
 model-specific mapping; otherwise the UI truthfully shows provider default. The
 playable Lounge adds provider-neutral player cards, structured public strategy, local
 replay controls, isolated spectator analysis, share routes, and responsive browser
-checks. Recovery policy, MCP, and subscription adapters remain later increments.
+checks. Bounded provider retries, local request budgets, outage circuits, sanitized
+failure events, and explicit operator retry are implemented. MCP and subscription
+adapters remain later increments.
 
 Read [`docs/STAGE_2_DURABLE_MATCHES.md`](docs/STAGE_2_DURABLE_MATCHES.md) for the
 current increment, [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md)
@@ -38,7 +40,7 @@ for the AI-seat contract, [`docs/STAGE_4_BROADCAST_EXPERIENCE.md`](docs/STAGE_4_
 for the broadcast shell, [`docs/UI_QA_MATRIX.md`](docs/UI_QA_MATRIX.md) for the
  board and responsive release gate, and [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md)
 for the complete roadmap. No model-provider credentials are required for Stage 2A–2D,
-Stage 3A, or the current Stage 4 broadcast slice. Stages 3B–3E require the selected
+Stage 3A, Stage 3F, or the current Stage 4 broadcast slice. Stages 3B–3E require the selected
 provider's platform API key only when a direct OpenAI, Anthropic, Google, or OpenRouter
 seat is used. Ollama and vLLM can run without provider credentials on an
 operator-configured local endpoint.
@@ -105,6 +107,13 @@ Ollama and `http://127.0.0.1:8000/v1` for vLLM; override the matching `*_API_BAS
 only in server configuration. vLLM may also use an optional server-side
 `VLLM_API_KEY`. Local adapters currently label effort as provider default because
 those servers do not expose one portable cross-model effort contract.
+
+Stage 3F retries only explicitly transient transport, HTTP 429, and selected HTTP
+5xx failures. The default is two total attempts inside the original server-owned
+move deadline. Authentication errors, refusals, malformed output, stale responses,
+and illegal moves pause immediately. Operators can tune the bounded policy with the
+`LOUNGE_PROVIDER_*` variables documented in `.env.example`; the browser receives
+policy and circuit state, never provider response bodies or credentials.
 
 The provided native and Compose development commands bind to loopback because Stage
 2E authentication and quotas are not implemented yet. Do not expose a key-enabled

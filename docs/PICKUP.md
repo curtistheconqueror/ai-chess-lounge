@@ -5,45 +5,45 @@ It records the durable handoff state; chat history is never required to resume w
 
 ## Last completed phase
 
-- **Phase:** Stage 3D — Google Gemini Interactions adapter
+- **Phase:** Stage 3E — open-ecosystem adapters
 - **Status:** merged and verified
-- **Pull request:** [#6](https://github.com/curtistheconqueror/ai-chess-lounge/pull/6)
-- **Merge commit:** `c8151d1e3cbc5e1c5a34f4608fedb3c0928beeed`
-- **Contributor branch:** `feat/stage-3d-gemini-adapter` (retained)
-- **Pickup branch:** `pickup/stage-3d-complete`
-- **CI:** GitHub Actions run `36973770292` passed migration validation, PostgreSQL,
+- **Pull request:** [#7](https://github.com/curtistheconqueror/ai-chess-lounge/pull/7)
+- **Merge commit:** `038266a95285028391bbba46b3f663f507929d36`
+- **Contributor branch:** `feat/stage-3e-open-ecosystem-adapters` (retained)
+- **Pickup branch:** `pickup/stage-3e-complete`
+- **CI:** GitHub Actions run `37019352470` passed migration validation, PostgreSQL,
   API tests, web typecheck/build, and responsive Chromium smoke tests.
 
-Stage 3D delivered direct Gemini seats, model-specific thinking-level mapping,
-strict local move validation, normalized usage, sanitized failures, and
-Gemini-versus-Claude setup.
+Stage 3E delivered OpenRouter, Ollama, and vLLM seats, strict structured moves,
+honest provider-default effort, safe server-owned endpoint configuration, normalized
+usage, and hosted-versus-local setup.
 
 ## Current work
 
-- **Phase:** Stage 3E — open-ecosystem adapters
-- **Contributor branch:** `feat/stage-3e-open-ecosystem-adapters`
+- **Phase:** Stage 3F — provider recovery
+- **Contributor branch:** `feat/stage-3f-provider-recovery`
 - **State:** implementation complete and locally verified; publication/CI pending
-- **Target:** add server-side OpenRouter Chat Completions, native Ollama, and
-  OpenAI-compatible vLLM adapters; honest provider-default effort for unmapped local
-  models; catalog-driven hosted-versus-local UI selection; and contract/browser
-  coverage.
+- **Target:** add bounded transient provider retries inside the original clock,
+  process-local request budgets, outage circuits, sanitized recovery events, public
+  reliability status, and an explicit operator retry control.
 
 Provider keys, local base URLs, and local model allowlists remain server-side; no
 credential or operator-selected destination belongs in player configuration, events,
 browser payloads, commits, or this document.
 
-Local verification passed Ruff format/lint, 116 backend tests with one
-environment-specific PostgreSQL skip, web typecheck and production build, and
-discovery of all 35 Playwright cases. Local Chromium execution is unavailable because
-the Playwright browser binary is not installed in this workspace; GitHub CI remains
-the authoritative responsive browser gate.
+Local verification passes Ruff format/lint, 122 backend tests with one
+environment-specific PostgreSQL skip, SQLite migration upgrade/current/downgrade,
+web typecheck and production build, and discovery of all 40 Playwright cases. Local
+Chromium execution is unavailable because the Playwright browser binary is not
+installed in this workspace; GitHub CI remains the authoritative responsive browser
+gate.
 
 ## Exact next target
 
-Complete the Stage 3E test matrix, publish the contributor branch, open a pull request,
-require green GitHub CI, squash-merge, retain the contributor branch, and create
-immutable `pickup/stage-3e-complete` at the merge commit. Stage 3F then adds bounded
-provider retries, rate limits, outage policy, and operator-facing recovery controls.
+Publish the Stage 3F contributor branch, require green GitHub CI (including the new
+recovery browser smoke), squash-merge, retain the contributor branch, and create
+immutable `pickup/stage-3f-complete` at the merge commit. Stage 5A remote runner
+transport is the next product phase after Stage 3F.
 
 ## Pickup branch policy
 

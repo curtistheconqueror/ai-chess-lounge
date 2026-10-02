@@ -6,7 +6,12 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-from .adapters import AdapterConfigurationError, AdapterError
+from .adapters import (
+    AdapterConfigurationError,
+    AdapterError,
+    provider_http_error,
+    provider_transport_error,
+)
 from .player_protocol import (
     AssistanceDivision,
     ConnectionMode,
@@ -248,13 +253,9 @@ class GeminiInteractionsAdapter:
                         timeout=timeout_seconds,
                     )
         except httpx.HTTPError as exc:
-            raise AdapterError(
-                f"Google Gemini Interactions API request failed ({type(exc).__name__})."
-            ) from exc
+            raise provider_transport_error("Google Gemini Interactions API", exc) from exc
         if not response.is_success:
-            raise AdapterError(
-                f"Google Gemini Interactions API returned HTTP {response.status_code}."
-            )
+            raise provider_http_error("Google Gemini Interactions API", response)
         return response
 
     def _headers(self) -> dict[str, str]:

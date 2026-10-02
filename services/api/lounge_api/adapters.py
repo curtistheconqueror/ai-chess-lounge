@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import Protocol, runtime_checkable
 
 import chess
+import httpx
 
 from .engine import EngineFailure, StockfishService
 from .player_protocol import (
@@ -25,7 +26,58 @@ class AdapterConfigurationError(AdapterError):
 
 
 class RetryableAdapterError(AdapterError):
-    """A local adapter failed transiently and may be retried by the runner."""
+    """An adapter failed transiently and may be retried by the runner."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        category: str = "transient",
+        retry_after_ms: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.category = category
+        self.retry_after_ms = retry_after_ms
+
+
+RETRYABLE_PROVIDER_STATUS_CODES = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
+
+
+def provider_transport_error(operation: str, exc: httpx.HTTPError) -> RetryableAdapterError:
+    """Build a sanitized transient error for a provider transport failure."""
+
+    return RetryableAdapterError(
+        f"{operation} request failed ({type(exc).__name__}).",
+        category="transport",
+    )
+
+
+def provider_http_error(operation: str, response: httpx.Response) -> AdapterError:
+    """Classify an HTTP failure without exposing the provider response body."""
+
+    status_code = response.status_code
+    message = f"{operation} returned HTTP {status_code}."
+    if status_code not in RETRYABLE_PROVIDER_STATUS_CODES:
+        return AdapterError(message)
+    category = "rate_limited" if status_code == 429 else "provider_outage"
+    return RetryableAdapterError(
+        message,
+        category=category,
+        retry_after_ms=_retry_after_ms(response),
+    )
+
+
+def _retry_after_ms(response: httpx.Response) -> int | None:
+    value = response.headers.get("Retry-After")
+    if value is None:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        return None
+    if seconds < 0:
+        return None
+    return min(120_000, round(seconds * 1_000))
 
 
 @runtime_checkable

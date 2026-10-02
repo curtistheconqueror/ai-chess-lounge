@@ -91,6 +91,10 @@ export function resignGame(gameId: string): Promise<GameSnapshot> {
   return request<GameSnapshot>(`/api/games/${gameId}/resign`, { method: "POST" });
 }
 
+export function retryAgentTurn(gameId: string): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/retry-agent`, { method: "POST" });
+}
+
 export function websocketUrl(gameId: string): string {
   if (apiBase) {
     const url = new URL(apiBase, window.location.href);

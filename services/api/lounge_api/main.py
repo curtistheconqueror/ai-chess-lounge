@@ -70,6 +70,10 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             "adapters": active_manager.adapters.catalog(),
         }
 
+    @application.get("/api/player-adapters/reliability")
+    async def player_adapter_reliability() -> dict[str, object]:
+        return active_manager.provider_reliability_status()
+
     @application.post("/api/games", response_model=GameSnapshot, status_code=201)
     async def create_game(request: CreateGameRequest) -> GameSnapshot:
         try:
@@ -176,6 +180,10 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     @application.post("/api/games/{game_id}/resume", response_model=GameSnapshot)
     async def resume_game(game_id: str) -> GameSnapshot:
         return await lifecycle_action(active_manager.resume, game_id)
+
+    @application.post("/api/games/{game_id}/retry-agent", response_model=GameSnapshot)
+    async def retry_agent_turn(game_id: str) -> GameSnapshot:
+        return await lifecycle_action(active_manager.retry_agent_turn, game_id)
 
     @application.post("/api/games/{game_id}/abort", response_model=GameSnapshot)
     async def abort_game(game_id: str) -> GameSnapshot:
