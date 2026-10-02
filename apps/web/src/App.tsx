@@ -1,12 +1,48 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { createGame, fetchGame, resignGame, resetGame, submitMove, websocketUrl } from "./api";
+import {
+  createGame,
+  fetchAnalysis,
+  fetchGame,
+  fetchPlayerAdapters,
+  resignGame,
+  resetGame,
+  submitMove,
+  websocketUrl,
+} from "./api";
 import { pairMoves, parseFen } from "./chess";
 import { ChessBoard } from "./ChessBoard";
-import type { GameSnapshot } from "./types";
+import { EvaluationChart } from "./EvaluationChart";
+import { PromotionPicker, type PromotionPiece } from "./PromotionPicker";
+import type {
+  AnalysisPoint,
+  AdapterModelCapabilities,
+  EffortLevel,
+  GameAnalysis,
+  GameSnapshot,
+  PlayerAdapterCatalog,
+  PlayerConfiguration,
+} from "./types";
 
-type PanelTab = "moves" | "pgn" | "fen";
+type PanelTab = "moves" | "analysis" | "pgn" | "fen";
 type TimeControlKey = "1+0" | "3+2" | "5+2" | "10+5";
+type SeatChoice = "human" | "stockfish" | "scripted" | "openai";
+type ClockSync = { gameId: string; generation: number; revision: number; receivedAt: number };
+type PromotionRequest = { from: string; to: string; candidates: string[] };
+type Color = "white" | "black";
+interface PlayerCardProps {
+  side: "white" | "black";
+  title: string;
+  provider: string;
+  configuration: string;
+  division: string;
+  cost: string;
+  latency: string;
+  badge: string;
+  active: boolean;
+  clock: string;
+  urgent: boolean;
+}
 
 const timeControls: Record<
   TimeControlKey,
@@ -18,38 +54,161 @@ const timeControls: Record<
   "10+5": { label: "10 + 5 · Classical", initialTimeMs: 600_000, incrementMs: 5_000 },
 };
 
+const promotionCodes: Record<PromotionPiece, string> = {
+  queen: "q",
+  rook: "r",
+  bishop: "b",
+  knight: "n",
+};
+
 const savedGameKey = "ai-chess-lounge:active-game";
+const loungeEffortLevels: EffortLevel[] = ["fast", "balanced", "deep", "maximum"];
+const openAiPublicSettings = {
+  move_timeout_ms: 20_000,
+  spectator_delay_ms: 180,
+} as const;
 
 function App() {
   const [game, setGame] = useState<GameSnapshot | null>(null);
+  const [analysis, setAnalysis] = useState<GameAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [flipped, setFlipped] = useState(false);
   const [stockfishElo, setStockfishElo] = useState(1600);
+  const [whiteSeat, setWhiteSeat] = useState<SeatChoice>("human");
+  const [blackSeat, setBlackSeat] = useState<SeatChoice>("stockfish");
+  const [playerAdapters, setPlayerAdapters] = useState<PlayerAdapterCatalog | null>(null);
+  const [whiteOpenAiModel, setWhiteOpenAiModel] = useState("");
+  const [blackOpenAiModel, setBlackOpenAiModel] = useState("");
+  const [whiteEffort, setWhiteEffort] = useState<EffortLevel>("balanced");
+  const [blackEffort, setBlackEffort] = useState<EffortLevel>("balanced");
   const [timeControl, setTimeControl] = useState<TimeControlKey>("5+2");
   const [panelTab, setPanelTab] = useState<PanelTab>("moves");
   const [replayPly, setReplayPly] = useState<number | null>(null);
+  const [replayRunning, setReplayRunning] = useState(false);
+  const [promotion, setPromotion] = useState<PromotionRequest | null>(null);
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [clockTick, setClockTick] = useState(Date.now());
   const socketRef = useRef<WebSocket | null>(null);
+  const gameRef = useRef<GameSnapshot | null>(null);
+  const clockSyncRef = useRef<ClockSync | null>(null);
   const initialEloRef = useRef(stockfishElo);
   const initialTimeControlRef = useRef(timeControl);
+  const initialWhiteSeatRef = useRef<Exclude<SeatChoice, "openai">>("human");
+  const initialBlackSeatRef = useRef<Exclude<SeatChoice, "openai">>("stockfish");
+
+  const openAiModels = useMemo(() => selectableOpenAiModels(playerAdapters), [playerAdapters]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchPlayerAdapters()
+      .then((catalog) => {
+        if (!cancelled) setPlayerAdapters(catalog);
+      })
+      .catch(() => {
+        if (!cancelled) setPlayerAdapters(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!openAiModels.length) return;
+    const resolvedWhiteModel = selectedOpenAiModel(whiteOpenAiModel, openAiModels);
+    const resolvedBlackModel = selectedOpenAiModel(blackOpenAiModel, openAiModels);
+    if (whiteOpenAiModel !== resolvedWhiteModel) setWhiteOpenAiModel(resolvedWhiteModel);
+    if (blackOpenAiModel !== resolvedBlackModel) setBlackOpenAiModel(resolvedBlackModel);
+    if (!loungeEffortsForModel(resolvedWhiteModel, playerAdapters).includes(whiteEffort)) {
+      setWhiteEffort(defaultOpenAiEffort(resolvedWhiteModel, playerAdapters));
+    }
+    if (!loungeEffortsForModel(resolvedBlackModel, playerAdapters).includes(blackEffort)) {
+      setBlackEffort(defaultOpenAiEffort(resolvedBlackModel, playerAdapters));
+    }
+  }, [
+    blackEffort,
+    blackOpenAiModel,
+    openAiModels,
+    playerAdapters,
+    whiteEffort,
+    whiteOpenAiModel,
+  ]);
 
   const acceptSnapshot = useCallback((snapshot: GameSnapshot) => {
+    const current = gameRef.current;
+    const currentServerTime = current ? Date.parse(current.clock.server_time) : Number.NaN;
+    const incomingServerTime = Date.parse(snapshot.clock.server_time);
+    if (
+      current?.id === snapshot.id &&
+      (snapshot.generation < current.generation ||
+        (snapshot.generation === current.generation &&
+          (snapshot.revision < current.revision ||
+            (snapshot.revision === current.revision &&
+              Number.isFinite(currentServerTime) &&
+              Number.isFinite(incomingServerTime) &&
+              incomingServerTime <= currentServerTime))))
+    ) {
+      return;
+    }
+    const receivedAt = Date.now();
+    gameRef.current = snapshot;
+    clockSyncRef.current = {
+      gameId: snapshot.id,
+      generation: snapshot.generation,
+      revision: snapshot.revision,
+      receivedAt,
+    };
     setGame(snapshot);
-    setSelected(null);
-    setReplayPly((current) => (current === null ? null : Math.min(current, snapshot.moves.length)));
+    setClockTick(receivedAt);
+    if (
+      !current ||
+      current.id !== snapshot.id ||
+      current.generation !== snapshot.generation ||
+      current.version !== snapshot.version ||
+      current.can_move !== snapshot.can_move
+    ) {
+      setSelected(null);
+    }
+    setReplayPly((currentPly) =>
+      currentPly === null ? null : Math.min(currentPly, snapshot.moves.length),
+    );
     localStorage.setItem(savedGameKey, snapshot.id);
+    const path = `/games/${snapshot.id}`;
+    if (window.location.pathname !== path) window.history.replaceState(null, "", path);
   }, []);
 
   const startNewGame = useCallback(async () => {
     setBusy(true);
     setNotice(null);
+    setAnalysis(null);
+    setReplayRunning(false);
     try {
       const control = timeControls[timeControl];
       acceptSnapshot(
-        await createGame(stockfishElo, control.initialTimeMs, control.incrementMs),
+        await createGame({
+          stockfishElo,
+          initialTimeMs: control.initialTimeMs,
+          incrementMs: control.incrementMs,
+          whitePlayer: createSelectedPlayerConfiguration(
+            whiteSeat,
+            "white",
+            stockfishElo,
+            whiteOpenAiModel,
+            whiteEffort,
+            playerAdapters,
+          ),
+          blackPlayer: createSelectedPlayerConfiguration(
+            blackSeat,
+            "black",
+            stockfishElo,
+            blackOpenAiModel,
+            blackEffort,
+            playerAdapters,
+          ),
+        }),
       );
       setReplayPly(null);
     } catch (error) {
@@ -57,19 +216,38 @@ function App() {
     } finally {
       setBusy(false);
     }
-  }, [acceptSnapshot, stockfishElo, timeControl]);
+  }, [
+    acceptSnapshot,
+    blackEffort,
+    blackOpenAiModel,
+    blackSeat,
+    playerAdapters,
+    stockfishElo,
+    timeControl,
+    whiteEffort,
+    whiteOpenAiModel,
+    whiteSeat,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
     async function restore() {
-      const stored = localStorage.getItem(savedGameKey);
+      const routeGame = window.location.pathname.match(/^\/games\/([A-Za-z0-9-]+)\/?$/)?.[1];
+      const stored = routeGame ?? localStorage.getItem(savedGameKey);
       if (stored) {
+        setBusy(true);
         try {
           const snapshot = await fetchGame(stored);
           if (!cancelled) acceptSnapshot(snapshot);
           return;
         } catch {
+          if (routeGame) {
+            if (!cancelled) setNotice("That shared match is unavailable or no longer exists.");
+            return;
+          }
           localStorage.removeItem(savedGameKey);
+        } finally {
+          if (!cancelled) setBusy(false);
         }
       }
       if (!cancelled) {
@@ -77,11 +255,21 @@ function App() {
         try {
           const control = timeControls[initialTimeControlRef.current];
           acceptSnapshot(
-            await createGame(
-              initialEloRef.current,
-              control.initialTimeMs,
-              control.incrementMs,
-            ),
+            await createGame({
+              stockfishElo: initialEloRef.current,
+              initialTimeMs: control.initialTimeMs,
+              incrementMs: control.incrementMs,
+              whitePlayer: createPlayerConfiguration(
+                initialWhiteSeatRef.current,
+                "white",
+                initialEloRef.current,
+              ),
+              blackPlayer: createPlayerConfiguration(
+                initialBlackSeatRef.current,
+                "black",
+                initialEloRef.current,
+              ),
+            }),
           );
         } catch (error) {
           setNotice(error instanceof Error ? error.message : "Unable to create game.");
@@ -99,23 +287,85 @@ function App() {
 
   useEffect(() => {
     if (!game?.id) return;
+    const gameId = game.id;
     socketRef.current?.close();
-    setConnection("connecting");
-    const socket = new WebSocket(websocketUrl(game.id));
-    socketRef.current = socket;
-    socket.addEventListener("open", () => setConnection("live"));
-    socket.addEventListener("close", () => setConnection("offline"));
-    socket.addEventListener("error", () => setConnection("offline"));
-    socket.addEventListener("message", (event) => {
-      try {
-        const message = JSON.parse(event.data) as { type: string; payload: GameSnapshot };
-        if (message.type === "snapshot") acceptSnapshot(message.payload);
-      } catch {
-        setNotice("A live update could not be read.");
-      }
-    });
-    return () => socket.close();
+    let stopped = false;
+    let retryTimer: number | undefined;
+    let retryCount = 0;
+
+    function connect() {
+      if (stopped) return;
+      setConnection("connecting");
+      const socket = new WebSocket(websocketUrl(gameId));
+      socketRef.current = socket;
+      socket.addEventListener("open", () => {
+        retryCount = 0;
+        setConnection("live");
+      });
+      socket.addEventListener("close", () => {
+        if (stopped) return;
+        setConnection("offline");
+        const delay = Math.min(10_000, 500 * 2 ** retryCount);
+        retryCount += 1;
+        retryTimer = window.setTimeout(connect, delay);
+      });
+      socket.addEventListener("error", () => setConnection("offline"));
+      socket.addEventListener("message", (event) => {
+        try {
+          const message = JSON.parse(event.data) as { type: string; payload: GameSnapshot };
+          if (message.type === "snapshot") acceptSnapshot(message.payload);
+        } catch {
+          setNotice("A live update could not be read.");
+        }
+      });
+    }
+
+    connect();
+    return () => {
+      stopped = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      socketRef.current?.close();
+    };
   }, [game?.id, acceptSnapshot]);
+
+  useEffect(() => {
+    if (!game?.id) return;
+    let cancelled = false;
+    setAnalysis((current) =>
+      current?.game_id === game.id &&
+      current.generation === game.generation &&
+      current.position_version === game.version
+        ? current
+        : null,
+    );
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    const timer = window.setTimeout(() => {
+      void fetchAnalysis(game.id)
+        .then((result) => {
+          if (
+            !cancelled &&
+            result.game_id === game.id &&
+            result.generation === game.generation &&
+            result.position_version === game.version
+          ) {
+            setAnalysis(result);
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setAnalysisError(error instanceof Error ? error.message : "Analysis unavailable.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setAnalysisLoading(false);
+        });
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [game?.id, game?.generation, game?.version]);
 
   useEffect(() => {
     if (game?.lifecycle !== "running" || game.status !== "active") return;
@@ -124,31 +374,118 @@ function App() {
     return () => window.clearInterval(timer);
   }, [game?.id, game?.lifecycle, game?.status, game?.turn, game?.clock.server_time]);
 
+  useEffect(() => {
+    if (!game) return;
+    document.title = `${game.status === "active" ? "Live" : game.result} · AI Chess Lounge`;
+    const description = document.querySelector('meta[name="description"]');
+    description?.setAttribute(
+      "content",
+      `Watch ${game.white_player.display_name} vs ${game.black_player.display_name} in the AI Chess Lounge.`,
+    );
+  }, [game]);
+
+  useEffect(() => {
+    if (!replayRunning || !game) return;
+    const timer = window.setTimeout(() => {
+      const current = replayPly ?? 0;
+      const next = Math.min(game.moves.length, current + 1);
+      setReplayPly(next);
+      if (next >= game.moves.length) setReplayRunning(false);
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [game, replayPly, replayRunning]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!game || event.altKey || event.ctrlKey || event.metaKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.matches("input, select, textarea, button")) return;
+      const current = replayPly ?? game.moves.length;
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setReplayRunning(false);
+        setReplayPly(Math.max(0, current - 1));
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setReplayRunning(false);
+        setReplayPly(Math.min(game.moves.length, current + 1));
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        setReplayRunning(false);
+        setReplayPly(0);
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        setReplayRunning(false);
+        setReplayPly(null);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [game, replayPly]);
+
+  const displayPly = replayPly ?? game?.moves.length ?? 0;
+  const followingLive = replayPly === null;
   const displayFen = useMemo(() => {
-    if (!game || replayPly === null || replayPly === game.moves.length) return game?.fen ?? "";
-    if (replayPly === 0) return game.initial_fen;
-    return game.moves[replayPly - 1]?.fen ?? game.fen;
-  }, [game, replayPly]);
-
+    if (!game || displayPly === game.moves.length) return game?.fen ?? "";
+    if (displayPly === 0) return game.initial_fen;
+    return game.moves[displayPly - 1]?.fen ?? game.fen;
+  }, [displayPly, game]);
   const displayLastMove = useMemo(() => {
-    if (!game) return null;
-    if (replayPly === null) return game.last_move;
-    return replayPly > 0 ? game.moves[replayPly - 1]?.uci ?? null : null;
-  }, [game, replayPly]);
-
+    if (!game || displayPly === 0) return null;
+    return game.moves[displayPly - 1]?.uci ?? null;
+  }, [displayPly, game]);
   const moveRows = useMemo(() => pairMoves(game?.moves ?? []), [game?.moves]);
-  const clocks = useMemo(() => projectClocks(game, clockTick), [game, clockTick]);
-  const atLive = replayPly === null || replayPly === game?.moves.length;
-  const playerCanMove = Boolean(game?.can_move && atLive && !busy);
+  const clocks = useMemo(
+    () => projectClocks(game, clockTick, clockSyncRef.current),
+    [game, clockTick],
+  );
+  const playerCanMove = Boolean(game?.can_move && followingLive && !busy);
+  const currentAnalysis =
+    analysis &&
+    game &&
+    analysis.game_id === game.id &&
+    analysis.generation === game.generation &&
+    analysis.position_version === game.version
+      ? analysis
+      : null;
+  const selectedPoint = currentAnalysis?.points.find((point) => point.ply === displayPly) ?? null;
+  const latestAgentMove = game?.moves.filter((move) => move.player_metadata !== null).at(-1);
+  const matchupLabel = game
+    ? `${game.white_player.display_name} vs ${game.black_player.display_name}`
+    : "Human vs Stockfish";
+  const evalShare = evaluationShare(selectedPoint);
+
+  async function commitMove(move: string) {
+    if (!game) return;
+    setSelected(null);
+    setPromotion(null);
+    setBusy(true);
+    setNotice(null);
+    try {
+      acceptSnapshot(await submitMove(game.id, move, game.version));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Move failed.");
+      try {
+        acceptSnapshot(await fetchGame(game.id));
+      } catch {
+        // Preserve the original move error when refresh also fails.
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function onSquareClick(square: string) {
     if (!game || !playerCanMove) return;
     const boardSquare = parseFen(game.fen).find((candidate) => candidate.name === square);
     if (!selected) {
-      if (boardSquare?.piece?.color === "white") setSelected(square);
+      if (boardSquare?.piece?.color === game.turn) setSelected(square);
       return;
     }
-    if (boardSquare?.piece?.color === "white") {
+    if (boardSquare?.piece?.color === game.turn) {
       setSelected(square);
       return;
     }
@@ -159,40 +496,33 @@ function App() {
       setSelected(null);
       return;
     }
-    let move = candidates[0];
     if (candidates.some((candidate) => candidate.length === 5)) {
-      const promotion = window.prompt("Promote to queen, rook, bishop, or knight?", "queen") ?? "queen";
-      const piece = { queen: "q", rook: "r", bishop: "b", knight: "n" }[
-        promotion.toLowerCase() as "queen" | "rook" | "bishop" | "knight"
-      ] ?? "q";
-      move = `${selected}${square}${piece}`;
+      setPromotion({ from: selected, to: square, candidates });
+      return;
     }
-    setSelected(null);
-    setBusy(true);
-    setNotice(null);
-    try {
-      acceptSnapshot(await submitMove(game.id, move, game.version));
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Move failed.");
-      try {
-        acceptSnapshot(await fetchGame(game.id));
-      } catch {
-        // Preserve the original error if refresh also fails.
-      }
-    } finally {
-      setBusy(false);
-    }
+    await commitMove(candidates[0]);
+  }
+
+  function choosePromotion(piece: PromotionPiece) {
+    if (!promotion) return;
+    const move = `${promotion.from}${promotion.to}${promotionCodes[piece]}`;
+    if (promotion.candidates.includes(move)) void commitMove(move);
   }
 
   async function copyText(value: string, label: string) {
-    await navigator.clipboard.writeText(value);
-    setNotice(`${label} copied.`);
-    window.setTimeout(() => setNotice(null), 1600);
+    try {
+      await navigator.clipboard.writeText(value);
+      setNotice(`${label} copied.`);
+    } catch {
+      setNotice(`${label} could not be copied. Select it manually and try again.`);
+    }
+    window.setTimeout(() => setNotice(null), 1800);
   }
 
   async function onReset() {
     if (!game) return;
     setBusy(true);
+    setReplayRunning(false);
     try {
       acceptSnapshot(await resetGame(game.id));
       setReplayPly(null);
@@ -215,8 +545,88 @@ function App() {
     }
   }
 
-  const engineLabel = game?.engine?.version ?? game?.engine?.name ?? "Stockfish";
-  const replayLabel = replayPly === null ? game?.moves.length ?? 0 : replayPly;
+  function selectPly(ply: number) {
+    setReplayRunning(false);
+    setReplayPly(Math.max(0, Math.min(game?.moves.length ?? 0, ply)));
+  }
+
+  function toggleReplay() {
+    if (!game?.moves.length) return;
+    if (replayRunning) {
+      setReplayRunning(false);
+      return;
+    }
+    if (replayPly === null || replayPly >= game.moves.length) setReplayPly(0);
+    setReplayRunning(true);
+  }
+
+  function downloadGame(format: "pgn" | "json") {
+    if (!game) return;
+    const content = format === "pgn"
+      ? game.pgn
+      : JSON.stringify(
+          {
+            schema: "ai-chess-lounge.match-export.v1",
+            exported_at: new Date().toISOString(),
+            match: game,
+              analysis: currentAnalysis,
+          },
+          null,
+          2,
+        );
+    downloadText(content, `ai-chess-lounge-${game.id}.${format}`, format);
+  }
+
+  async function shareMatch() {
+    if (!game) return;
+    const url = permalink(game.id);
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "AI Chess Lounge match",
+          text: `${matchupLabel} · ${game.result === "*" ? "live" : game.result}`,
+          url,
+        });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+    await copyText(url, "Match link");
+  }
+
+  const whiteConfiguration = game?.white_player
+    ?? createSelectedPlayerConfiguration(
+      whiteSeat,
+      "white",
+      stockfishElo,
+      whiteOpenAiModel,
+      whiteEffort,
+      playerAdapters,
+    );
+  const blackConfiguration = game?.black_player
+    ?? createSelectedPlayerConfiguration(
+      blackSeat,
+      "black",
+      stockfishElo,
+      blackOpenAiModel,
+      blackEffort,
+      playerAdapters,
+    );
+  const whiteStrategy = strategyForSeat(game, "white", whiteConfiguration);
+  const blackStrategy = strategyForSeat(game, "black", blackConfiguration);
+  const whitePlayer = playerCardForSeat(
+    game,
+    "white",
+    whiteConfiguration,
+    clocks.white,
+  );
+  const blackPlayer = playerCardForSeat(
+    game,
+    "black",
+    blackConfiguration,
+    clocks.black,
+  );
 
   return (
     <main className="app-shell">
@@ -229,87 +639,62 @@ function App() {
           </div>
         </div>
         <div className="topbar-actions">
-          <span className={`connection ${connection}`}>
+          <span className={`connection ${connection}`} aria-label={`Connection ${connection}`}>
             <span className="connection-dot" /> {connection}
           </span>
-          <button className="ghost-button" onClick={() => setFlipped((value) => !value)}>
-            Flip board
-          </button>
+          <button className="ghost-button" onClick={() => setFlipped((value) => !value)}>Flip board</button>
+          <button className="gold-ghost-button" onClick={() => void shareMatch()} disabled={!game}>Share match</button>
         </div>
       </header>
 
+      <section className="broadcast-ribbon" aria-label="Match broadcast status">
+        <span className={game?.status === "active" ? "live-pulse" : "result-pulse"} />
+        <strong>{game?.status === "active" ? "LIVE EXHIBITION" : "MATCH COMPLETE"}</strong>
+        <span>Table 01</span>
+        <span>{game ? `${Math.round(game.clock.initial_time_ms / 60_000)}+${game.clock.increment_ms / 1_000}` : "—"}</span>
+        <span>Server authoritative</span>
+        {!followingLive && <b>LOCAL REPLAY · LIVE FEED CONTINUES</b>}
+      </section>
+
       <section className="arena-layout">
         <div className="match-stage">
-          <PlayerCard
-            side="black"
-            title={engineLabel}
-            subtitle={`Engine · target ${game?.engine?.target_elo ?? stockfishElo} Elo`}
-            badge={game?.turn === "black" && game?.status === "active" ? "THINKING" : "BLACK"}
-            active={game?.turn === "black" && game?.status === "active"}
-            clock={formatClock(clocks.black)}
-            urgent={game?.turn === "black" && clocks.black <= 10_000}
+          <PlayerCard {...(flipped ? whitePlayer : blackPlayer)} />
+
+          <StrategyChannel
+            white={whiteStrategy}
+            black={blackStrategy}
+            activeSide={game?.turn ?? "white"}
+            pv={selectedPoint?.pv_san ?? []}
+            depth={selectedPoint?.depth ?? null}
           />
 
-          <div className="strategy-banner" role="status">
-            <div className="strategy-icon">◇</div>
-            <div>
-              <span>Strategy channel</span>
-              <strong>{game?.strategy_banner ?? "Preparing the board…"}</strong>
+          <div className="board-broadcast-frame">
+            <div className={`evaluation-bar ${flipped ? "flipped" : ""}`} aria-label={`White evaluation share ${Math.round(evalShare)} percent`}>
+              <div className="evaluation-white" style={{ height: `${evalShare}%` }} />
+              <span>{formatEvaluation(selectedPoint)}</span>
             </div>
+            <ChessBoard
+              fen={displayFen || "8/8/8/8/8/8/8/8 w - - 0 1"}
+              flipped={flipped}
+              legalMoves={followingLive ? game?.legal_moves ?? [] : []}
+              selected={selected}
+              lastMove={displayLastMove}
+              inCheck={Boolean(followingLive && game?.in_check)}
+              disabled={!playerCanMove}
+              onSquareClick={(square) => void onSquareClick(square)}
+            />
           </div>
 
-          <ChessBoard
-            fen={displayFen || "8/8/8/8/8/8/8/8 w - - 0 1"}
-            flipped={flipped}
-            legalMoves={atLive ? game?.legal_moves ?? [] : []}
-            selected={selected}
-            lastMove={displayLastMove}
-            disabled={!playerCanMove}
-            onSquareClick={(square) => void onSquareClick(square)}
-          />
-
-          <PlayerCard
-            side="white"
-            title="CurtisTheConqueror"
-            subtitle="Human seat · White"
-            badge={game?.turn === "white" && game?.status === "active" ? "YOUR MOVE" : "WHITE"}
-            active={game?.turn === "white" && game?.status === "active"}
-            clock={formatClock(clocks.white)}
-            urgent={game?.turn === "white" && clocks.white <= 10_000}
-          />
+          <PlayerCard {...(flipped ? blackPlayer : whitePlayer)} />
 
           <div className="playback-bar">
-            <button
-              aria-label="First position"
-              onClick={() => setReplayPly(0)}
-              disabled={!game?.moves.length}
-            >
-              |◀
-            </button>
-            <button
-              aria-label="Previous move"
-              onClick={() => setReplayPly(Math.max(0, (replayPly ?? game?.moves.length ?? 0) - 1))}
-              disabled={!game?.moves.length}
-            >
-              ◀
-            </button>
-            <span>
-              Position <strong>{replayLabel}</strong> / {game?.moves.length ?? 0}
-            </span>
-            <button
-              aria-label="Next move"
-              onClick={() => {
-                if (!game) return;
-                const next = Math.min(game.moves.length, (replayPly ?? game.moves.length) + 1);
-                setReplayPly(next === game.moves.length ? null : next);
-              }}
-              disabled={atLive}
-            >
-              ▶
-            </button>
-            <button aria-label="Jump to live" onClick={() => setReplayPly(null)} disabled={atLive}>
-              LIVE
-            </button>
+            <button aria-label="First position" onClick={() => selectPly(0)} disabled={!game?.moves.length}>|◀</button>
+            <button aria-label="Previous move" onClick={() => selectPly(displayPly - 1)} disabled={!game?.moves.length || displayPly === 0}>◀</button>
+            <button className="replay-toggle" onClick={toggleReplay} disabled={!game?.moves.length}>{replayRunning ? "PAUSE" : "REPLAY"}</button>
+            <input type="range" min="0" max={game?.moves.length ?? 0} value={displayPly} onChange={(event) => selectPly(Number(event.target.value))} aria-label="Replay position" />
+            <span><strong>{displayPly}</strong> / {game?.moves.length ?? 0}</span>
+            <button aria-label="Next move" onClick={() => selectPly(displayPly + 1)} disabled={!game || displayPly >= game.moves.length}>▶</button>
+            <button className={followingLive ? "live active" : "live"} onClick={() => { setReplayRunning(false); setReplayPly(null); }} disabled={followingLive}>LIVE</button>
           </div>
         </div>
 
@@ -317,51 +702,85 @@ function App() {
           <div className="match-header">
             <div>
               <p className="eyebrow">EXHIBITION TABLE 01</p>
-              <h2>Human vs Stockfish</h2>
+              <h2>{game?.white_player.display_name ?? seatChoiceLabel(whiteSeat)} <span>vs</span> {game?.black_player.display_name ?? seatChoiceLabel(blackSeat)}</h2>
+              <small>{game?.id ? `Match ${game.id.slice(0, 8).toUpperCase()}` : "Opening table…"}</small>
             </div>
-            <span className={`result-badge ${game?.status ?? "loading"}`}>
-              {game?.status === "active" ? "LIVE" : game?.result ?? "LOADING"}
-            </span>
+            <span className={`result-badge ${game?.status ?? "loading"}`}>{game?.status === "active" ? "LIVE" : game?.result ?? "LOADING"}</span>
           </div>
 
           <div className="match-controls">
             <label>
-              Engine strength
-              <select value={stockfishElo} onChange={(event) => setStockfishElo(Number(event.target.value))}>
+              White seat
+              <select
+                aria-label="White seat"
+                value={whiteSeat}
+                onChange={(event) => setWhiteSeat(event.target.value as SeatChoice)}
+              >
+                <SeatOptions openAiSelectable={openAiModels.length > 0} />
+              </select>
+            </label>
+            <label>
+              Black seat
+              <select
+                aria-label="Black seat"
+                value={blackSeat}
+                onChange={(event) => setBlackSeat(event.target.value as SeatChoice)}
+              >
+                <SeatOptions openAiSelectable={openAiModels.length > 0} />
+              </select>
+            </label>
+            {whiteSeat === "openai" && (
+              <OpenAiSeatControls
+                color="white"
+                models={openAiModels}
+                catalog={playerAdapters}
+                selectedModel={selectedOpenAiModel(whiteOpenAiModel, openAiModels)}
+                selectedEffort={whiteEffort}
+                onModelChange={(model) => {
+                  setWhiteOpenAiModel(model);
+                  setWhiteEffort(defaultOpenAiEffort(model, playerAdapters));
+                }}
+                onEffortChange={setWhiteEffort}
+              />
+            )}
+            {blackSeat === "openai" && (
+              <OpenAiSeatControls
+                color="black"
+                models={openAiModels}
+                catalog={playerAdapters}
+                selectedModel={selectedOpenAiModel(blackOpenAiModel, openAiModels)}
+                selectedEffort={blackEffort}
+                onModelChange={(model) => {
+                  setBlackOpenAiModel(model);
+                  setBlackEffort(defaultOpenAiEffort(model, playerAdapters));
+                }}
+                onEffortChange={setBlackEffort}
+              />
+            )}
+            <label>
+              Stockfish strength
+              <select aria-label="Stockfish strength" value={stockfishElo} onChange={(event) => setStockfishElo(Number(event.target.value))} disabled={whiteSeat !== "stockfish" && blackSeat !== "stockfish"}>
                 <option value={1320}>1320 · Club entry</option>
                 <option value={1600}>1600 · Strong club</option>
                 <option value={2000}>2000 · Expert</option>
                 <option value={2500}>2500 · Grandmaster+</option>
-                <option value={3190}>Maximum · Brutal</option>
+                <option value={3190}>3190 · Maximum</option>
               </select>
             </label>
             <label>
               Time control
-              <select
-                value={timeControl}
-                onChange={(event) => setTimeControl(event.target.value as TimeControlKey)}
-              >
-                {(Object.entries(timeControls) as [TimeControlKey, (typeof timeControls)[TimeControlKey]][]).map(
-                  ([key, control]) => (
-                    <option key={key} value={key}>{control.label}</option>
-                  ),
-                )}
+              <select value={timeControl} onChange={(event) => setTimeControl(event.target.value as TimeControlKey)}>
+                {(Object.entries(timeControls) as [TimeControlKey, (typeof timeControls)[TimeControlKey]][]).map(([key, control]) => (
+                  <option key={key} value={key}>{control.label}</option>
+                ))}
               </select>
             </label>
-            <button className="primary-button" onClick={() => void startNewGame()} disabled={busy}>
-              New match
-            </button>
+            <button className="primary-button" onClick={() => void startNewGame()} disabled={busy}>New match</button>
           </div>
 
-          <div className="panel-tabs" role="tablist">
-            {(["moves", "pgn", "fen"] as const).map((tab) => (
-              <button
-                key={tab}
-                role="tab"
-                aria-selected={panelTab === tab}
-                className={panelTab === tab ? "active" : ""}
-                onClick={() => setPanelTab(tab)}
-              >
+          <div className="panel-tabs" role="tablist" aria-label="Match details">
+            {(["moves", "analysis", "pgn", "fen"] as const).map((tab) => (
+              <button key={tab} role="tab" aria-selected={panelTab === tab} className={panelTab === tab ? "active" : ""} onClick={() => setPanelTab(tab)}>
                 {tab.toUpperCase()}
               </button>
             ))}
@@ -370,116 +789,367 @@ function App() {
           <div className="panel-content">
             {panelTab === "moves" && (
               <div className="move-list">
-                {!moveRows.length && <div className="empty-state">The opening move is yours.</div>}
+                {!moveRows.length && <div className="empty-state">The opening position is ready.</div>}
                 {moveRows.map((row) => (
                   <div className="move-row" key={row.number}>
                     <span>{row.number}.</span>
-                    <button onClick={() => setReplayPly(row.number * 2 - 1)}>{row.white ?? "—"}</button>
-                    <button
-                      onClick={() => setReplayPly(row.black ? row.number * 2 : row.number * 2 - 1)}
-                    >
-                      {row.black ?? "…"}
-                    </button>
+                    <MoveButton san={row.white} ply={row.number * 2 - 1} selected={displayPly === row.number * 2 - 1} classification={currentAnalysis?.points[row.number * 2 - 1]?.classification ?? null} onSelect={selectPly} />
+                    <MoveButton san={row.black} ply={row.number * 2} selected={Boolean(row.black && displayPly === row.number * 2)} classification={currentAnalysis?.points[row.number * 2]?.classification ?? null} onSelect={selectPly} />
                   </div>
                 ))}
               </div>
             )}
+            {panelTab === "analysis" && <AnalysisPanel analysis={currentAnalysis} loading={analysisLoading} error={analysisError} selectedPly={displayPly} selectedPoint={selectedPoint} onSelect={selectPly} />}
             {panelTab === "pgn" && (
               <div className="notation-panel">
                 <pre>{game?.pgn ?? "No game loaded."}</pre>
-                <button onClick={() => void copyText(game?.pgn ?? "", "PGN")}>Copy PGN</button>
+                <div><button onClick={() => void copyText(game?.pgn ?? "", "PGN")}>Copy PGN</button><button onClick={() => downloadGame("pgn")}>Download .pgn</button></div>
               </div>
             )}
             {panelTab === "fen" && (
               <div className="notation-panel">
                 <pre>{displayFen}</pre>
-                <button onClick={() => void copyText(displayFen, "FEN")}>Copy FEN</button>
+                <div><button onClick={() => void copyText(displayFen, "FEN")}>Copy FEN</button><button onClick={() => downloadGame("json")}>Download match JSON</button></div>
               </div>
             )}
           </div>
 
           <div className="telemetry-grid">
-            <Metric label="Ply" value={String(game?.moves.length ?? 0)} />
-            <Metric
-              label="Engine latency"
-              value={
-                game?.moves.filter((move) => move.actor.startsWith("stockfish")).at(-1)?.elapsed_ms
-                  ? `${game.moves.filter((move) => move.actor.startsWith("stockfish")).at(-1)?.elapsed_ms} ms`
-                  : "—"
-              }
-            />
-            <Metric label="Position version" value={String(game?.version ?? 0)} />
+            <Metric label="Position" value={`${displayPly} / ${game?.moves.length ?? 0}`} />
+            <Metric label="Evaluation" value={formatEvaluation(selectedPoint)} accent />
+            <Metric label="Move latency" value={latestAgentMove?.player_metadata ? `${latestAgentMove.player_metadata.latency_ms} ms` : "—"} />
+            <Metric label="Analysis depth" value={selectedPoint?.depth ? `Depth ${selectedPoint.depth}` : analysisLoading ? "CALCULATING" : "—"} />
             <Metric label="Event sequence" value={String(game?.event_sequence ?? 0)} />
-            <Metric
-              label="Time control"
-              value={game ? `${Math.round(game.clock.initial_time_ms / 60_000)}+${game.clock.increment_ms / 1_000}` : "—"}
-            />
             <Metric label="Lifecycle" value={(game?.lifecycle ?? "loading").toUpperCase()} accent />
-            <Metric label="Storage" value="DURABLE" accent />
           </div>
 
           <div className="secondary-actions">
-            <button onClick={() => void onReset()} disabled={!game || busy}>Reset board</button>
-            <button onClick={() => void onResign()} disabled={!game || busy || game.status !== "active"}>
-              Resign
-            </button>
-            <button onClick={() => game && void copyText(window.location.href, "Lounge link")}>Copy link</button>
+            <button onClick={() => void onReset()} disabled={!game || busy}>Reset</button>
+            <button onClick={() => void onResign()} disabled={!game || busy || game.status !== "active"}>Resign</button>
+            <button onClick={() => game && void copyText(permalink(game.id), "Match link")}>Copy link</button>
+            <button onClick={() => downloadGame("pgn")} disabled={!game}>Export PGN</button>
           </div>
 
           <div className="integrity-note">
-            <span>SERVER AUTHORITY</span>
-            Every move is validated before it reaches the board. FEN, PGN, result, and replay all derive from the same position history.
+            <span>BROADCAST INTEGRITY</span>
+            Evaluation runs in a separate spectator engine and never chooses the competitor’s move. Public strategy cards contain declared or position-derived summaries—not hidden model reasoning.
           </div>
         </aside>
       </section>
 
+      <footer className="lounge-footer"><span>AI Chess Lounge</span><span>Provider-neutral broadcast shell</span><span>PGN · FEN · JSON · Replay</span></footer>
+      {promotion && <PromotionPicker onChoose={choosePromotion} onCancel={() => setPromotion(null)} />}
       {notice && <div className="toast" role="alert">{notice}</div>}
+      <div className="sr-only" aria-live="polite">Position {displayPly}. {selectedPoint ? formatEvaluation(selectedPoint) : "Evaluation pending"}.</div>
     </main>
   );
 }
 
-function PlayerCard({
-  side,
-  title,
-  subtitle,
-  badge,
-  active,
-  clock,
-  urgent,
-}: {
-  side: "white" | "black";
-  title: string;
-  subtitle: string;
-  badge: string;
-  active: boolean;
-  clock: string;
-  urgent: boolean;
-}) {
+function PlayerCard({ side, title, provider, configuration, division, cost, latency, badge, active, clock, urgent }: PlayerCardProps) {
   return (
-    <div className={`player-card ${active ? "active" : ""}`}>
+    <div className={`player-card ${side} ${active ? "active" : ""}`}>
       <div className={`player-avatar ${side}`}>{side === "white" ? "♔" : "♚"}</div>
       <div className="player-copy">
-        <strong>{title}</strong>
-        <span>{subtitle}</span>
+        <div className="player-name-line"><strong>{title}</strong><span className="player-badge">{badge}</span></div>
+        <span>{provider} · {configuration}</span>
+        <div className="player-chips"><small>{division}</small><small>{latency}</small><small>{cost}</small></div>
       </div>
-      <div className="player-status">
-        <strong className={`player-clock ${urgent ? "urgent" : ""}`}>{clock}</strong>
-        <span className="player-badge">{badge}</span>
-      </div>
+      <strong className={`player-clock ${urgent ? "urgent" : ""}`}>{clock}</strong>
     </div>
   );
 }
 
-function projectClocks(
+function StrategyChannel({ white, black, activeSide, pv, depth }: {
+  white: string;
+  black: string;
+  activeSide: "white" | "black";
+  pv: string[];
+  depth: number | null;
+}) {
+  return (
+    <div className="strategy-channel" aria-label="Public strategy channel">
+      <div className={activeSide === "black" ? "strategy-card active" : "strategy-card"}><span><b>BLACK</b> PUBLIC PLAN</span><strong>{black}</strong></div>
+      <div className="strategy-center" aria-label="Spectator principal variation"><span>◇</span><small>{pv.length ? `Spectator PV · ${pv.slice(0, 4).join(" ")}` : "Public summaries only"}</small>{depth && <em>D{depth}</em>}</div>
+      <div className={activeSide === "white" ? "strategy-card active" : "strategy-card"}><span><b>WHITE</b> PUBLIC PLAN</span><strong>{white}</strong></div>
+    </div>
+  );
+}
+
+function MoveButton({ san, ply, selected, classification, onSelect }: {
+  san?: string;
+  ply: number;
+  selected: boolean;
+  classification: AnalysisPoint["classification"];
+  onSelect: (ply: number) => void;
+}) {
+  return <button className={selected ? "selected" : ""} onClick={() => onSelect(ply)} disabled={!san}><span>{san ?? "…"}</span>{classification && <i className={`classification ${classification}`}>{classification}</i>}</button>;
+}
+
+function AnalysisPanel({ analysis, loading, error, selectedPly, selectedPoint, onSelect }: {
+  analysis: GameAnalysis | null;
+  loading: boolean;
+  error: string | null;
+  selectedPly: number;
+  selectedPoint: AnalysisPoint | null;
+  onSelect: (ply: number) => void;
+}) {
+  if (!analysis && loading) return <div className="analysis-state"><span className="analysis-spinner" />Running spectator Stockfish…</div>;
+  if (!analysis && error) return <div className="analysis-state error">Analysis unavailable: {error}</div>;
+  if (!analysis) return <div className="analysis-state">Analysis will appear after the match loads.</div>;
+  return (
+    <div className="analysis-panel">
+      <div className="analysis-headline"><div><span>SPECTATOR ENGINE</span><strong>{analysis.engine_version ?? analysis.engine_name}</strong></div><b>{formatEvaluation(selectedPoint)}</b></div>
+      <EvaluationChart points={analysis.points} selectedPly={selectedPly} onSelect={onSelect} />
+      <div className="principal-variation"><span>Principal variation</span><strong>{selectedPoint?.pv_san.length ? selectedPoint.pv_san.join(" ") : "No forced line available"}</strong></div>
+      <div className="analysis-footnote">White perspective · {selectedPoint?.depth ? `depth ${selectedPoint.depth}` : "depth pending"} · isolated from move selection</div>
+    </div>
+  );
+}
+
+function Metric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+  return <div className="metric"><span>{label}</span><strong className={accent ? "accent" : ""}>{value}</strong></div>;
+}
+
+function SeatOptions({ openAiSelectable }: { openAiSelectable: boolean }) {
+  return (
+    <>
+      <option value="human">Human player</option>
+      <option value="stockfish">Stockfish</option>
+      <option value="scripted">Deterministic agent</option>
+      <option value="openai" disabled={!openAiSelectable}>OpenAI model{openAiSelectable ? "" : " · not configured"}</option>
+    </>
+  );
+}
+
+function seatChoiceLabel(choice: SeatChoice): string {
+  if (choice === "stockfish") return "Stockfish";
+  if (choice === "scripted") return "Deterministic Agent";
+  if (choice === "openai") return "OpenAI";
+  return "Human";
+}
+
+function OpenAiSeatControls({
+  color,
+  models,
+  catalog,
+  selectedModel,
+  selectedEffort,
+  onModelChange,
+  onEffortChange,
+}: {
+  color: Color;
+  models: string[];
+  catalog: PlayerAdapterCatalog | null;
+  selectedModel: string;
+  selectedEffort: EffortLevel;
+  onModelChange: (model: string) => void;
+  onEffortChange: (effort: EffortLevel) => void;
+}) {
+  const effortOptions = models.length
+    ? loungeEffortsForModel(selectedModel, catalog)
+    : [];
+  return (
+    <div className="openai-seat-controls" role="group" aria-label={`${capitalize(color)} OpenAI settings`}>
+      <label>
+        {capitalize(color)} OpenAI model
+        <select aria-label={`${capitalize(color)} OpenAI model`} value={selectedModel} onChange={(event) => onModelChange(event.target.value)} disabled={!models.length}>
+          {models.map((model) => <option key={model} value={model}>{model}</option>)}
+        </select>
+      </label>
+      <label>
+        {capitalize(color)} effort
+        <select aria-label={`${capitalize(color)} effort`} value={selectedEffort} onChange={(event) => onEffortChange(event.target.value as EffortLevel)} disabled={!effortOptions.length}>
+          {effortOptions.map((effort) => <option key={effort} value={effort}>{capitalize(effort)}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function createPlayerConfiguration(
+  choice: Exclude<SeatChoice, "openai">,
+  color: "white" | "black",
+  stockfishElo: number,
+): PlayerConfiguration {
+  if (choice === "stockfish") {
+    return {
+      protocol_version: "1.0",
+      player_id: `local-stockfish-${color}`,
+      adapter_id: "stockfish",
+      display_name: `Stockfish ${stockfishElo}`,
+      provider: "Local UCI",
+      model: "Stockfish",
+      connection_mode: "local",
+      effort: "balanced",
+      division: "engine_assisted",
+      settings: {
+        color,
+        target_elo: stockfishElo,
+        move_time_ms: stockfishElo >= 2500 ? 700 : 400,
+        spectator_delay_ms: 80,
+      },
+    };
+  }
+  if (choice === "scripted") {
+    return {
+      protocol_version: "1.0",
+      player_id: `local-scripted-${color}`,
+      adapter_id: "scripted",
+      display_name: `Deterministic ${color === "white" ? "White" : "Black"}`,
+      provider: "Lounge Protocol",
+      model: "deterministic-v1",
+      connection_mode: "local",
+      effort: null,
+      division: "legal_assist",
+      settings: { moves: [], spectator_delay_ms: 180 },
+    };
+  }
+  return {
+    protocol_version: "1.0",
+    player_id: `local-human-${color}`,
+    adapter_id: "human",
+    display_name: `Human ${color === "white" ? "White" : "Black"}`,
+    provider: "Human seat",
+    model: "Manual input",
+    connection_mode: "human",
+    effort: null,
+    division: "legal_assist",
+    settings: { color },
+  };
+}
+
+function createSelectedPlayerConfiguration(
+  choice: SeatChoice,
+  color: Color,
+  stockfishElo: number,
+  requestedModel: string,
+  requestedEffort: EffortLevel,
+  catalog: PlayerAdapterCatalog | null,
+): PlayerConfiguration {
+  if (choice !== "openai") {
+    return createPlayerConfiguration(choice, color, stockfishElo);
+  }
+
+  const model = selectedOpenAiModel(requestedModel, selectableOpenAiModels(catalog));
+  const effortOptions = loungeEffortsForModel(model, catalog);
+  const effort = effortOptions.includes(requestedEffort)
+    ? requestedEffort
+    : defaultOpenAiEffort(model, catalog);
+  return {
+    protocol_version: catalog?.protocol_version ?? "1.0",
+    player_id: `local-openai-${color}`,
+    adapter_id: "openai",
+    display_name: `${model} · ${capitalize(effort)}`,
+    provider: "OpenAI",
+    model,
+    connection_mode: "direct_api",
+    effort,
+    division: "legal_assist",
+    settings: { ...openAiPublicSettings },
+  };
+}
+
+function selectableOpenAiModels(catalog: PlayerAdapterCatalog | null): string[] {
+  const adapter = catalog?.adapters.find((candidate) => candidate.adapter_id === "openai");
+  if (!adapter) return [];
+  return adapter.models.filter((model) => adapter.capabilities[model]?.selectable === true);
+}
+
+function openAiCapabilities(
+  model: string,
+  catalog: PlayerAdapterCatalog | null,
+): AdapterModelCapabilities | undefined {
+  return catalog?.adapters.find((candidate) => candidate.adapter_id === "openai")
+    ?.capabilities[model];
+}
+
+function loungeEffortsForModel(
+  model: string,
+  catalog: PlayerAdapterCatalog | null,
+): EffortLevel[] {
+  const advertised = openAiCapabilities(model, catalog)?.effort_levels ?? [];
+  return loungeEffortLevels.filter((effort) => advertised.includes(effort));
+}
+
+function selectedOpenAiModel(requested: string, available: string[]): string {
+  return available.includes(requested) ? requested : available[0] ?? "";
+}
+
+function defaultOpenAiEffort(
+  model: string,
+  catalog: PlayerAdapterCatalog | null,
+): EffortLevel {
+  const available = loungeEffortsForModel(model, catalog);
+  return available.includes("balanced") ? "balanced" : available[0] ?? "balanced";
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function strategyForSeat(
   game: GameSnapshot | null,
-  nowMs: number,
-): { white: number; black: number } {
+  color: "white" | "black",
+  player: PlayerConfiguration,
+): string {
+  const move = game?.moves.filter((candidate) =>
+    color === "white" ? candidate.ply % 2 === 1 : candidate.ply % 2 === 0,
+  ).at(-1);
+  if (game?.status === "active" && game.turn === color) {
+    return player.adapter_id === "human"
+      ? "Human-controlled decision. No private reasoning is captured."
+      : `${player.display_name} is selecting a move through the ${player.adapter_id} adapter.`;
+  }
+  if (move?.player_metadata?.plan) return move.player_metadata.plan;
+  if (move) return `Committed ${move.san}; awaiting the next turn.`;
+  return `${player.display_name} is waiting for the opening position.`;
+}
+
+function playerCardForSeat(
+  game: GameSnapshot | null,
+  side: "white" | "black",
+  player: PlayerConfiguration,
+  clockMs: number,
+): PlayerCardProps {
+  const active = game?.status === "active" && game.turn === side;
+  const move = game?.moves.filter((candidate) =>
+    side === "white" ? candidate.ply % 2 === 1 : candidate.ply % 2 === 0,
+  ).at(-1);
+  const metadata = move?.player_metadata;
+  const targetElo = player.settings.target_elo;
+  const moveTime = player.settings.move_time_ms;
+  const configuration = player.adapter_id === "stockfish"
+    ? `${typeof targetElo === "number" ? targetElo : "—"} Elo · ${typeof moveTime === "number" ? moveTime : "—"} ms budget`
+    : player.adapter_id === "human"
+      ? "Manual input · server validated"
+      : `${player.model} · protocol v1.0`;
+  const knownCost = metadata?.usage.estimated_cost_usd;
+  return {
+    side,
+    title: player.display_name,
+    provider: player.provider,
+    configuration,
+    division: player.division.replaceAll("_", " "),
+    cost: knownCost !== null && knownCost !== undefined
+      ? `$${knownCost.toFixed(4)}`
+      : player.connection_mode === "local" || player.connection_mode === "human"
+        ? "Local · $0"
+        : "Cost pending",
+    latency: metadata ? `${metadata.latency_ms} ms` : player.adapter_id === "human" ? "Human controlled" : "Awaiting move",
+    badge: active ? (player.adapter_id === "human" ? "YOUR MOVE" : "THINKING") : side.toUpperCase(),
+    active: Boolean(active),
+    clock: formatClock(clockMs),
+    urgent: Boolean(active && clockMs <= 10_000),
+  };
+}
+
+function projectClocks(game: GameSnapshot | null, nowMs: number, sync: ClockSync | null): { white: number; black: number } {
   if (!game) return { white: 0, black: 0 };
   let white = game.clock.white_remaining_ms;
   let black = game.clock.black_remaining_ms;
   if (game.lifecycle === "running" && game.status === "active") {
-    const serverTime = Date.parse(game.clock.server_time);
-    const elapsed = Number.isFinite(serverTime) ? Math.max(0, nowMs - serverTime) : 0;
+    const synchronized = sync?.gameId === game.id && sync.generation === game.generation && sync.revision === game.revision;
+    const elapsed = synchronized ? Math.max(0, nowMs - sync.receivedAt) : 0;
     if (game.turn === "white") white = Math.max(0, white - elapsed);
     else black = Math.max(0, black - elapsed);
   }
@@ -490,20 +1160,35 @@ function formatClock(milliseconds: number): string {
   const safe = Math.max(0, milliseconds);
   const minutes = Math.floor(safe / 60_000);
   const seconds = Math.floor((safe % 60_000) / 1_000);
-  if (safe < 10_000) {
-    const tenths = Math.floor((safe % 1_000) / 100);
-    return `${minutes}:${String(seconds).padStart(2, "0")}.${tenths}`;
-  }
+  if (safe < 10_000) return `${minutes}:${String(seconds).padStart(2, "0")}.${Math.floor((safe % 1_000) / 100)}`;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-function Metric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong className={accent ? "accent" : ""}>{value}</strong>
-    </div>
-  );
+function formatEvaluation(point: AnalysisPoint | null): string {
+  if (!point) return "—";
+  if (point.mate !== null) return point.mate > 0 ? `M${point.mate}` : `−M${Math.abs(point.mate)}`;
+  const pawns = point.score_cp / 100;
+  return `${pawns >= 0 ? "+" : ""}${pawns.toFixed(2)}`;
+}
+
+function evaluationShare(point: AnalysisPoint | null): number {
+  if (!point) return 50;
+  const score = point.mate !== null ? Math.sign(point.mate) * 100_000 : point.score_cp;
+  return Math.max(5, Math.min(95, 50 + Math.tanh(score / 420) * 45));
+}
+
+function permalink(gameId: string): string {
+  return `${window.location.origin}/games/${gameId}`;
+}
+
+function downloadText(content: string, filename: string, format: "pgn" | "json") {
+  const blob = new Blob([content], { type: format === "pgn" ? "application/x-chess-pgn;charset=utf-8" : "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export default App;

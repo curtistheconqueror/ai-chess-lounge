@@ -18,6 +18,19 @@ class EngineMove:
     elapsed_ms: int
 
 
+@dataclass(frozen=True, slots=True)
+class EngineAnalysis:
+    score_cp: int
+    mate: int | None
+    best_move: str | None
+    pv_san: tuple[str, ...]
+    depth: int | None
+
+
+class EngineFailure(RuntimeError):
+    """Raised when Stockfish cannot complete a requested turn."""
+
+
 class StockfishService:
     """A serialized Stockfish UCI process shared by Stage 1 games."""
 
@@ -61,26 +74,50 @@ class StockfishService:
             target_elo=target_elo,
             move_time_ms=move_time_ms,
             version=self._version,
-            path=self.path,
         )
+
+    async def analyse_position(
+        self,
+        board: chess.Board,
+        *,
+        analysis_time_ms: int = 80,
+    ) -> EngineAnalysis:
+        if not self.available:
+            raise EngineFailure(
+                "Stockfish is not installed. Set STOCKFISH_PATH or use the Docker runtime."
+            )
+        async with self._lock:
+            try:
+                await self._ensure_started()
+                assert self._engine is not None
+                return await asyncio.to_thread(
+                    self._analyse_sync,
+                    board.copy(stack=True),
+                    analysis_time_ms,
+                )
+            except (chess.engine.EngineError, OSError, TimeoutError) as exc:
+                raise EngineFailure("Stockfish analysis could not be completed.") from exc
 
     async def choose_move(
         self, board: chess.Board, *, target_elo: int, move_time_ms: int
     ) -> EngineMove:
         if not self.available:
-            raise RuntimeError(
+            raise EngineFailure(
                 "Stockfish is not installed. Set STOCKFISH_PATH or use the Docker runtime."
             )
         async with self._lock:
-            await self._ensure_started()
-            assert self._engine is not None
-            started = asyncio.get_running_loop().time()
-            move = await asyncio.to_thread(
-                self._play_sync,
-                board.copy(stack=True),
-                target_elo,
-                move_time_ms,
-            )
+            try:
+                await self._ensure_started()
+                assert self._engine is not None
+                started = asyncio.get_running_loop().time()
+                move = await asyncio.to_thread(
+                    self._play_sync,
+                    board.copy(stack=True),
+                    target_elo,
+                    move_time_ms,
+                )
+            except (chess.engine.EngineError, OSError, TimeoutError) as exc:
+                raise EngineFailure("Stockfish could not complete the turn.") from exc
             elapsed_ms = round((asyncio.get_running_loop().time() - started) * 1000)
             return EngineMove(uci=move.uci(), elapsed_ms=elapsed_ms)
 
@@ -103,8 +140,37 @@ class StockfishService:
             chess.engine.Limit(time=move_time_ms / 1000),
         )
         if result.move is None:
-            raise RuntimeError("Stockfish returned no move.")
+            raise EngineFailure("Stockfish returned no move.")
         return result.move
+
+    def _analyse_sync(self, board: chess.Board, analysis_time_ms: int) -> EngineAnalysis:
+        assert self._engine is not None
+        if "UCI_LimitStrength" in self._engine.options:
+            self._engine.configure({"UCI_LimitStrength": False})
+        info = self._engine.analyse(
+            board,
+            chess.engine.Limit(time=analysis_time_ms / 1_000),
+        )
+        pov_score = info["score"].pov(chess.WHITE)
+        score_cp = pov_score.score(mate_score=100_000) or 0
+        mate = pov_score.mate()
+        pv = list(info.get("pv", []))[:8]
+        best_move = pv[0].uci() if pv else None
+        pv_board = board.copy(stack=True)
+        pv_san: list[str] = []
+        for move in pv:
+            if move not in pv_board.legal_moves:
+                break
+            pv_san.append(pv_board.san(move))
+            pv_board.push(move)
+        depth = info.get("depth")
+        return EngineAnalysis(
+            score_cp=score_cp,
+            mate=mate,
+            best_move=best_move,
+            pv_san=tuple(pv_san),
+            depth=int(depth) if depth is not None else None,
+        )
 
     async def _ensure_started(self) -> None:
         if self._engine is not None:

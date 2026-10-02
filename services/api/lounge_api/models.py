@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
+
 
 class OpponentKind(StrEnum):
     STOCKFISH = "stockfish"
@@ -40,6 +42,8 @@ class CreateGameRequest(BaseModel):
     engine_move_time_ms: int = Field(default=450, ge=50, le=10_000)
     initial_time_ms: int = Field(default=300_000, ge=100, le=86_400_000)
     increment_ms: int = Field(default=2_000, ge=0, le=60_000)
+    white_player: PlayerConfiguration | None = None
+    black_player: PlayerConfiguration | None = None
 
 
 class MoveRequest(BaseModel):
@@ -74,6 +78,7 @@ class MoveRecord(BaseModel):
     elapsed_ms: int | None = None
     white_remaining_ms: int
     black_remaining_ms: int
+    player_metadata: PlayerMoveMetadata | None = None
 
 
 class MatchEvent(BaseModel):
@@ -84,13 +89,42 @@ class MatchEvent(BaseModel):
     timestamp: str
 
 
+class TurnLease(BaseModel):
+    match_id: str
+    owner_id: str
+    token: str
+    position_version: int
+    acquired_at: str
+    expires_at: str
+
+
 class EngineSummary(BaseModel):
     name: str
     available: bool
     target_elo: int
     move_time_ms: int
     version: str | None = None
-    path: str | None = None
+
+
+class AnalysisPoint(BaseModel):
+    ply: int
+    fen: str
+    score_cp: int
+    mate: int | None = None
+    best_move: str | None = None
+    pv_san: list[str] = Field(default_factory=list)
+    depth: int | None = None
+    classification: str | None = None
+
+
+class GameAnalysis(BaseModel):
+    game_id: str
+    generation: int
+    position_version: int
+    engine_name: str
+    engine_version: str | None = None
+    perspective: str = "white"
+    points: list[AnalysisPoint]
 
 
 class ClockSnapshot(BaseModel):
@@ -124,6 +158,8 @@ class GameSnapshot(BaseModel):
     can_move: bool
     opponent: OpponentKind
     engine: EngineSummary | None
+    white_player: PlayerConfiguration
+    black_player: PlayerConfiguration
     clock: ClockSnapshot
     strategy_banner: str
     created_at: str

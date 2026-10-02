@@ -1,4 +1,10 @@
-import type { ApiError, GameSnapshot } from "./types";
+import type {
+  ApiError,
+  GameAnalysis,
+  GameSnapshot,
+  PlayerAdapterCatalog,
+  PlayerConfigurationInput,
+} from "./types";
 
 const apiBase = import.meta.env.VITE_API_BASE ?? "";
 
@@ -23,11 +29,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function createGame(
-  stockfishElo: number,
+export interface CreateGameOptions {
+  stockfishElo: number;
+  initialTimeMs?: number;
+  incrementMs?: number;
+  whitePlayer: PlayerConfigurationInput;
+  blackPlayer: PlayerConfigurationInput;
+}
+
+export function createGame({
+  stockfishElo,
   initialTimeMs = 300_000,
   incrementMs = 2_000,
-): Promise<GameSnapshot> {
+  whitePlayer,
+  blackPlayer,
+}: CreateGameOptions): Promise<GameSnapshot> {
   return request<GameSnapshot>("/api/games", {
     method: "POST",
     body: JSON.stringify({
@@ -36,6 +52,8 @@ export function createGame(
       engine_move_time_ms: stockfishElo >= 2500 ? 700 : 400,
       initial_time_ms: initialTimeMs,
       increment_ms: incrementMs,
+      white_player: whitePlayer,
+      black_player: blackPlayer,
     }),
   });
 }
@@ -44,13 +62,23 @@ export function fetchGame(gameId: string): Promise<GameSnapshot> {
   return request<GameSnapshot>(`/api/games/${gameId}`);
 }
 
+export function fetchAnalysis(gameId: string): Promise<GameAnalysis> {
+  return request<GameAnalysis>(`/api/games/${gameId}/analysis`);
+}
+
+export function fetchPlayerAdapters(): Promise<PlayerAdapterCatalog> {
+  return request<PlayerAdapterCatalog>("/api/player-adapters");
+}
+
 export function submitMove(
   gameId: string,
   move: string,
   positionVersion: number,
+  idempotencyKey = crypto.randomUUID(),
 ): Promise<GameSnapshot> {
   return request<GameSnapshot>(`/api/games/${gameId}/moves`, {
     method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
     body: JSON.stringify({ move, position_version: positionVersion }),
   });
 }

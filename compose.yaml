@@ -15,8 +15,11 @@ services:
 
   lounge:
     build: .
+    env_file:
+      - path: .env.local
+        required: false
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://lounge:lounge@postgres:5432/lounge
       STOCKFISH_PATH: /usr/games/stockfish

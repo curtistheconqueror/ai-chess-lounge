@@ -2,7 +2,7 @@
 
 ## Current outcome
 
-Sub-phases 2A through 2C turn the Stage 1 prototype into a restart-safe, timed match
+Sub-phases 2A through 2D turn the Stage 1 prototype into a restart-safe, timed match
 service without adding any model-provider credential dependency.
 
 | Sub-phase | Delivered |
@@ -10,7 +10,7 @@ service without adding any model-provider credential dependency.
 | 2A Persistence | PostgreSQL Compose service, async SQLAlchemy repository, Alembic migration, durable matches and moves, and immutable ordered events |
 | 2B State machine | Created, waiting, running, paused, completed, aborted, and adjudicated lifecycle states with validated transitions |
 | 2C Clocks | Server-authoritative Fischer controls, durable turn anchors and deadlines, pause/resume semantics, and timeout results |
-| 2D foundation | Durable match revision compare-and-swap, stale-writer rejection, current-generation resets, and startup recovery |
+| 2D Concurrency | Idempotent move retries, expiring fenced turn leases, stale-read refresh, crash rollback coverage, and PostgreSQL CI |
 
 ## Storage model
 
@@ -36,8 +36,29 @@ service without adding any model-provider credential dependency.
   offline.
 - Timeout is a terminal match result with a persisted losing color and ordered
   `clock.timeout` and `match.completed` events.
-- Browser clocks are animated projections of server snapshots. Clients cannot award
-  time or decide the result.
+- Browser clocks are animated projections anchored when a server snapshot arrives,
+  avoiding client/server wall-clock skew. Clients cannot award time or decide the
+  result.
+
+## Concurrency and recovery
+
+- Move clients may send `Idempotency-Key`. The key and request hash commit atomically
+  with the accepted move and events, so a lost-response retry cannot apply twice.
+- Reusing a key for different input is rejected instead of guessing client intent.
+- One database-backed turn lease coordinates expensive engine or future agent work.
+  The lease is fenced by position version, expires after a bounded interval, and is
+  cleared by any accepted mutation.
+- Stockfish acquires the same lease contract future model adapters will use; another
+  process can reclaim the turn after a crashed worker's lease expires.
+- Mutations are prepared on detached match candidates and published to process memory
+  only after the database transaction commits, so a rollback cannot poison the cache.
+- Transient Stockfish or database failures release through the lease boundary and
+  retry the still-pending engine turn with capped exponential backoff.
+- Authoritative reads refresh from the database so one API process cannot indefinitely
+  serve a position cached before another process committed.
+- WebSockets watch the durable revision instead of relying only on process-local
+  listeners, so a spectator connected to another API process still receives the move.
+- PostgreSQL CI covers migrations, concurrent retries, and competing lease claims.
 
 The API remains the only board authority. Database rows are never accepted as move
 proposals; restored games are reconstructed by replaying persisted UCI moves and
@@ -80,6 +101,10 @@ Snapshots now disclose lifecycle, durable revision, reset generation, ordered ev
 sequence, timestamps, and a clock projection containing balances, time-control
 settings, active-turn anchor, deadline, server time, and timeout color.
 
+`POST /api/games/{game_id}/moves` accepts an optional `Idempotency-Key` header using
+8–128 URL-safe identifier characters. New clients send it on every move and retain the
+same key when retrying that exact request.
+
 ## Verification
 
 ```bash
@@ -90,11 +115,11 @@ make migrate
 
 The test suite covers restart restoration, event ordering, reset history, lifecycle
 rules, deterministic clock math, pause/resume, exact-deadline flag fall, background
-timeout scheduling, WebSocket snapshots, Stockfish responses, and a two-manager race
-against one database.
+timeout scheduling, WebSocket snapshots, Stockfish responses, idempotent retries,
+lease fencing and expiry, crash rollback, stale cross-instance reads, and PostgreSQL
+multi-connection races. The crash test also retries in the same process to prove the
+rolled-back candidate never escaped into the live cache.
 
 ## Remaining Stage 2 work
 
-- Complete 2D idempotency keys, turn leases, process-crash injection, and PostgreSQL
-  integration coverage
 - 2E minimal accounts, match visibility, and owner permissions
