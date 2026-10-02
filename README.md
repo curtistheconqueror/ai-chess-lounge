@@ -13,19 +13,20 @@ The project has two complementary experiences:
 ## Project status
 
 **Stage 2: Durable Match Platform** has sub-phases 2A through 2D implemented,
-**Stage 3A–3C** now provide the AI-seat protocol, unattended runner, and direct OpenAI
-and Anthropic provider adapters, and the **Stage 4 broadcast vertical slice** is implemented.
+**Stage 3A–3D** now provide the AI-seat protocol, unattended runner, and direct OpenAI,
+Anthropic, and Google Gemini provider adapters, and the **Stage 4 broadcast vertical
+slice** is implemented.
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
 writers; Fischer clocks, deadlines, pause/resume, and timeout results are owned by the
 server; and idempotent move commands plus fenced turn leases coordinate retries and
 workers. Either color can now be Human, Stockfish, or a deterministic reference agent;
-two automated seats complete games without browser control. OpenAI Responses and
-Anthropic Messages players can occupy either seat with independently selected model
-and effort settings, including cross-provider matches. The
+two automated seats complete games without browser control. OpenAI Responses,
+Anthropic Messages, and Gemini Interactions players can occupy either seat with
+independently selected model and effort settings, including cross-provider matches. The
 playable Lounge adds provider-neutral player cards, structured public strategy, local
 replay controls, isolated spectator analysis, share routes, and responsive browser
-checks. Google, open-ecosystem, and subscription adapters remain later increments.
+checks. Open-ecosystem and subscription adapters remain later increments.
 
 Read [`docs/STAGE_2_DURABLE_MATCHES.md`](docs/STAGE_2_DURABLE_MATCHES.md) for the
 current increment, [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md)
@@ -34,8 +35,9 @@ for the AI-seat contract, [`docs/STAGE_4_BROADCAST_EXPERIENCE.md`](docs/STAGE_4_
 for the broadcast shell, [`docs/UI_QA_MATRIX.md`](docs/UI_QA_MATRIX.md) for the
  board and responsive release gate, and [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md)
 for the complete roadmap. No model-provider credentials are required for Stage 2A–2D,
-Stage 3A, or the current Stage 4 broadcast slice. Stages 3B and 3C require the selected
-provider's platform API key only when a direct OpenAI or Anthropic seat is used.
+Stage 3A, or the current Stage 4 broadcast slice. Stages 3B–3D require the selected
+provider's platform API key only when a direct OpenAI, Anthropic, or Google seat is
+used.
 
 ## Core match types
 
@@ -81,6 +83,12 @@ optionally set `ANTHROPIC_CHESS_MODELS`. The built-in allowlist contains current
 effort-capable Claude models. Anthropic credentials remain behind the identical
 server-only boundary.
 
+To enable Gemini seats, set `GEMINI_API_KEY` and optionally
+`GEMINI_CHESS_MODELS`. Gemini 3.8 Flash advertises Lounge fast, balanced, and deep;
+models whose API supports minimal thinking also advertise maximum. Unsupported
+effort choices are omitted rather than silently emulated. An override model without
+an explicit verified thinking-level map remains disabled in the catalog.
+
 The provided native and Compose development commands bind to loopback because Stage
 2E authentication and quotas are not implemented yet. Do not expose a key-enabled
 instance to the public internet; external access becomes supported only with the
@@ -103,7 +111,8 @@ ownership, quota, and visibility controls in that later stage.
 ## Contributing
 
 Read [`AGENTS.md`](AGENTS.md) before making changes and
-[`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request. Resume interrupted
+work from [`docs/PICKUP.md`](docs/PICKUP.md).
 
 ## License
 

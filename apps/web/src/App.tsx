@@ -26,7 +26,7 @@ import type {
 
 type PanelTab = "moves" | "analysis" | "pgn" | "fen";
 type TimeControlKey = "1+0" | "3+2" | "5+2" | "10+5";
-type HostedProviderChoice = "openai" | "anthropic";
+type HostedProviderChoice = "openai" | "anthropic" | "google";
 type SeatChoice = "human" | "stockfish" | "scripted" | HostedProviderChoice;
 type ClockSync = { gameId: string; generation: number; revision: number; receivedAt: number };
 type PromotionRequest = { from: string; to: string; candidates: string[] };
@@ -71,6 +71,7 @@ const hostedProviderPublicSettings = {
 const hostedProviderDetails: Record<HostedProviderChoice, { label: string; provider: string }> = {
   openai: { label: "OpenAI", provider: "OpenAI" },
   anthropic: { label: "Claude", provider: "Anthropic" },
+  google: { label: "Gemini", provider: "Google" },
 };
 
 function App() {
@@ -105,21 +106,17 @@ function App() {
   const initialWhiteSeatRef = useRef<Exclude<SeatChoice, HostedProviderChoice>>("human");
   const initialBlackSeatRef = useRef<Exclude<SeatChoice, HostedProviderChoice>>("stockfish");
 
-  const openAiModels = useMemo(
-    () => selectableProviderModels("openai", playerAdapters),
-    [playerAdapters],
-  );
-  const anthropicModels = useMemo(
-    () => selectableProviderModels("anthropic", playerAdapters),
-    [playerAdapters],
-  );
   const whiteProviderModels = useMemo(
-    () => modelsForSeat(whiteSeat, openAiModels, anthropicModels),
-    [anthropicModels, openAiModels, whiteSeat],
+    () => isHostedProvider(whiteSeat)
+      ? selectableProviderModels(whiteSeat, playerAdapters)
+      : [],
+    [playerAdapters, whiteSeat],
   );
   const blackProviderModels = useMemo(
-    () => modelsForSeat(blackSeat, openAiModels, anthropicModels),
-    [anthropicModels, blackSeat, openAiModels],
+    () => isHostedProvider(blackSeat)
+      ? selectableProviderModels(blackSeat, playerAdapters)
+      : [],
+    [blackSeat, playerAdapters],
   );
 
   useEffect(() => {
@@ -743,8 +740,7 @@ function App() {
                 onChange={(event) => setWhiteSeat(event.target.value as SeatChoice)}
               >
                 <SeatOptions
-                  openAiSelectable={openAiModels.length > 0}
-                  anthropicSelectable={anthropicModels.length > 0}
+                  catalog={playerAdapters}
                 />
               </select>
             </label>
@@ -756,67 +752,36 @@ function App() {
                 onChange={(event) => setBlackSeat(event.target.value as SeatChoice)}
               >
                 <SeatOptions
-                  openAiSelectable={openAiModels.length > 0}
-                  anthropicSelectable={anthropicModels.length > 0}
+                  catalog={playerAdapters}
                 />
               </select>
             </label>
-            {whiteSeat === "openai" && (
+            {isHostedProvider(whiteSeat) && (
               <ProviderSeatControls
-                providerChoice="openai"
+                providerChoice={whiteSeat}
                 color="white"
-                models={openAiModels}
+                models={whiteProviderModels}
                 catalog={playerAdapters}
-                selectedModel={selectedProviderModel(whiteProviderModel, openAiModels)}
+                selectedModel={selectedProviderModel(whiteProviderModel, whiteProviderModels)}
                 selectedEffort={whiteEffort}
                 onModelChange={(model) => {
                   setWhiteProviderModel(model);
-                  setWhiteEffort(defaultProviderEffort("openai", model, playerAdapters));
+                  setWhiteEffort(defaultProviderEffort(whiteSeat, model, playerAdapters));
                 }}
                 onEffortChange={setWhiteEffort}
               />
             )}
-            {blackSeat === "openai" && (
+            {isHostedProvider(blackSeat) && (
               <ProviderSeatControls
-                providerChoice="openai"
+                providerChoice={blackSeat}
                 color="black"
-                models={openAiModels}
+                models={blackProviderModels}
                 catalog={playerAdapters}
-                selectedModel={selectedProviderModel(blackProviderModel, openAiModels)}
+                selectedModel={selectedProviderModel(blackProviderModel, blackProviderModels)}
                 selectedEffort={blackEffort}
                 onModelChange={(model) => {
                   setBlackProviderModel(model);
-                  setBlackEffort(defaultProviderEffort("openai", model, playerAdapters));
-                }}
-                onEffortChange={setBlackEffort}
-              />
-            )}
-            {whiteSeat === "anthropic" && (
-              <ProviderSeatControls
-                providerChoice="anthropic"
-                color="white"
-                models={anthropicModels}
-                catalog={playerAdapters}
-                selectedModel={selectedProviderModel(whiteProviderModel, anthropicModels)}
-                selectedEffort={whiteEffort}
-                onModelChange={(model) => {
-                  setWhiteProviderModel(model);
-                  setWhiteEffort(defaultProviderEffort("anthropic", model, playerAdapters));
-                }}
-                onEffortChange={setWhiteEffort}
-              />
-            )}
-            {blackSeat === "anthropic" && (
-              <ProviderSeatControls
-                providerChoice="anthropic"
-                color="black"
-                models={anthropicModels}
-                catalog={playerAdapters}
-                selectedModel={selectedProviderModel(blackProviderModel, anthropicModels)}
-                selectedEffort={blackEffort}
-                onModelChange={(model) => {
-                  setBlackProviderModel(model);
-                  setBlackEffort(defaultProviderEffort("anthropic", model, playerAdapters));
+                  setBlackEffort(defaultProviderEffort(blackSeat, model, playerAdapters));
                 }}
                 onEffortChange={setBlackEffort}
               />
@@ -974,20 +939,21 @@ function Metric({ label, value, accent = false }: { label: string; value: string
   return <div className="metric"><span>{label}</span><strong className={accent ? "accent" : ""}>{value}</strong></div>;
 }
 
-function SeatOptions({
-  openAiSelectable,
-  anthropicSelectable,
-}: {
-  openAiSelectable: boolean;
-  anthropicSelectable: boolean;
-}) {
+function SeatOptions({ catalog }: { catalog: PlayerAdapterCatalog | null }) {
   return (
     <>
       <option value="human">Human player</option>
       <option value="stockfish">Stockfish</option>
       <option value="scripted">Deterministic agent</option>
-      <option value="openai" disabled={!openAiSelectable}>OpenAI model{openAiSelectable ? "" : " · not configured"}</option>
-      <option value="anthropic" disabled={!anthropicSelectable}>Claude model{anthropicSelectable ? "" : " · not configured"}</option>
+      {(Object.keys(hostedProviderDetails) as HostedProviderChoice[]).map((choice) => {
+        const selectable = selectableProviderModels(choice, catalog).length > 0;
+        const label = hostedProviderDetails[choice].label;
+        return (
+          <option key={choice} value={choice} disabled={!selectable}>
+            {label} model{selectable ? "" : " · not configured"}
+          </option>
+        );
+      })}
     </>
   );
 }
@@ -997,6 +963,7 @@ function seatChoiceLabel(choice: SeatChoice): string {
   if (choice === "scripted") return "Deterministic Agent";
   if (choice === "openai") return "OpenAI";
   if (choice === "anthropic") return "Claude";
+  if (choice === "google") return "Gemini";
   return "Human";
 }
 
@@ -1129,17 +1096,7 @@ function createSelectedPlayerConfiguration(
 }
 
 function isHostedProvider(choice: SeatChoice): choice is HostedProviderChoice {
-  return choice === "openai" || choice === "anthropic";
-}
-
-function modelsForSeat(
-  choice: SeatChoice,
-  openAiModels: string[],
-  anthropicModels: string[],
-): string[] {
-  if (choice === "openai") return openAiModels;
-  if (choice === "anthropic") return anthropicModels;
-  return [];
+  return choice === "openai" || choice === "anthropic" || choice === "google";
 }
 
 function selectableProviderModels(

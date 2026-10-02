@@ -32,6 +32,7 @@ from .adapters import (
 from .anthropic_adapter import AnthropicMessagesAdapter
 from .domain import ClockExpired, GameSession, MoveRejected, StalePosition
 from .engine import EngineAnalysis, EngineFailure, StockfishService
+from .gemini_adapter import GeminiInteractionsAdapter
 from .models import (
     AnalysisPoint,
     CreateGameRequest,
@@ -96,6 +97,7 @@ class GameManager:
                 StockfishPlayerAdapter(self.engine),
                 OpenAIResponsesAdapter(),
                 AnthropicMessagesAdapter(),
+                GeminiInteractionsAdapter(),
             ]
         )
         self.store = store or DatabaseStore()

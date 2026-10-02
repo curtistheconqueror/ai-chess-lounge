@@ -303,3 +303,129 @@ test("Claude and OpenAI can be configured as opposing provider seats", async ({ 
   expect(JSON.stringify(submitted).toLowerCase()).not.toContain("api_key");
   expect(JSON.stringify(submitted).toLowerCase()).not.toContain("authorization");
 });
+
+test("Gemini exposes model-specific effort and can face Claude", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Gemini provider setup smoke runs once on desktop.");
+
+  const allEfforts = ["fast", "balanced", "deep", "maximum"];
+  await page.route("**/api/player-adapters", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      protocol_version: "1.0",
+      adapters: [
+        {
+          adapter_id: "google",
+          models: ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-unavailable"],
+          capabilities: {
+            "gemini-3.8-flash": {
+              model: "gemini-3.8-flash",
+              selectable: true,
+              availability: "configured_unverified",
+              connection_mode: "direct_api",
+              effort_levels: ["fast", "balanced", "deep"],
+              provider_effort_map: { fast: "low", balanced: "medium", deep: "high" },
+              thinking_mode: "level",
+              structured_output: true,
+              credentials_required: true,
+            },
+            "gemini-3.5-flash": {
+              model: "gemini-3.5-flash",
+              selectable: true,
+              availability: "configured_unverified",
+              connection_mode: "direct_api",
+              effort_levels: allEfforts,
+              provider_effort_map: { fast: "minimal", balanced: "low", deep: "medium", maximum: "high" },
+              thinking_mode: "level",
+              structured_output: true,
+              credentials_required: true,
+            },
+            "gemini-unavailable": {
+              model: "gemini-unavailable",
+              selectable: false,
+              availability: "credentials_missing",
+              connection_mode: "direct_api",
+              effort_levels: allEfforts,
+              structured_output: true,
+              credentials_required: true,
+            },
+          },
+        },
+        {
+          adapter_id: "anthropic",
+          models: ["claude-opus-5-5"],
+          capabilities: {
+            "claude-opus-5-5": {
+              model: "claude-opus-5-5",
+              selectable: true,
+              availability: "configured_unverified",
+              connection_mode: "direct_api",
+              effort_levels: allEfforts,
+              structured_output: true,
+              credentials_required: true,
+            },
+          },
+        },
+      ],
+    }),
+  }));
+
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/api/games", async (route) => {
+    if (route.request().method() === "POST") {
+      submitted = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "Gemini payload captured by the UI test." }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.reload();
+  await expect(page.getByRole("grid", { name: "Chess board" })).toBeVisible();
+  await expect(page.getByLabel("White seat").locator('option[value="google"]')).toBeEnabled();
+
+  await page.getByLabel("White seat").selectOption("google");
+  await page.getByLabel("White Gemini model").selectOption("gemini-3.8-flash");
+  await expect(page.getByLabel("White effort").locator('option[value="maximum"]')).toHaveCount(0);
+  await page.getByLabel("White effort").selectOption("deep");
+  await expect(page.getByLabel("White Gemini model").locator('option[value="gemini-unavailable"]')).toHaveCount(0);
+
+  await page.getByLabel("Black seat").selectOption("anthropic");
+  await page.getByLabel("Black Claude model").selectOption("claude-opus-5-5");
+  await page.getByLabel("Black effort").selectOption("maximum");
+  await page.getByRole("button", { name: "New match" }).click();
+
+  await expect(page.getByRole("alert")).toContainText("Gemini payload captured");
+  expect(submitted).toMatchObject({
+    white_player: {
+      adapter_id: "google",
+      provider: "Google",
+      model: "gemini-3.8-flash",
+      connection_mode: "direct_api",
+      effort: "deep",
+      division: "legal_assist",
+      settings: {
+        move_timeout_ms: 20_000,
+        spectator_delay_ms: 180,
+      },
+    },
+    black_player: {
+      adapter_id: "anthropic",
+      provider: "Anthropic",
+      model: "claude-opus-5-5",
+      connection_mode: "direct_api",
+      effort: "maximum",
+      division: "legal_assist",
+      settings: {
+        move_timeout_ms: 20_000,
+        spectator_delay_ms: 180,
+      },
+    },
+  });
+  expect(JSON.stringify(submitted).toLowerCase()).not.toContain("api_key");
+  expect(JSON.stringify(submitted).toLowerCase()).not.toContain("x-goog-api-key");
+});

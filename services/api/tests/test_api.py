@@ -56,6 +56,7 @@ def test_adapter_catalog_and_human_vs_scripted_game(client: TestClient) -> None:
     assert catalog.json()["protocol_version"] == "1.0"
     assert {item["adapter_id"] for item in catalog.json()["adapters"]} >= {
         "anthropic",
+        "google",
         "openai",
         "scripted",
         "stockfish",
@@ -76,6 +77,16 @@ def test_adapter_catalog_and_human_vs_scripted_game(client: TestClient) -> None:
     first_anthropic_model = anthropic["models"][0]
     assert anthropic["capabilities"][first_anthropic_model]["thinking_mode"] == "adaptive"
     assert anthropic["capabilities"][first_anthropic_model]["credentials_required"] is True
+    google = next(item for item in catalog.json()["adapters"] if item["adapter_id"] == "google")
+    assert google["models"]
+    first_google_model = google["models"][0]
+    assert google["capabilities"][first_google_model]["thinking_mode"] == "level"
+    assert google["capabilities"][first_google_model]["credentials_required"] is True
+    assert google["capabilities"][first_google_model]["effort_levels"] == [
+        "fast",
+        "balanced",
+        "deep",
+    ]
     assert "key" not in catalog.text.lower()
 
     scripted_black = {

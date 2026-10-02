@@ -51,6 +51,23 @@ changing match orchestration or browser-control behavior.
 | Setup UI | White and Black independently select catalog-enabled Claude or OpenAI models and effort, including cross-provider matches |
 | Error boundary | Refusals, incomplete output, malformed structured data, HTTP errors, and transport failures are sanitized before reaching match events or clients |
 
+## Stage 3D outcome
+
+Google Gemini joins the same match-facing contract through the Interactions API.
+Gemini can occupy either color and face a human, Stockfish, OpenAI, Anthropic, or
+another enabled Gemini model without a provider-specific game mode.
+
+| Capability | Stage 3D delivery |
+| --- | --- |
+| Provider transport | Direct server-side `POST /v1beta/interactions` with `store: false`; provider code remains isolated in `gemini_adapter.py` |
+| Structured proposal | Gemini-compatible JSON Schema produces one UCI move, public plan, public threat, and confidence; complete regex, length, and range constraints are enforced locally |
+| Thinking control | Gemini 3.8 Flash maps Lounge fast/balanced/deep to low/medium/high; models that expose minimal also map fast/balanced/deep/maximum to minimal/low/medium/high |
+| Thinking privacy | Requests set `thinking_summaries: none`; the Lounge stores normalized reasoning-token totals when supplied, never private reasoning text |
+| Usage | Total input, output, and thought tokens normalize into common move metadata; cost remains unset until the pricing registry exists |
+| Model policy | `GEMINI_CHESS_MODELS` can change the catalog without rebuilding the frontend; override models without a verified effort map remain disabled |
+| Setup UI | Both seats discover Gemini models and model-specific effort options from `/api/player-adapters`; unsupported levels are absent, not simulated |
+| Error boundary | Failed, cancelled, incomplete, malformed, HTTP, and transport responses are sanitized; a paid failure pauses after one call |
+
 ## Protocol boundary
 
 The transport-neutral JSON Schemas are published in `packages/protocol`. The
@@ -67,9 +84,9 @@ than silently changing assistance level.
 
 ## Credential boundary
 
-Stage 3A requires no provider account or API key. Stage 3B reads `OPENAI_API_KEY` and
-Stage 3C reads `ANTHROPIC_API_KEY` from the server environment (including the ignored
-`.env.local` development file). Player
+Stage 3A requires no provider account or API key. Stage 3B reads `OPENAI_API_KEY`,
+Stage 3C reads `ANTHROPIC_API_KEY`, and Stage 3D reads `GEMINI_API_KEY` from the server
+environment (including the ignored `.env.local` development file). Player
 settings reject credential-shaped and undisclosed fields through a fail-closed
 per-adapter public allowlist, and the repository stores only typed public
 configuration and normalized usage. The key is used only to construct the server-side
@@ -106,10 +123,11 @@ revision and lease fencing reject late work from any other process.
 - Pause cancels an in-flight automated call without accepting a late move
 - Existing human/Stockfish, clocks, concurrency, analysis, API, and UI build tests
 - Alembic `0003 → 0004 → 0003` migration exercise
-- Mock-transport contract tests for OpenAI Authorization, `store: false`, Anthropic
-  API key/version headers, strict structured outputs, every provider effort mapping,
-  usage normalization, malformed output, refusals, incomplete responses, health
-  checks, and sanitized provider failures
+- Mock-transport contract tests for OpenAI Authorization, provider `store: false`,
+  Anthropic API key/version headers, Gemini API-key headers, strict structured
+  outputs, every provider effort mapping, usage normalization, malformed output,
+  refusals or failed interactions, incomplete responses, health checks, and sanitized
+  provider failures
 - Provider failure integration test proving a paid adapter is called once and the
   match pauses without an unbounded retry loop
 - Post-call persistence-failure test proving a completed direct-API turn is never
@@ -117,12 +135,12 @@ revision and lease fencing reject late work from any other process.
 - Fenced manager integration test proving an OpenAI proposal becomes one legal move
   with normalized public metadata
 - Browser payload tests proving independent model/effort choices and secret-free
-  public settings for OpenAI-versus-OpenAI and Anthropic-versus-OpenAI seats
+  public settings for OpenAI-versus-OpenAI, Anthropic-versus-OpenAI, and
+  Gemini-versus-Anthropic seats
 
 ## Remaining Stage 3 work
 
 | Sub-phase | Next capability |
 | --- | --- |
-| 3D | Google Gemini adapter and thinking controls |
 | 3E | OpenRouter/OpenAI-compatible and local Ollama/vLLM adapters |
 | 3F | Bounded provider retries, rate limits, outage policy, and operator-facing recovery controls |

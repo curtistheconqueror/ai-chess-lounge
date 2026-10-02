@@ -9,8 +9,13 @@ AI Chess Lounge welcomes human and AI-assisted contributions.
 3. Make the smallest coherent change that satisfies the issue.
 4. Add tests and documentation where behavior or contracts change.
 5. Run local verification.
-6. Open a pull request with purpose, implementation, verification, risks, and any
+6. Update `docs/PICKUP.md` with the current phase, verification, risks, and exact next
+   target.
+7. Open a pull request with purpose, implementation, verification, risks, and any
    deferred work.
+8. Keep the contributor branch after merge and create
+   `pickup/<stage-or-phase>-complete` at the verified merge commit. Pickup branches
+   are immutable and must never be force-pushed.
 
 ## Branch naming
 
@@ -19,6 +24,7 @@ AI Chess Lounge welcomes human and AI-assisted contributions.
 - `docs/<short-name>`
 - `test/<short-name>`
 - `chore/<short-name>`
+- `pickup/<stage-or-phase>-complete` (immutable completed checkpoint)
 
 ## Commit guidance
 
