@@ -59,8 +59,8 @@ jobs:
         env:
           TEST_POSTGRES_URL: postgresql+asyncpg://lounge:lounge@127.0.0.1:5432/lounge_test
         run: |
-          ruff format --check services/api
-          ruff check services/api
+          ruff format --check services/api packages/runner-sdk-python
+          ruff check services/api packages/runner-sdk-python
           pytest
 
       - name: Set up Node
@@ -68,7 +68,16 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            packages/runner-sdk-typescript/package-lock.json
+
+      - name: Install and test TypeScript runner SDK
+        working-directory: packages/runner-sdk-typescript
+        run: |
+          npm ci
+          npm run build
+          npm test
 
       - name: Install web dependencies
         working-directory: apps/web
