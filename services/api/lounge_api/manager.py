@@ -238,6 +238,12 @@ class GameManager:
 
     async def snapshot(self, game_id: str) -> GameSnapshot:
         await self.get(game_id)
+        if self._game_locks[game_id].locked():
+            # Writers work on private copies and publish only after persistence.
+            # Do not make spectators wait for the next model/remote turn: a host
+            # may need this committed snapshot before it can submit that turn.
+            # The writer/timeout task still owns terminal-state adjudication.
+            return deepcopy(self.games[game_id]).snapshot(now=self._clock())
         async with self._game_locks[game_id]:
             game = deepcopy(await self._reload(game_id))
             try:
