@@ -128,7 +128,9 @@ def test_two_official_cli_contract_fakes_complete_authoritative_game(tmp_path, m
                 return await read_game_status(http, str(http.base_url).rstrip("/"), match_id)
 
             async with asyncio.timeout(20):
-                counts = await asyncio.gather(*(run_match(c, choose, status) for c in clients))
+                counts = await asyncio.gather(
+                    *(run_match(c, choose, status, max_turns=2) for c in clients)
+                )
             assert counts == [2, 2]
             game = (await http.get(f"/api/games/{game_id}")).json()
             assert game["status"] == "checkmate"
