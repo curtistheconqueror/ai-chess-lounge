@@ -36,7 +36,19 @@ export function parseFen(fen: string): BoardSquare[] {
     let fileIndex = 0;
     for (const token of row) {
       if (/\d/.test(token)) {
-        fileIndex += Number(token);
+        const emptySquares = Number(token);
+        for (let offset = 0; offset < emptySquares; offset += 1) {
+          const file = String.fromCharCode(97 + fileIndex);
+          const rank = String(8 - rowIndex);
+          squares.push({
+            name: `${file}${rank}`,
+            file,
+            rank,
+            piece: null,
+            dark: (fileIndex + rowIndex) % 2 === 1,
+          });
+          fileIndex += 1;
+        }
         continue;
       }
       const file = String.fromCharCode(97 + fileIndex);
