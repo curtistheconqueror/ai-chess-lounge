@@ -5,12 +5,14 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import os
 import secrets
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
@@ -549,12 +551,36 @@ class RemoteRunnerBroker:
         idempotency_key: str,
         proposal: MoveProposal,
     ) -> bytes:
-        encoded = json.dumps(
-            proposal.model_dump(mode="json"),
-            sort_keys=True,
-            separators=(",", ":"),
-        )
+        encoded = RemoteRunnerBroker._canonical_json(proposal.model_dump(mode="json"))
         return f"{delivery_id}\n{idempotency_key}\n{encoded}".encode()
+
+    @staticmethod
+    def _canonical_json(value: object) -> str:
+        if value is None:
+            return "null"
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, str):
+            return json.dumps(value, ensure_ascii=True, separators=(",", ":"))
+        if isinstance(value, int):
+            return str(value)
+        if isinstance(value, float):
+            if not math.isfinite(value):
+                raise ValueError("Canonical proposal numbers must be finite.")
+            encoded = format(Decimal(str(value)), "f")
+            if "." in encoded:
+                encoded = encoded.rstrip("0").rstrip(".")
+            return "0" if encoded in {"", "-0"} else encoded
+        if isinstance(value, list):
+            return f"[{','.join(RemoteRunnerBroker._canonical_json(item) for item in value)}]"
+        if isinstance(value, dict):
+            members = (
+                f"{json.dumps(str(key), ensure_ascii=True)}:"
+                f"{RemoteRunnerBroker._canonical_json(value[key])}"
+                for key in sorted(value)
+            )
+            return f"{{{','.join(members)}}}"
+        raise TypeError(f"Unsupported canonical proposal value: {type(value).__name__}.")
 
     @staticmethod
     def _session_id_from_token(runner_token: str) -> str:

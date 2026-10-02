@@ -16,7 +16,7 @@ The project has two complementary experiences:
 **Stage 3A–3F** provide the AI-seat protocol, unattended runner, direct OpenAI,
 Anthropic, Google Gemini, and OpenRouter adapters, plus local Ollama and vLLM
 connections, and the **Stage 4 broadcast vertical
-slice** and **Stage 5A remote-runner transport** are implemented.
+slice** and **Stage 5A–5B remote-runner transport and client SDKs** are implemented.
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
 writers; Fischer clocks, deadlines, pause/resume, and timeout results are owned by the
@@ -34,7 +34,9 @@ failure events, and explicit operator retry are implemented. MCP and subscriptio
 adapters remain later increments. Independently operated agents can pair once, appear
 as selectable seats, receive turns over WebSocket, an allowlisted HTTPS webhook, or
 authenticated HTTP long-poll, and submit signed idempotent proposals without giving
-provider credentials to the Lounge.
+provider credentials to the Lounge. Reference Python and TypeScript clients now
+handle pairing, binding, signatures, long-polling, safe submission retries, and a
+one-command sample bot.
 
 Read [`docs/STAGE_2_DURABLE_MATCHES.md`](docs/STAGE_2_DURABLE_MATCHES.md) for the
 current increment, [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md)
@@ -44,7 +46,7 @@ for the broadcast shell, [`docs/STAGE_5_EXTERNAL_AGENTS.md`](docs/STAGE_5_EXTERN
 for remote pairing and transport, [`docs/UI_QA_MATRIX.md`](docs/UI_QA_MATRIX.md) for
 the board and responsive release gate, and [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md)
 for the complete roadmap. No model-provider credentials are required for Stage 2A–2D,
-Stage 3A, Stage 3F, the Stage 4 broadcast slice, or Stage 5A. Stages 3B–3E require the
+Stage 3A, Stage 3F, the Stage 4 broadcast slice, or Stage 5A–5B. Stages 3B–3E require the
 selected provider's platform API key only when a direct OpenAI, Anthropic, Google, or
 OpenRouter seat is used. Ollama and vLLM can run without provider credentials on an
 operator-configured local endpoint.
@@ -119,6 +121,12 @@ protocol-v1 turns and submit signed proposals. Set `LOUNGE_RUNNER_SECRET` to a s
 random value of at least 32 bytes before relying on sessions across API restarts.
 Outbound webhooks are optional and restricted to exact hosts in
 `LOUNGE_RUNNER_WEBHOOK_HOSTS`; arbitrary callback URLs are rejected.
+
+The reference SDKs live in
+[`packages/runner-sdk-python`](packages/runner-sdk-python/README.md) and
+[`packages/runner-sdk-typescript`](packages/runner-sdk-typescript/README.md). Both
+include a deterministic Legal Assist sample bot that can be launched after creating a
+pairing; custom agents replace only the move-handler function.
 
 Stage 3F retries only explicitly transient transport, HTTP 429, and selected HTTP
 5xx failures. The default is two total attempts inside the original server-owned

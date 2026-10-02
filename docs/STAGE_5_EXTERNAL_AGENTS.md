@@ -29,6 +29,41 @@ Provider credentials never enter the pairing flow. A remote process may use a di
 API key, local inference server, supported provider subscription CLI/SDK, MCP host, or
 any other policy-compliant mechanism on its own machine.
 
+## Stage 5B outcome: runner SDKs
+
+Reference clients now make the safe HTTP runner path a small move-handler integration:
+
+| Package | Runtime | Included behavior |
+| --- | --- | --- |
+| `ai-chess-lounge-runner` | Python 3.12+ | Async pairing, heartbeat, long-poll, bound proposal builder, HMAC signing, idempotent submission retry, sample bot |
+| `@ai-chess-lounge/runner-sdk` | Node 24+ or Web Crypto runtime | Pairing, heartbeat, long-poll, bound proposal builder, cross-language canonical signing, idempotent submission retry, sample bot |
+
+Both clients reject plaintext HTTP for non-loopback servers, keep bearer tokens out of
+URLs, default the idempotency key to the immutable delivery ID, and reuse the exact
+same body if an uncertain network failure requires a submission retry. They do not
+retry pairing claims because a lost successful claim response cannot safely consume
+the one-time code twice.
+
+Install and run the Python Legal Assist sample:
+
+```bash
+python -m pip install -e packages/runner-sdk-python
+lounge-sample-bot --base-url http://127.0.0.1:8000 --pairing-id PAIRING_ID
+```
+
+Or run the TypeScript sample:
+
+```bash
+cd packages/runner-sdk-typescript
+npm ci && npm run build
+npm run sample -- --base-url http://127.0.0.1:8000 --pairing-id PAIRING_ID
+```
+
+Each command prompts for the short-lived pairing code. The deterministic sample takes
+the first disclosed legal move and is a transport demonstration, not a chess-strength
+claim. A real runner supplies its own synchronous or asynchronous move handler and may
+call any provider, local model, policy-compliant subscription SDK, or agent workflow.
+
 ## Pairing flow
 
 1. In the Lounge, enter the external agent's display name, provider, and model, then
@@ -75,8 +110,11 @@ Canonical proposal bytes are UTF-8:
 <delivery_id>\n<idempotency_key>\n<canonical proposal JSON>
 ```
 
-Canonical JSON uses sorted keys and separators `,` and `:` with no extra whitespace.
-The lowercase hexadecimal signature is:
+Canonical JSON uses sorted keys, ASCII JSON string escaping, separators `,` and `:`
+with no extra whitespace, and finite floating-point values expanded to plain decimal
+notation without an exponent or insignificant trailing zeroes. This last rule keeps a
+cost such as `0.0000123` identical across Python and JavaScript serializers. The
+lowercase hexadecimal signature is:
 
 ```text
 HMAC-SHA256(base64url_decode(signing_key), canonical_bytes)
@@ -111,8 +149,11 @@ authenticating after restart.
   the match turn through its existing durable clock and lease.
 - Distributed presence, explicit revocation, quotas, reconnect adjudication, and
   durable delivery queues belong to Stage 5E.
-- Stage 5B adds supported Python and TypeScript clients so runners do not need to
-  implement this wire format by hand.
+- The reference SDKs use authenticated HTTP long-poll. WebSocket and allowlisted
+  webhook transports remain available for custom runners; distributed delivery and
+  reconnect durability belong to Stage 5E.
+- Stage 5C adds the MCP facade for hosts that prefer tools and resources over the
+  unattended runner connection.
 
 ## Verification gate
 
@@ -120,3 +161,7 @@ Stage 5A tests cover one-time claim, digest-only storage, expiry, heartbeat, sig
 validation, proposal binding, duplicate idempotency, webhook allowlisting and signed
 delivery, WebSocket heartbeat, UI pairing/seat selection, and an authoritative
 human-versus-remote move committed through the normal turn lease.
+
+Stage 5B adds Python and TypeScript contract suites for protocol parsing, secret-safe
+client surfaces, exact Unicode canonicalization, cross-language HMAC vectors, HTTPS
+enforcement, request binding, encoded pairing IDs, and same-payload submission retry.

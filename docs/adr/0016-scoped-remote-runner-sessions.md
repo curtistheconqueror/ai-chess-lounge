@@ -21,6 +21,8 @@ secret and return it only at claim time.
 Deliver the unchanged protocol-v1 `MoveRequest` over authenticated WebSocket, HTTPS
 webhook, or HTTP long-poll. Require every returned `MoveProposal` to carry a scoped
 idempotency key and an HMAC-SHA256 signature over its canonical delivery payload.
+Canonical signing uses sorted compact JSON, ASCII string escaping, and plain-decimal
+finite floats so independent Python and JavaScript runners produce identical bytes.
 The remote adapter returns the proposal to the existing fenced match runner; it never
 updates game state itself.
 
