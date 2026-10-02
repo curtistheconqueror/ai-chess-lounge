@@ -5,8 +5,9 @@ import os
 
 import pytest
 from lounge_api.manager import GameManager
-from lounge_api.models import CreateGameRequest, OpponentKind
+from lounge_api.models import CreateGameRequest, OpponentKind, RunnerPairingCreate
 from lounge_api.persistence import DatabaseStore, TurnLeaseUnavailable
+from lounge_api.remote_runner import RemoteRunnerBroker, RunnerPairingError
 
 POSTGRES_URL = os.getenv("TEST_POSTGRES_URL")
 
@@ -43,6 +44,26 @@ def test_postgres_concurrent_retry_and_turn_lease() -> None:
             )
             assert sum(not isinstance(result, Exception) for result in leases) == 1
             assert sum(isinstance(result, TurnLeaseUnavailable) for result in leases) == 1
+
+            secret = b"postgres-stage-5a-test-secret-32-bytes"
+            first_broker = RemoteRunnerBroker(first.store, secret=secret)
+            second_broker = RemoteRunnerBroker(second.store, secret=secret)
+            pairing = await first_broker.create_pairing(
+                RunnerPairingCreate(
+                    display_name="Postgres Remote",
+                    provider="Test Runner",
+                    model="remote-v1",
+                )
+            )
+            claims = await asyncio.gather(
+                first_broker.claim_pairing(pairing.pairing_id, pairing.pairing_code),
+                second_broker.claim_pairing(pairing.pairing_id, pairing.pairing_code),
+                return_exceptions=True,
+            )
+            assert sum(not isinstance(result, Exception) for result in claims) == 1
+            assert sum(isinstance(result, RunnerPairingError) for result in claims) == 1
+            await first_broker.close()
+            await second_broker.close()
         finally:
             await first.close()
             await second.close()

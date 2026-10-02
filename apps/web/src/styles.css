@@ -1330,6 +1330,138 @@ select {
   grid-column: 1 / -1;
 }
 
+.runner-pairing-panel {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px;
+  border: 1px solid rgba(125, 104, 216, 0.22);
+  border-radius: 13px;
+  background:
+    linear-gradient(135deg, rgba(125, 104, 216, 0.09), transparent 54%),
+    rgba(8, 13, 12, 0.72);
+}
+
+.runner-pairing-heading,
+.runner-pairing-code,
+.runner-presence {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.runner-pairing-heading div,
+.runner-pairing-code {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.runner-pairing-heading span,
+.runner-pairing-code span {
+  color: #9e8fe3;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.runner-pairing-heading strong {
+  margin-top: 3px;
+  color: #e6e1f9;
+  font-size: 0.82rem;
+}
+
+.runner-pairing-heading button,
+.runner-pairing-code button,
+.runner-pairing-create {
+  min-height: 34px;
+  padding: 7px 11px;
+  color: #d8cef9;
+  border: 1px solid rgba(125, 104, 216, 0.35);
+  border-radius: 8px;
+  background: rgba(125, 104, 216, 0.08);
+  cursor: pointer;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.runner-pairing-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.runner-pairing-fields label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #7f8d87;
+  font-size: 0.57rem;
+  font-weight: 700;
+}
+
+.runner-pairing-fields input {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 9px;
+  color: #e8eeeb;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: #101916;
+}
+
+.runner-pairing-code {
+  position: relative;
+  padding: 9px 88px 9px 10px;
+  border: 1px solid rgba(85, 214, 156, 0.18);
+  border-radius: 9px;
+  background: rgba(85, 214, 156, 0.045);
+}
+
+.runner-pairing-code code {
+  max-width: 100%;
+  margin-top: 5px;
+  overflow: hidden;
+  color: #a9f1d2;
+  font-size: 0.66rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runner-pairing-code button {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.runner-presence {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: #728079;
+  font-size: 0.58rem;
+}
+
+.runner-presence small {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.runner-presence small.connected {
+  color: #78e5b6;
+  border: 1px solid rgba(85, 214, 156, 0.22);
+}
+
+.runner-presence small.standby {
+  color: #d2be82;
+  border: 1px solid rgba(217, 172, 85, 0.18);
+}
+
 .panel-tabs {
   grid-template-columns: repeat(4, 1fr);
 }
@@ -1830,6 +1962,10 @@ select {
 
   .secondary-actions {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .runner-pairing-fields {
+    grid-template-columns: 1fr;
   }
 
   .lounge-footer span:nth-child(2) {

@@ -72,6 +72,64 @@ test("two credential-free agents start an unattended match", async ({ page }, te
   );
 });
 
+test("a remote agent pairs once and becomes a selectable seat", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Remote pairing smoke runs once on desktop.");
+
+  await page.getByLabel("Remote agent name").fill("Lounge Remote Bot");
+  await page.getByLabel("Remote agent provider").fill("External Agent Host");
+  await page.getByLabel("Remote agent model").fill("frontier-agent-v1");
+  const pairingResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/runner-pairings") && response.request().method() === "POST"
+  );
+  await page.getByRole("button", { name: "Generate one-time pairing" }).click();
+  const pairing = await (await pairingResponse).json() as {
+    pairing_id: string;
+    pairing_code: string;
+    player: { player_id: string };
+  };
+  await expect(page.locator(".runner-pairing-code")).toContainText("PAIRING CODE");
+
+  const claimed = await page.request.post(
+    `/api/runner-pairings/${pairing.pairing_id}/claim`,
+    { data: { pairing_code: pairing.pairing_code } },
+  );
+  expect(claimed.ok()).toBeTruthy();
+  const credentials = await claimed.json() as { runner_token: string; signing_key: string };
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByLabel("White seat").locator('option[value="remote_runner"]')).toBeEnabled();
+  await page.getByLabel("White seat").selectOption("remote_runner");
+  await expect(page.getByLabel("White paired agent")).toContainText("Lounge Remote Bot");
+
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/api/games", async (route) => {
+    if (route.request().method() === "POST") {
+      submitted = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "Remote runner payload captured by the UI test." }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "New match" }).click();
+  await expect(page.getByRole("alert")).toContainText("Remote runner payload captured");
+  expect(submitted).toMatchObject({
+    white_player: {
+      player_id: pairing.player.player_id,
+      adapter_id: "remote_runner",
+      display_name: "Lounge Remote Bot",
+      provider: "External Agent Host",
+      model: "frontier-agent-v1",
+      connection_mode: "remote_runner",
+      settings: { runner_id: pairing.player.player_id },
+    },
+  });
+  expect(JSON.stringify(submitted)).not.toContain(credentials.runner_token);
+  expect(JSON.stringify(submitted)).not.toContain(credentials.signing_key);
+});
+
 test("paused automated turns expose an audited operator retry", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Recovery smoke runs once on desktop.");
 

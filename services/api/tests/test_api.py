@@ -60,6 +60,7 @@ def test_adapter_catalog_and_human_vs_scripted_game(client: TestClient) -> None:
         "openai",
         "openrouter",
         "ollama",
+        "remote_runner",
         "scripted",
         "stockfish",
         "vllm",
@@ -146,6 +147,68 @@ def test_provider_reliability_status_is_public_and_secret_free(client: TestClien
         "openrouter",
     }
     assert "key" not in response.text.lower()
+
+
+def test_remote_runner_pairing_heartbeat_and_websocket(client: TestClient) -> None:
+    pairing_response = client.post(
+        "/api/runner-pairings",
+        json={
+            "display_name": "API Remote Agent",
+            "provider": "Independent Runner",
+            "model": "sample-bot-v1",
+            "move_timeout_ms": 5_000,
+        },
+    )
+    assert pairing_response.status_code == 201
+    pairing = pairing_response.json()
+    assert pairing["player"]["adapter_id"] == "remote_runner"
+    assert pairing["player"]["settings"]["runner_id"] == pairing["player"]["player_id"]
+
+    claimed_response = client.post(
+        f"/api/runner-pairings/{pairing['pairing_id']}/claim",
+        json={"pairing_code": pairing["pairing_code"]},
+    )
+    assert claimed_response.status_code == 200
+    credentials = claimed_response.json()
+    headers = {"Authorization": f"Bearer {credentials['runner_token']}"}
+
+    heartbeat = client.post("/api/runner-sessions/heartbeat", headers=headers)
+    assert heartbeat.status_code == 200
+    assert heartbeat.json()["player_id"] == pairing["player"]["player_id"]
+    assert "runner_token" not in heartbeat.text
+    assert "signing_key" not in heartbeat.text
+
+    no_turn = client.get("/api/runner-sessions/turns/next", headers=headers)
+    assert no_turn.status_code == 204
+    statuses = client.get("/api/runner-sessions")
+    assert statuses.status_code == 200
+    assert statuses.json()[0]["connected"] is False
+    assert credentials["runner_token"] not in statuses.text
+    assert credentials["signing_key"] not in statuses.text
+
+    with client.websocket_connect("/ws/runners", headers=headers) as websocket:
+        websocket.send_json({"type": "heartbeat"})
+        message = websocket.receive_json()
+        assert message["type"] == "heartbeat.ack"
+        assert message["payload"]["connected"] is True
+
+    already_claimed = client.post(
+        f"/api/runner-pairings/{pairing['pairing_id']}/claim",
+        json={"pairing_code": pairing["pairing_code"]},
+    )
+    assert already_claimed.status_code == 409
+
+
+def test_remote_runner_endpoints_reject_missing_or_invalid_bearer(client: TestClient) -> None:
+    missing = client.post("/api/runner-sessions/heartbeat")
+    invalid = client.get(
+        "/api/runner-sessions/turns/next",
+        headers={"Authorization": "Bearer not-a-runner-token"},
+    )
+
+    assert missing.status_code == 401
+    assert invalid.status_code == 401
+    assert missing.headers["www-authenticate"] == "Bearer"
 
 
 def test_retry_agent_endpoint_rejects_a_human_turn(client: TestClient) -> None:

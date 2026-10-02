@@ -58,6 +58,30 @@ export interface PlayerConfiguration {
   settings: Record<string, unknown>;
 }
 
+export interface RunnerPairingResponse {
+  pairing_id: string;
+  pairing_code: string;
+  expires_at: string;
+  player: PlayerConfiguration;
+}
+
+export interface RunnerSessionStatus {
+  session_id: string;
+  player: PlayerConfiguration;
+  player_id: string;
+  display_name: string;
+  provider: string;
+  model: string;
+  permissions: string[];
+  transport: "webhook" | "websocket_or_http";
+  connected: boolean;
+  created_at: string;
+  expires_at: string;
+  last_heartbeat_at: string;
+  expired: boolean;
+  revoked: boolean;
+}
+
 export type PlayerConfigurationInput = Omit<PlayerConfiguration, "player_id">;
 
 export interface PlayerMoveMetadata {

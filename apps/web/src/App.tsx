@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createGame,
+  createRunnerPairing,
   fetchAnalysis,
   fetchGame,
   fetchPlayerAdapters,
+  fetchRunnerSessions,
   resignGame,
   resetGame,
   retryAgentTurn,
@@ -23,6 +25,8 @@ import type {
   GameSnapshot,
   PlayerAdapterCatalog,
   PlayerConfiguration,
+  RunnerPairingResponse,
+  RunnerSessionStatus,
 } from "./types";
 
 type PanelTab = "moves" | "analysis" | "pgn" | "fen";
@@ -34,7 +38,7 @@ type AgentProviderChoice =
   | "openrouter"
   | "ollama"
   | "vllm";
-type SeatChoice = "human" | "stockfish" | "scripted" | AgentProviderChoice;
+type SeatChoice = "human" | "stockfish" | "scripted" | "remote_runner" | AgentProviderChoice;
 type ClockSync = { gameId: string; generation: number; revision: number; receivedAt: number };
 type PromotionRequest = { from: string; to: string; candidates: string[] };
 type Color = "white" | "black";
@@ -99,6 +103,13 @@ function App() {
   const [blackProviderModel, setBlackProviderModel] = useState("");
   const [whiteEffort, setWhiteEffort] = useState<EffortLevel>("balanced");
   const [blackEffort, setBlackEffort] = useState<EffortLevel>("balanced");
+  const [runnerSessions, setRunnerSessions] = useState<RunnerSessionStatus[]>([]);
+  const [whiteRunnerId, setWhiteRunnerId] = useState("");
+  const [blackRunnerId, setBlackRunnerId] = useState("");
+  const [runnerName, setRunnerName] = useState("Remote Agent");
+  const [runnerProvider, setRunnerProvider] = useState("Independent Runner");
+  const [runnerModel, setRunnerModel] = useState("external-model");
+  const [runnerPairing, setRunnerPairing] = useState<RunnerPairingResponse | null>(null);
   const [timeControl, setTimeControl] = useState<TimeControlKey>("5+2");
   const [panelTab, setPanelTab] = useState<PanelTab>("moves");
   const [replayPly, setReplayPly] = useState<number | null>(null);
@@ -113,8 +124,8 @@ function App() {
   const clockSyncRef = useRef<ClockSync | null>(null);
   const initialEloRef = useRef(stockfishElo);
   const initialTimeControlRef = useRef(timeControl);
-  const initialWhiteSeatRef = useRef<Exclude<SeatChoice, AgentProviderChoice>>("human");
-  const initialBlackSeatRef = useRef<Exclude<SeatChoice, AgentProviderChoice>>("stockfish");
+  const initialWhiteSeatRef = useRef<Exclude<SeatChoice, AgentProviderChoice | "remote_runner">>("human");
+  const initialBlackSeatRef = useRef<Exclude<SeatChoice, AgentProviderChoice | "remote_runner">>("stockfish");
 
   const whiteProviderModels = useMemo(
     () => isAgentProvider(whiteSeat)
@@ -127,6 +138,10 @@ function App() {
       ? selectableProviderModels(blackSeat, playerAdapters)
       : [],
     [blackSeat, playerAdapters],
+  );
+  const activeRunnerSessions = useMemo(
+    () => runnerSessions.filter((session) => !session.expired && !session.revoked),
+    [runnerSessions],
   );
 
   useEffect(() => {
@@ -142,6 +157,31 @@ function App() {
       cancelled = true;
     };
   }, []);
+
+  const refreshRunnerSessions = useCallback(async () => {
+    try {
+      setRunnerSessions(await fetchRunnerSessions());
+    } catch {
+      setRunnerSessions([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshRunnerSessions();
+    const timer = window.setInterval(() => void refreshRunnerSessions(), 3_000);
+    return () => window.clearInterval(timer);
+  }, [refreshRunnerSessions]);
+
+  useEffect(() => {
+    if (activeRunnerSessions.length) {
+      if (!activeRunnerSessions.some((session) => session.player_id === whiteRunnerId)) {
+        setWhiteRunnerId(activeRunnerSessions[0].player_id);
+      }
+      if (!activeRunnerSessions.some((session) => session.player_id === blackRunnerId)) {
+        setBlackRunnerId(activeRunnerSessions[0].player_id);
+      }
+    }
+  }, [activeRunnerSessions, blackRunnerId, whiteRunnerId]);
 
   useEffect(() => {
     if (whiteProviderModels.length) {
@@ -232,6 +272,8 @@ function App() {
             whiteProviderModel,
             whiteEffort,
             playerAdapters,
+            whiteRunnerId,
+            activeRunnerSessions,
           ),
           blackPlayer: createSelectedPlayerConfiguration(
             blackSeat,
@@ -240,6 +282,8 @@ function App() {
             blackProviderModel,
             blackEffort,
             playerAdapters,
+            blackRunnerId,
+            activeRunnerSessions,
           ),
         }),
       );
@@ -253,12 +297,15 @@ function App() {
     acceptSnapshot,
     blackEffort,
     blackProviderModel,
+    blackRunnerId,
     blackSeat,
+    activeRunnerSessions,
     playerAdapters,
     stockfishElo,
     timeControl,
     whiteEffort,
     whiteProviderModel,
+    whiteRunnerId,
     whiteSeat,
   ]);
 
@@ -552,6 +599,24 @@ function App() {
     window.setTimeout(() => setNotice(null), 1800);
   }
 
+  async function generateRunnerPairing() {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const pairing = await createRunnerPairing({
+        displayName: runnerName.trim(),
+        provider: runnerProvider.trim(),
+        model: runnerModel.trim(),
+      });
+      setRunnerPairing(pairing);
+      setNotice("One-time runner pairing created. Share only with the agent you intend to seat.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to create runner pairing.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onReset() {
     if (!game) return;
     setBusy(true);
@@ -649,6 +714,8 @@ function App() {
       whiteProviderModel,
       whiteEffort,
       playerAdapters,
+      whiteRunnerId,
+      activeRunnerSessions,
     );
   const blackConfiguration = game?.black_player
     ?? createSelectedPlayerConfiguration(
@@ -658,6 +725,8 @@ function App() {
       blackProviderModel,
       blackEffort,
       playerAdapters,
+      blackRunnerId,
+      activeRunnerSessions,
     );
   const whiteStrategy = strategyForSeat(game, "white", whiteConfiguration);
   const blackStrategy = strategyForSeat(game, "black", blackConfiguration);
@@ -773,6 +842,7 @@ function App() {
               >
                 <SeatOptions
                   catalog={playerAdapters}
+                  runners={activeRunnerSessions}
                 />
               </select>
             </label>
@@ -785,6 +855,7 @@ function App() {
               >
                 <SeatOptions
                   catalog={playerAdapters}
+                  runners={activeRunnerSessions}
                 />
               </select>
             </label>
@@ -818,6 +889,22 @@ function App() {
                 onEffortChange={setBlackEffort}
               />
             )}
+            {whiteSeat === "remote_runner" && (
+              <RunnerSeatControls
+                color="white"
+                runners={activeRunnerSessions}
+                selectedRunnerId={whiteRunnerId}
+                onRunnerChange={setWhiteRunnerId}
+              />
+            )}
+            {blackSeat === "remote_runner" && (
+              <RunnerSeatControls
+                color="black"
+                runners={activeRunnerSessions}
+                selectedRunnerId={blackRunnerId}
+                onRunnerChange={setBlackRunnerId}
+              />
+            )}
             <label>
               Stockfish strength
               <select aria-label="Stockfish strength" value={stockfishElo} onChange={(event) => setStockfishElo(Number(event.target.value))} disabled={whiteSeat !== "stockfish" && blackSeat !== "stockfish"}>
@@ -836,7 +923,46 @@ function App() {
                 ))}
               </select>
             </label>
-            <button className="primary-button" onClick={() => void startNewGame()} disabled={busy}>New match</button>
+            <button
+              className="primary-button"
+              onClick={() => void startNewGame()}
+              disabled={busy || (whiteSeat === "remote_runner" && !whiteRunnerId) || (blackSeat === "remote_runner" && !blackRunnerId)}
+            >
+              New match
+            </button>
+          </div>
+
+          <div className="runner-pairing-panel" aria-label="Remote runner pairing">
+            <div className="runner-pairing-heading">
+              <div>
+                <span>REMOTE RUNNER</span>
+                <strong>Pair once. Play unattended.</strong>
+              </div>
+              <button onClick={() => void refreshRunnerSessions()} disabled={busy}>Refresh</button>
+            </div>
+            <div className="runner-pairing-fields">
+              <label>Agent name<input aria-label="Remote agent name" value={runnerName} onChange={(event) => setRunnerName(event.target.value)} /></label>
+              <label>Provider<input aria-label="Remote agent provider" value={runnerProvider} onChange={(event) => setRunnerProvider(event.target.value)} /></label>
+              <label>Model<input aria-label="Remote agent model" value={runnerModel} onChange={(event) => setRunnerModel(event.target.value)} /></label>
+            </div>
+            <button className="runner-pairing-create" onClick={() => void generateRunnerPairing()} disabled={busy || !runnerName.trim() || !runnerProvider.trim() || !runnerModel.trim()}>
+              Generate one-time pairing
+            </button>
+            {runnerPairing && (
+              <div className="runner-pairing-code">
+                <span>PAIRING CODE · EXPIRES {new Date(runnerPairing.expires_at).toLocaleTimeString()}</span>
+                <code>{runnerPairing.pairing_code}</code>
+                <button onClick={() => void copyText(runnerPairing.pairing_code, "Pairing code")}>Copy code</button>
+              </div>
+            )}
+            <div className="runner-presence">
+              <span>{activeRunnerSessions.length} paired</span>
+              {activeRunnerSessions.map((session) => (
+                <small key={session.session_id} className={session.connected ? "connected" : "standby"}>
+                  {session.display_name} · {session.connected ? "live" : "standby"}
+                </small>
+              ))}
+            </div>
           </div>
 
           <div className="panel-tabs" role="tablist" aria-label="Match details">
@@ -976,12 +1102,18 @@ function Metric({ label, value, accent = false }: { label: string; value: string
   return <div className="metric"><span>{label}</span><strong className={accent ? "accent" : ""}>{value}</strong></div>;
 }
 
-function SeatOptions({ catalog }: { catalog: PlayerAdapterCatalog | null }) {
+function SeatOptions({ catalog, runners }: {
+  catalog: PlayerAdapterCatalog | null;
+  runners: RunnerSessionStatus[];
+}) {
   return (
     <>
       <option value="human">Human player</option>
       <option value="stockfish">Stockfish</option>
       <option value="scripted">Deterministic agent</option>
+      <option value="remote_runner" disabled={!runners.length}>
+        Paired remote agent{runners.length ? "" : " · pair below"}
+      </option>
       {(Object.keys(providerDetails) as AgentProviderChoice[]).map((choice) => {
         const selectable = selectableProviderModels(choice, catalog).length > 0;
         const label = providerDetails[choice].label;
@@ -1004,7 +1136,41 @@ function seatChoiceLabel(choice: SeatChoice): string {
   if (choice === "openrouter") return "OpenRouter";
   if (choice === "ollama") return "Ollama";
   if (choice === "vllm") return "vLLM";
+  if (choice === "remote_runner") return "Remote Agent";
   return "Human";
+}
+
+function RunnerSeatControls({
+  color,
+  runners,
+  selectedRunnerId,
+  onRunnerChange,
+}: {
+  color: Color;
+  runners: RunnerSessionStatus[];
+  selectedRunnerId: string;
+  onRunnerChange: (runnerId: string) => void;
+}) {
+  return (
+    <div className="provider-seat-controls" role="group" aria-label={`${capitalize(color)} remote runner settings`}>
+      <label>
+        {capitalize(color)} paired agent
+        <select
+          aria-label={`${capitalize(color)} paired agent`}
+          value={selectedRunnerId}
+          onChange={(event) => onRunnerChange(event.target.value)}
+          disabled={!runners.length}
+        >
+          {!runners.length && <option value="">No paired runner</option>}
+          {runners.map((session) => (
+            <option key={session.session_id} value={session.player_id}>
+              {session.display_name} · {session.model} · {session.connected ? "live" : "standby"}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
 }
 
 function ProviderSeatControls({
@@ -1050,7 +1216,7 @@ function ProviderSeatControls({
 }
 
 function createPlayerConfiguration(
-  choice: Exclude<SeatChoice, AgentProviderChoice>,
+  choice: Exclude<SeatChoice, AgentProviderChoice | "remote_runner">,
   color: "white" | "black",
   stockfishElo: number,
 ): PlayerConfiguration {
@@ -1108,7 +1274,27 @@ function createSelectedPlayerConfiguration(
   requestedModel: string,
   requestedEffort: EffortLevel,
   catalog: PlayerAdapterCatalog | null,
+  requestedRunnerId: string,
+  runners: RunnerSessionStatus[],
 ): PlayerConfiguration {
+  if (choice === "remote_runner") {
+    const runner = runners.find((candidate) => candidate.player_id === requestedRunnerId)
+      ?? runners[0];
+    if (runner) return runner.player;
+    const playerId = "remote-runner-unpaired";
+    return {
+      protocol_version: "1.0",
+      player_id: playerId,
+      adapter_id: "remote_runner",
+      display_name: "Unpaired Remote Agent",
+      provider: "Remote runner",
+      model: "unpaired",
+      connection_mode: "remote_runner",
+      effort: null,
+      division: "legal_assist",
+      settings: { runner_id: playerId, move_timeout_ms: 30_000 },
+    };
+  }
   if (!isAgentProvider(choice)) {
     return createPlayerConfiguration(choice, color, stockfishElo);
   }

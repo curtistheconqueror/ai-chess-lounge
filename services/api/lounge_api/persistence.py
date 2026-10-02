@@ -31,11 +31,20 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
 
 from .domain import GameSession
-from .models import EngineSummary, MatchEvent, MatchState, MoveRecord, OpponentKind, TurnLease
+from .models import (
+    EngineSummary,
+    MatchEvent,
+    MatchState,
+    MoveRecord,
+    OpponentKind,
+    RunnerPairingRecord,
+    RunnerSessionRecord,
+    TurnLease,
+)
 from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0004_player_seats"
+SCHEMA_REVISION = "0005_remote_runners"
 
 
 class ConcurrentGameUpdate(RuntimeError):
@@ -155,6 +164,42 @@ class IdempotencyRow(Base):
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     applied_revision: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RunnerPairingRow(Base):
+    __tablename__ = "runner_pairings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    code_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    player: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    session_ttl_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    webhook_url: Mapped[str | None] = mapped_column(String(2_048), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RunnerSessionRow(Base):
+    __tablename__ = "runner_sessions"
+    __table_args__ = (
+        UniqueConstraint("pairing_id", name="uq_runner_sessions_pairing"),
+        Index("ix_runner_sessions_player", "player_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    pairing_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("runner_pairings.id", ondelete="CASCADE"), nullable=False
+    )
+    player_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    player: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    token_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    issuer_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    permissions: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    webhook_url: Mapped[str | None] = mapped_column(String(2_048), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 def normalize_database_url(url: str) -> str:
@@ -321,6 +366,134 @@ class DatabaseStore:
                     IdempotencyRow.idempotency_key == idempotency_key,
                 )
             )
+
+    async def create_runner_pairing(self, pairing: RunnerPairingRecord) -> None:
+        await self.initialize()
+        async with self.sessions.begin() as session:
+            session.add(
+                RunnerPairingRow(
+                    id=pairing.pairing_id,
+                    code_digest=pairing.code_digest,
+                    player=pairing.player.model_dump(mode="json"),
+                    session_ttl_ms=pairing.session_ttl_ms,
+                    webhook_url=pairing.webhook_url,
+                    created_at=datetime.fromisoformat(pairing.created_at),
+                    expires_at=datetime.fromisoformat(pairing.expires_at),
+                    claimed_at=(
+                        datetime.fromisoformat(pairing.claimed_at)
+                        if pairing.claimed_at is not None
+                        else None
+                    ),
+                )
+            )
+
+    async def load_runner_pairing(self, pairing_id: str) -> RunnerPairingRecord | None:
+        await self.initialize()
+        async with self.sessions() as session:
+            row = await session.get(RunnerPairingRow, pairing_id)
+            if row is None:
+                return None
+            return self._runner_pairing_record(row)
+
+    async def claim_runner_pairing(
+        self,
+        pairing_id: str,
+        code_digest: str,
+        runner_session: RunnerSessionRecord,
+        *,
+        now: datetime,
+    ) -> bool:
+        """Atomically consume a live pairing code and create one runner session."""
+
+        await self.initialize()
+        async with self.sessions.begin() as session:
+            claimed = await session.execute(
+                update(RunnerPairingRow)
+                .where(
+                    RunnerPairingRow.id == pairing_id,
+                    RunnerPairingRow.code_digest == code_digest,
+                    RunnerPairingRow.claimed_at.is_(None),
+                    RunnerPairingRow.expires_at > now,
+                )
+                .values(claimed_at=now)
+            )
+            if claimed.rowcount != 1:
+                return False
+            session.add(
+                RunnerSessionRow(
+                    id=runner_session.session_id,
+                    pairing_id=runner_session.pairing_id,
+                    player_id=runner_session.player.player_id,
+                    player=runner_session.player.model_dump(mode="json"),
+                    token_digest=runner_session.token_digest,
+                    issuer_digest=runner_session.issuer_digest,
+                    permissions=runner_session.permissions,
+                    webhook_url=runner_session.webhook_url,
+                    created_at=datetime.fromisoformat(runner_session.created_at),
+                    expires_at=datetime.fromisoformat(runner_session.expires_at),
+                    last_heartbeat_at=datetime.fromisoformat(runner_session.last_heartbeat_at),
+                    revoked_at=(
+                        datetime.fromisoformat(runner_session.revoked_at)
+                        if runner_session.revoked_at is not None
+                        else None
+                    ),
+                )
+            )
+        return True
+
+    async def load_runner_session(self, session_id: str) -> RunnerSessionRecord | None:
+        await self.initialize()
+        async with self.sessions() as session:
+            row = await session.get(RunnerSessionRow, session_id)
+            if row is None:
+                return None
+            return self._runner_session_record(row)
+
+    async def load_active_runner_session_for_player(
+        self,
+        player_id: str,
+        *,
+        now: datetime,
+    ) -> RunnerSessionRecord | None:
+        await self.initialize()
+        async with self.sessions() as session:
+            row = await session.scalar(
+                select(RunnerSessionRow)
+                .where(
+                    RunnerSessionRow.player_id == player_id,
+                    RunnerSessionRow.expires_at > now,
+                    RunnerSessionRow.revoked_at.is_(None),
+                )
+                .order_by(RunnerSessionRow.created_at.desc())
+                .limit(1)
+            )
+            return self._runner_session_record(row) if row is not None else None
+
+    async def list_runner_sessions(self) -> list[RunnerSessionRecord]:
+        await self.initialize()
+        async with self.sessions() as session:
+            rows = list(
+                (
+                    await session.scalars(
+                        select(RunnerSessionRow).order_by(RunnerSessionRow.created_at.desc())
+                    )
+                ).all()
+            )
+        return [self._runner_session_record(row) for row in rows]
+
+    async def touch_runner_session(self, session_id: str, *, now: datetime) -> bool:
+        await self.initialize()
+        async with self.sessions.begin() as session:
+            result = await session.execute(
+                update(RunnerSessionRow)
+                .where(
+                    RunnerSessionRow.id == session_id,
+                    RunnerSessionRow.expires_at > now,
+                    RunnerSessionRow.revoked_at.is_(None),
+                )
+                .values(last_heartbeat_at=now)
+            )
+            return result.rowcount == 1
 
     async def acquire_turn_lease(
         self,
@@ -505,6 +678,8 @@ class DatabaseStore:
         """Delete test data while preserving the schema."""
         await self.initialize()
         async with self.sessions.begin() as session:
+            await session.execute(delete(RunnerSessionRow))
+            await session.execute(delete(RunnerPairingRow))
             await session.execute(delete(IdempotencyRow))
             await session.execute(delete(EventRow))
             await session.execute(delete(MoveRow))
@@ -575,6 +750,35 @@ class DatabaseStore:
             )
             for event in events
         ]
+
+    @staticmethod
+    def _runner_pairing_record(row: RunnerPairingRow) -> RunnerPairingRecord:
+        return RunnerPairingRecord(
+            pairing_id=row.id,
+            code_digest=row.code_digest,
+            player=PlayerConfiguration.model_validate(row.player),
+            session_ttl_ms=row.session_ttl_ms,
+            webhook_url=row.webhook_url,
+            created_at=_utc(row.created_at).isoformat(),
+            expires_at=_utc(row.expires_at).isoformat(),
+            claimed_at=_utc(row.claimed_at).isoformat() if row.claimed_at else None,
+        )
+
+    @staticmethod
+    def _runner_session_record(row: RunnerSessionRow) -> RunnerSessionRecord:
+        return RunnerSessionRecord(
+            session_id=row.id,
+            pairing_id=row.pairing_id,
+            player=PlayerConfiguration.model_validate(row.player),
+            token_digest=row.token_digest,
+            issuer_digest=row.issuer_digest,
+            permissions=list(row.permissions),
+            webhook_url=row.webhook_url,
+            created_at=_utc(row.created_at).isoformat(),
+            expires_at=_utc(row.expires_at).isoformat(),
+            last_heartbeat_at=_utc(row.last_heartbeat_at).isoformat(),
+            revoked_at=_utc(row.revoked_at).isoformat() if row.revoked_at else None,
+        )
 
     @staticmethod
     def _restore_game(row: MatchRow, rows: list[MoveRow]) -> GameSession:
