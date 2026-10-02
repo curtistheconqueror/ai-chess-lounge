@@ -20,6 +20,10 @@ Local 5C Python: 149 passed, 1 PostgreSQL-environment skip.
 ## Current work — Stage 5D remains IN PROGRESS
 
 Contributor: `feat/stage-5d-subscription-bridge`, based on the verified 5C merge.
+Draft PR #13: https://github.com/curtistheconqueror/ai-chess-lounge/pull/13
+Published implementation: `d116e5399fc1d3e642c8e620348dc8814c8b23c4`.
+Reviewed source checkpoint (includes final-turn fix and regression):
+`6fbf562172b43ef81bb6afe9e196d7eeeaa60c43`.
 Do not create or label a `pickup/stage-5d-complete` branch yet. The required live
 subscription game has not passed. Keep this contributor branch for continuation.
 
@@ -59,8 +63,15 @@ Local final gates: 171 Python tests passed, 1 PostgreSQL-environment skip;
 build passed. Optional package editable install and CLI entry point passed.
 Local Playwright could not launch because its Chromium revision was absent;
 the official download returned a truncated/invalid archive. Browser results
-must be verified by PR CI before merge. PR details and CI results are recorded
-in the subsequent contributor handoff update. Run `make test`, `make build`, and
+were verified by PR CI run `37066364849`, job `111035002777`, which passed:
+170 Python tests, 2 missing-Stockfish skips; PostgreSQL and SQLite migrations;
+3 TypeScript tests; production build; 14 browser tests passed and 36 intentional
+viewport-duplicate skips.
+
+Luna extra-high independently reviewed the bridge and found the final-turn limit
+edge case. It is fixed, with the full fake-CLI game now constrained to exactly
+two moves per side. All 17 bridge tests and Ruff passed again locally. Updated
+PR CI must remain green at its current head; consult PR #13 Checks. Run `make test`, `make build`, and
 `cd apps/web && npm run e2e` after any changes. PostgreSQL is verified in CI;
 local runs may skip it when TEST_POSTGRES_URL is unset.
 
