@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from fastapi import WebSocketDisconnect
 from lounge_api.manager import GameManager
 from lounge_api.models import (
     CreateGameRequest,
@@ -23,6 +24,54 @@ from lounge_api.remote_runner import (
 )
 
 SECRET = b"stage-5a-test-secret-is-at-least-32-bytes"
+
+
+@pytest.mark.parametrize("cancel_connection", [False, True])
+def test_socket_shutdown_drains_children(cancel_connection: bool) -> None:
+    async def run() -> None:
+        store = DatabaseStore("sqlite+aiosqlite:///:memory:")
+        broker = RemoteRunnerBroker(store, secret=SECRET)
+        receive_started = asyncio.Event()
+        disconnect = asyncio.Event()
+        children: list[asyncio.Task] = []
+
+        class Socket:
+            async def accept(self) -> None:
+                pass
+
+            async def receive_json(self) -> object:
+                children.append(asyncio.current_task())
+                receive_started.set()
+                await disconnect.wait()
+                raise WebSocketDisconnect(code=1000)
+
+        class Queue(asyncio.Queue):
+            async def get(self) -> object:
+                children.append(asyncio.current_task())
+                return await super().get()
+
+        await store.initialize()
+        try:
+            pairing = await broker.create_pairing(pairing_request())
+            credentials = await broker.claim_pairing(pairing.pairing_id, pairing.pairing_code)
+            broker._queues[credentials.session_id] = Queue()
+            connection = asyncio.create_task(broker.socket_loop(Socket(), credentials.runner_token))
+            await asyncio.wait_for(receive_started.wait(), timeout=1)
+            if cancel_connection:
+                connection.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await connection
+            else:
+                disconnect.set()
+                await asyncio.wait_for(connection, timeout=1)
+            assert len(children) == 2
+            assert all(child.done() for child in children)
+            assert credentials.session_id not in broker._connected
+        finally:
+            await broker.close()
+            await store.close()
+
+    asyncio.run(run())
 
 
 class MutableClock:
