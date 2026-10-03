@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 PROTOCOL_VERSION = "1.0"
 
@@ -72,6 +72,8 @@ PUBLIC_SETTINGS_BY_ADAPTER: dict[str, frozenset[str]] = {
     "remote_runner": frozenset(
         {
             "runner_id",
+            "max_turns",
+            "match_ttl_ms",
             "move_timeout_ms",
             "spectator_delay_ms",
         }
@@ -140,6 +142,8 @@ class PlayerConfiguration(BaseModel):
 
         for key, minimum, maximum in (
             ("move_timeout_ms", 1, 86_400_000),
+            ("max_turns", 1, 2_000),
+            ("match_ttl_ms", 1_000, 86_400_000),
             ("spectator_delay_ms", 0, 2_000),
         ):
             setting = self.settings.get(key)
@@ -278,6 +282,9 @@ class PlayerConfiguration(BaseModel):
 
 
 class MoveRequest(BaseModel):
+    # Internal lifecycle fence, intentionally excluded from the wire schema.
+    _match_revision: int | None = PrivateAttr(default=None)
+
     schema_version: str = PROTOCOL_VERSION
     request_id: str = Field(default_factory=lambda: str(uuid4()))
     match_id: str

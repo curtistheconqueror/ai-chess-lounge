@@ -1,6 +1,6 @@
 # AI Chess Lounge — Master Product and Execution Plan
 
-**Status:** Stage 2A–2D, Stage 3A–3F, the Stage 4 broadcast slice, and Stage 5A–5B implemented
+**Status:** Stage 2A–2D, Stage 3A–3F, the Stage 4 broadcast slice, and Stage 5A–5E implemented
 
 **Working repository:** `curtistheconqueror/ai-chess-lounge`
 
@@ -353,6 +353,26 @@ are projections for efficient reads.
 - Separate exhibition results from rated experiment results
 - Never compare engine-assisted agents with pure agents on one rating list
 
+### Clock-awareness experiment (requested 2026-10-03)
+
+Build on existing Stage 2C authoritative Fischer clocks, separately from request
+and authorization timeouts. Extend normalized requests with opponent remaining time,
+increment, clock-observation timestamp and a clear submission deadline. Keep spectator
+playback delay separate from measured model response latency and competitive clocks.
+
+Stage 7A/7D experiments compare disclosed conditions: clock information supplied vs
+withheld, fixed effort vs provider-supported model-selected effort vs automatic
+controller-selected effort. Record which actor changes effort; never attribute a
+controller adjustment to spontaneous model behavior. Standard single requests get
+snapshots, not continuous clock updates. Any tool-based clock refresh is an explicitly
+disclosed capability/division.
+
+Show live countdowns, move latency, near-deadline submissions, flagging, and independent
+Stockfish move-quality metrics. Public strategy notes are model statements, not private
+reasoning evidence. Use color swaps, multiple games, identical clock/network-accounting
+rules and pinned profiles. Distinguish time pressure from chess tempo. No inference
+about a model's time-management ability from the two-move Stage 5D transport test.
+
 ### Model identity
 
 A scoreboard entry uses the full identity:
@@ -544,7 +564,7 @@ happened, what each agent publicly claims to be planning, and replay/share the g
 
 **Goal:** Allow independently operated agents to join without browser control.
 
-**Progress:** Stages 5A and 5B are implemented. The Lounge now creates one-time pairings,
+**Progress:** Stages 5A–5E are implemented. The Lounge now creates one-time pairings,
 issues digest-protected sessions scoped to one player, exposes heartbeat/presence,
 delivers turns by authenticated WebSocket, allowlisted HTTPS webhook, or HTTP
 long-poll, and accepts signed idempotent proposals through the existing authoritative
@@ -557,8 +577,8 @@ and include one-command deterministic sample bots.
 | 5A Remote runner | **Implemented:** one-time pairing, scoped session token, WebSocket/allowlisted webhook/HTTP turn transport, heartbeat, signed idempotent proposals, and UI seat selection |
 | 5B Runner SDK | **Implemented:** Python and TypeScript reference clients with cross-language signing vectors and a one-command sample bot |
 | 5C MCP facade | Implemented: local stdio create/join/watch/submit tools, polling/heartbeat, FEN/PGN resources, and deterministic full-game verification |
-| 5D Subscription bridge | Implemented: local Codex CLI sidecar, one-match authorization, capability detection, deterministic tests, and a completed live subscription game; merge verification tracked in PICKUP |
-| 5E Trust controls | Revocation, audit events, runner limits, secret isolation, and reconnect/forfeit rules |
+| 5D Subscription bridge | Implemented: local Codex CLI sidecar, one-match authorization, capability detection, deterministic tests, and a completed live subscription game; merged in PR #13 with green postmerge CI |
+| 5E Trust controls | Implemented: durable one-match grants, turn/time limits, transactional revocation, secret-free audit, and original-deadline reconnect; distributed routing remains deferred |
 
 **Exit gate:** A remote agent and one supported subscription-authenticated agent can
 complete unattended games after a single explicit session authorization. No provider

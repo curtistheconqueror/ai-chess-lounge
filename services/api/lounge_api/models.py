@@ -89,6 +89,8 @@ class RunnerPairingCreate(BaseModel):
     pairing_ttl_ms: int = Field(default=600_000, ge=60_000, le=1_800_000)
     session_ttl_ms: int = Field(default=14_400_000, ge=300_000, le=86_400_000)
     move_timeout_ms: int = Field(default=30_000, ge=1, le=120_000)
+    max_turns: int = Field(default=500, ge=1, le=2_000)
+    match_ttl_ms: int = Field(default=14_400_000, ge=1_000, le=86_400_000)
     webhook_url: str | None = Field(default=None, max_length=2_048)
 
     @model_validator(mode="after")
@@ -172,6 +174,7 @@ class RunnerSessionStatus(BaseModel):
     last_heartbeat_at: str
     expired: bool
     revoked: bool
+    match_grant: dict[str, object] | None = None
 
 
 class RunnerTurnDelivery(BaseModel):

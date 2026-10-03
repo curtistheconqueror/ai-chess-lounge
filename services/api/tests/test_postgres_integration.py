@@ -69,3 +69,44 @@ def test_postgres_concurrent_retry_and_turn_lease() -> None:
             await second.close()
 
     asyncio.run(run())
+
+
+def test_postgres_runner_grant_concurrency_and_revocation() -> None:
+    async def run() -> None:
+        from datetime import UTC, datetime
+
+        from lounge_api.persistence import RunnerTrustError
+
+        assert POSTGRES_URL is not None
+        first = DatabaseStore(POSTGRES_URL)
+        second = DatabaseStore(POSTGRES_URL)
+        await first.initialize()
+        await second.initialize()
+        broker = RemoteRunnerBroker(first, secret=b"postgres-stage5e-trust-secret-value")
+        try:
+            pairing = await broker.create_pairing(
+                RunnerPairingCreate(display_name="PG trust", provider="Test", model="test")
+            )
+            creds = await broker.claim_pairing(pairing.pairing_id, pairing.pairing_code)
+            outcomes = await asyncio.gather(
+                first.reserve_runner_turn(creds.session_id, "pg-a", "white", now=datetime.now(UTC)),
+                second.reserve_runner_turn(
+                    creds.session_id, "pg-b", "white", now=datetime.now(UTC)
+                ),
+                return_exceptions=True,
+            )
+            assert sum(isinstance(item, dict) for item in outcomes) == 1
+            assert sum(isinstance(item, RunnerTrustError) for item in outcomes) == 1
+            grant = await first.runner_grant(creds.session_id)
+            assert grant is not None
+            await second.revoke_runner_session(creds.session_id, now=datetime.now(UTC))
+            with pytest.raises(RunnerTrustError, match="revoked"):
+                await first.check_runner_grant(
+                    creds.session_id, str(grant["match_id"]), "white", now=datetime.now(UTC)
+                )
+        finally:
+            await broker.close()
+            await first.close()
+            await second.close()
+
+    asyncio.run(run())

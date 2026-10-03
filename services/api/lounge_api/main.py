@@ -122,6 +122,19 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     async def runner_sessions() -> list[RunnerSessionStatus]:
         return await active_manager.remote_runners.statuses()
 
+    @application.post("/api/runner-sessions/{session_id}/revoke", status_code=204)
+    async def revoke_runner(session_id: str) -> Response:
+        # Operator-only in the loopback deployment, like pairing and match controls.
+        try:
+            await active_manager.remote_runners.revoke(session_id)
+        except RunnerPairingError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return Response(status_code=204)
+
+    @application.get("/api/runner-sessions/{session_id}/audit")
+    async def runner_audit(session_id: str) -> list[dict[str, object]]:
+        return await active_manager.store.runner_audit(session_id)
+
     def runner_token(authorization: str | None) -> str:
         try:
             return bearer_token(authorization)
