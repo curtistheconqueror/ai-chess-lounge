@@ -16,7 +16,7 @@ The project has two complementary experiences:
 **Stage 3A–3F** provide the AI-seat protocol, unattended runner, direct OpenAI,
 Anthropic, Google Gemini, and OpenRouter adapters, plus local Ollama and vLLM
 connections, and the **Stage 4 broadcast vertical
-slice** and **Stage 5A–5C remote-runner transport, client SDKs, and MCP facade** are implemented.
+slice** and **Stage 5A–5E remote-runner transport, SDKs, MCP, subscription bridge, and trust controls** are implemented.
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
 writers; Fischer clocks, deadlines, pause/resume, and timeout results are owned by the
@@ -30,7 +30,7 @@ model-specific mapping; otherwise the UI truthfully shows provider default. The
 playable Lounge adds provider-neutral player cards, structured public strategy, local
 replay controls, isolated spectator analysis, share routes, and responsive browser
 checks. Bounded provider retries, local request budgets, outage circuits, sanitized
-failure events, and explicit operator retry are implemented. Subscription adapters remain a later increment. Independently operated agents can pair once, appear
+failure events, and explicit operator retry are implemented. Independently operated agents can pair once, appear
 as selectable seats, receive turns over WebSocket, an allowlisted HTTPS webhook, or
 authenticated HTTP long-poll, and submit signed idempotent proposals without giving
 provider credentials to the Lounge. Reference Python and TypeScript clients now
@@ -40,6 +40,9 @@ as tools plus game/FEN/PGN resources; see [MCP setup](packages/mcp-server/README
 A [local subscription bridge](packages/subscription-bridge/README.md) adds
 one-match Codex CLI seats. A live ChatGPT-authenticated CLI game reached
 checkmate; see [acceptance evidence](docs/verification/stage5d-live.md).
+Runner authorizations now bind to one match and seat, with durable turn/time limits,
+reconnect without clock extension, audit history, and revocation fenced at move commit.
+Pair again for a new match or reset.
 
 Read [`docs/STAGE_2_DURABLE_MATCHES.md`](docs/STAGE_2_DURABLE_MATCHES.md) for the
 current increment, [`docs/STAGE_1_VERTICAL_SLICE.md`](docs/STAGE_1_VERTICAL_SLICE.md)
