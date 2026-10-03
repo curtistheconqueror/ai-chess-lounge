@@ -334,3 +334,29 @@ def test_invalid_idempotency_key_is_rejected(client: TestClient) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_runner_revoke_endpoint_and_safe_audit(client: TestClient) -> None:
+    pairing = client.post(
+        "/api/runner-pairings",
+        json={"display_name": "Revoke test", "provider": "Test", "model": "test"},
+    ).json()
+    credentials = client.post(
+        f"/api/runner-pairings/{pairing['pairing_id']}/claim",
+        json={"pairing_code": pairing["pairing_code"]},
+    ).json()
+    path = f"/api/runner-sessions/{credentials['session_id']}"
+    assert client.post(path + "/revoke").status_code == 204
+    assert client.post(path + "/revoke").status_code == 204
+    audit = client.get(path + "/audit")
+    assert audit.status_code == 200
+    assert [event["kind"] for event in audit.json()] == ["session.claimed", "session.revoked"]
+    assert credentials["runner_token"] not in audit.text
+    assert credentials["signing_key"] not in audit.text
+    assert (
+        client.get(
+            "/api/runner-sessions/turns/next",
+            headers={"Authorization": "Bearer " + credentials["runner_token"]},
+        ).status_code
+        == 401
+    )

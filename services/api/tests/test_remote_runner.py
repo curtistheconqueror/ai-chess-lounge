@@ -48,16 +48,15 @@ def test_socket_shutdown_drains_children(cancel_connection: bool) -> None:
                 await disconnect.wait()
                 raise WebSocketDisconnect(code=1000)
 
-        class Queue(asyncio.Queue):
-            async def get(self) -> object:
-                children.append(asyncio.current_task())
-                return await super().get()
+        async def poll(*args, **kwargs):
+            children.append(asyncio.current_task())
+            await asyncio.Event().wait()
 
         await store.initialize()
         try:
             pairing = await broker.create_pairing(pairing_request())
             credentials = await broker.claim_pairing(pairing.pairing_id, pairing.pairing_code)
-            broker._queues[credentials.session_id] = Queue()
+            broker.next_turn = poll
             connection = asyncio.create_task(broker.socket_loop(Socket(), credentials.runner_token))
             await asyncio.wait_for(receive_started.wait(), timeout=1)
             if cancel_connection:

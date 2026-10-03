@@ -73,6 +73,15 @@ def test_player_and_runner_migrations_upgrade_and_downgrade(
         columns("runner_sessions")
     )
 
+    command.upgrade(config, "0006_runner_trust")
+    assert {"runner_match_grants", "runner_audit_events"}.issubset(tables())
+    assert {"generation", "color", "max_turns", "turns_dispatched"}.issubset(
+        columns("runner_match_grants")
+    )
+    command.downgrade(config, "0005_remote_runners")
+    assert "runner_match_grants" not in tables()
+    assert "runner_audit_events" not in tables()
+
     command.downgrade(config, "0004_player_seats")
     assert "runner_pairings" not in tables()
     assert "runner_sessions" not in tables()
