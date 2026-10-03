@@ -31,6 +31,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error(message);
   }
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -83,10 +84,14 @@ export function createRunnerPairing(input: {
   division?: AssistanceDivision;
   effort?: EffortLevel | null;
   moveTimeoutMs?: number;
+  maxTurns?: number;
+  matchTtlMs?: number;
 }): Promise<RunnerPairingResponse> {
   return request<RunnerPairingResponse>("/api/runner-pairings", {
     method: "POST",
     body: JSON.stringify({
+      max_turns: input.maxTurns ?? 500,
+      match_ttl_ms: input.matchTtlMs ?? 14_400_000,
       display_name: input.displayName,
       provider: input.provider,
       model: input.model,
@@ -135,4 +140,8 @@ export function websocketUrl(gameId: string): string {
   }
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${window.location.host}/ws/games/${gameId}`;
+}
+
+export function revokeRunnerSession(sessionId: string): Promise<void> {
+  return request<void>(`/api/runner-sessions/${encodeURIComponent(sessionId)}/revoke`, { method: "POST" });
 }

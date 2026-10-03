@@ -7,6 +7,7 @@ import {
   fetchGame,
   fetchPlayerAdapters,
   fetchRunnerSessions,
+  revokeRunnerSession,
   resignGame,
   resetGame,
   retryAgentTurn,
@@ -114,6 +115,8 @@ function App() {
   const [runnerSessions, setRunnerSessions] = useState<RunnerSessionStatus[]>([]);
   const [whiteRunnerId, setWhiteRunnerId] = useState("");
   const [blackRunnerId, setBlackRunnerId] = useState("");
+  const [runnerMaxTurns, setRunnerMaxTurns] = useState(500);
+  const [runnerMatchMinutes, setRunnerMatchMinutes] = useState(240);
   const [runnerName, setRunnerName] = useState("Remote Agent");
   const [runnerProvider, setRunnerProvider] = useState("Independent Runner");
   const [runnerModel, setRunnerModel] = useState("external-model");
@@ -150,7 +153,7 @@ function App() {
     [blackSeat, playerAdapters],
   );
   const activeRunnerSessions = useMemo(
-    () => runnerSessions.filter((session) => !session.expired && !session.revoked),
+    () => runnerSessions.filter((session) => !session.expired && !session.revoked && !session.match_grant),
     [runnerSessions],
   );
 
@@ -609,11 +612,26 @@ function App() {
     window.setTimeout(() => setNotice(null), 1800);
   }
 
+  async function revokeRunner(sessionId: string) {
+    setBusy(true);
+    try {
+      await revokeRunnerSession(sessionId);
+      await refreshRunnerSessions();
+      setNotice("Runner access revoked. Pending moves cannot be committed.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to revoke runner.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function generateRunnerPairing() {
     setBusy(true);
     setNotice(null);
     try {
       const pairing = await createRunnerPairing({
+        maxTurns: runnerMaxTurns,
+        matchTtlMs: runnerMatchMinutes * 60_000,
         displayName: runnerName.trim(),
         provider: runnerConnectionMode === "subscription_bridge" ? "OpenAI" : runnerProvider.trim(),
         model: (runnerConnectionMode === "subscription_bridge" ? subscriptionModel : runnerModel).trim(),
@@ -983,7 +1001,12 @@ function App() {
                 Uses the official OpenAI Codex CLI authorization on the bridge machine. Subscription credentials stay local and are not uploaded to the Lounge. This runner is limited to the open_agentic division, uses provider-default effort, and requires a one-match authorization each time.
               </p>
             )}
-            <button className="runner-pairing-create" onClick={() => void generateRunnerPairing()} disabled={busy || !runnerName.trim() || (runnerConnectionMode === "subscription_bridge" ? !subscriptionModel.trim() : !runnerProvider.trim() || !runnerModel.trim())}>
+            <p>Authorizes the next match only. Reconnects keep the original clock and limits. Pair again for another game.</p>
+            <div className="runner-pairing-fields">
+              <label>Maximum turn requests<input aria-label="Runner turn limit" type="number" min={1} max={2000} value={runnerMaxTurns} onChange={(event) => setRunnerMaxTurns(Number(event.target.value))} /></label>
+              <label>Authorization minutes<input aria-label="Runner authorization minutes" type="number" min={1} max={1440} value={runnerMatchMinutes} onChange={(event) => setRunnerMatchMinutes(Number(event.target.value))} /></label>
+            </div>
+            <button className="runner-pairing-create" onClick={() => void generateRunnerPairing()} disabled={busy || !Number.isInteger(runnerMaxTurns) || runnerMaxTurns < 1 || runnerMaxTurns > 2000 || !Number.isInteger(runnerMatchMinutes) || runnerMatchMinutes < 1 || runnerMatchMinutes > 1440 || !runnerName.trim() || (runnerConnectionMode === "subscription_bridge" ? !subscriptionModel.trim() : !runnerProvider.trim() || !runnerModel.trim())}>
               Generate one-time pairing
             </button>
             {runnerPairing && (
@@ -1020,10 +1043,12 @@ function App() {
               </div>
             )}
             <div className="runner-presence">
-              <span>{activeRunnerSessions.length} paired</span>
-              {activeRunnerSessions.map((session) => (
+              <span>{activeRunnerSessions.length} ready for a new match</span>
+              {runnerSessions.filter((session) => !session.expired && !session.revoked).map((session) => (
                 <small key={session.session_id} className={session.connected ? "connected" : "standby"}>
                   {session.display_name} · {session.connected ? "live" : "standby"}
+                  {session.match_grant && <span> · Bound to {session.match_grant.color} · {session.match_grant.turns_dispatched}/{session.match_grant.max_turns} turn requests</span>}
+                  <button disabled={busy} aria-label={`Revoke ${session.display_name}`} onClick={() => void revokeRunner(session.session_id)}>Revoke access</button>
                 </small>
               ))}
             </div>

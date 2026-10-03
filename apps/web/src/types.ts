@@ -81,6 +81,7 @@ export interface RunnerSessionStatus {
   last_heartbeat_at: string;
   expired: boolean;
   revoked: boolean;
+  match_grant?: { match_id: string; color: string; turns_dispatched: number; max_turns: number; expires_at: string } | null;
 }
 
 export type PlayerConfigurationInput = Omit<PlayerConfiguration, "player_id">;
