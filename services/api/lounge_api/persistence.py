@@ -44,7 +44,7 @@ from .models import (
 from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0005_remote_runners"
+SCHEMA_REVISION = "0006_runner_trust"
 
 
 class ConcurrentGameUpdate(RuntimeError):
@@ -202,6 +202,34 @@ class RunnerSessionRow(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class RunnerTrustError(RuntimeError):
+    """A match grant is unavailable, exhausted, expired, or revoked."""
+
+
+class RunnerGrantRow(Base):
+    __tablename__ = "runner_match_grants"
+
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("runner_sessions.id"), primary_key=True
+    )
+    match_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    color: Mapped[str] = mapped_column(String(5), nullable=False)
+    turns_dispatched: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_turns: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RunnerAuditRow(Base):
+    __tablename__ = "runner_audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    match_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 def normalize_database_url(url: str) -> str:
     if url.startswith("postgres://"):
         return url.replace("postgres://", "postgresql+asyncpg://", 1)
@@ -278,6 +306,19 @@ class DatabaseStore:
     ) -> None:
         await self.initialize()
         async with self.sessions.begin() as session:
+            if move.actor.startswith("remote_runner:"):
+                color = move.actor.split(":", 1)[1]
+                player = game.white_player if color == "white" else game.black_player
+                runner = await session.scalar(
+                    select(RunnerSessionRow).where(RunnerSessionRow.player_id == player.player_id)
+                )
+                if runner is None:
+                    raise RunnerTrustError("The runner session is unavailable.")
+                now = lease_now or datetime.now(UTC)
+                await self._lock_runner(session, runner.id, now)
+                grant = await session.get(RunnerGrantRow, runner.id)
+                self._check_grant(grant, game.id, game.generation, color, now)
+                self._audit(session, runner.id, "move.committed", now, game.id)
             values = {**self._match_values(game), **self._cleared_lease_values()}
             statement = update(MatchRow).where(
                 MatchRow.id == game.id,
@@ -439,6 +480,7 @@ class DatabaseStore:
                     ),
                 )
             )
+            self._audit(session, runner_session.session_id, "session.claimed", now)
         return True
 
     async def load_runner_session(self, session_id: str) -> RunnerSessionRecord | None:
@@ -486,6 +528,7 @@ class DatabaseStore:
         async with self.sessions.begin() as session:
             result = await session.execute(
                 update(RunnerSessionRow)
+                .execution_options(synchronize_session=False)
                 .where(
                     RunnerSessionRow.id == session_id,
                     RunnerSessionRow.expires_at > now,
@@ -494,6 +537,175 @@ class DatabaseStore:
                 .values(last_heartbeat_at=now)
             )
             return result.rowcount == 1
+
+    @staticmethod
+    def _audit(
+        session: AsyncSession,
+        session_id: str,
+        kind: str,
+        now: datetime,
+        match_id: str | None = None,
+    ) -> None:
+        session.add(
+            RunnerAuditRow(session_id=session_id, match_id=match_id, kind=kind, created_at=now)
+        )
+
+    async def _lock_runner(
+        self, session: AsyncSession, session_id: str, now: datetime
+    ) -> RunnerSessionRow:
+        # A write lock works on SQLite and PostgreSQL and serializes grant,
+        # revoke, and final move-commit checks on this session.
+        result = await session.execute(
+            update(RunnerSessionRow)
+            .execution_options(synchronize_session=False)
+            .where(
+                RunnerSessionRow.id == session_id,
+                RunnerSessionRow.revoked_at.is_(None),
+                RunnerSessionRow.expires_at > now,
+            )
+            .values(last_heartbeat_at=RunnerSessionRow.last_heartbeat_at)
+        )
+        if result.rowcount != 1:
+            raise RunnerTrustError("The runner session is expired or revoked.")
+        row = await session.get(RunnerSessionRow, session_id)
+        assert row is not None
+        return row
+
+    async def reserve_runner_turn(
+        self,
+        session_id: str,
+        match_id: str,
+        color: str,
+        *,
+        now: datetime,
+        position_version: int = 0,
+        match_revision: int | None = None,
+    ) -> dict[str, object]:
+        async with self.sessions.begin() as session:
+            runner = await self._lock_runner(session, session_id, now)
+            grant = await session.get(RunnerGrantRow, session_id)
+            match = await session.get(MatchRow, match_id)
+            if match is not None and (
+                (match_revision is not None and match.revision != match_revision)
+                or match.position_version != position_version
+                or match.lifecycle != MatchState.RUNNING.value
+                or ("white" if chess.Board(match.current_fen).turn else "black") != color
+            ):
+                raise RunnerTrustError("The runner turn is stale or the match is not running.")
+            generation = match.generation if match else 0
+            if grant is None:
+                settings = runner.player.get("settings", {})
+                grant = RunnerGrantRow(
+                    session_id=session_id,
+                    match_id=match_id,
+                    generation=generation,
+                    color=color,
+                    turns_dispatched=0,
+                    max_turns=int(settings.get("max_turns", 500)),
+                    expires_at=min(
+                        _utc(runner.expires_at),
+                        now + timedelta(milliseconds=int(settings.get("match_ttl_ms", 14_400_000))),
+                    ),
+                )
+                session.add(grant)
+                self._audit(session, session_id, "match.authorized", now, match_id)
+            self._check_grant(grant, match_id, generation, color, now)
+            if grant.turns_dispatched >= grant.max_turns:
+                raise RunnerTrustError("The runner match turn limit has been reached.")
+            grant.turns_dispatched += 1
+            self._audit(session, session_id, "turn.dispatched", now, match_id)
+            return {**self._grant_view(grant), "match_revision": match.revision if match else None}
+
+    @staticmethod
+    def _check_grant(
+        grant: RunnerGrantRow | None, match_id: str, generation: int, color: str, now: datetime
+    ) -> None:
+        if grant is None or (grant.match_id, grant.generation, grant.color) != (
+            match_id,
+            generation,
+            color,
+        ):
+            raise RunnerTrustError("The runner is authorized for a different match or seat.")
+        if _utc(grant.expires_at) <= now:
+            raise RunnerTrustError("The runner match authorization has expired.")
+
+    async def check_runner_grant(
+        self,
+        session_id: str,
+        match_id: str,
+        color: str,
+        *,
+        now: datetime,
+        position_version: int | None = None,
+        match_revision: int | None = None,
+    ) -> None:
+        async with self.sessions.begin() as session:
+            await self._lock_runner(session, session_id, now)
+            grant = await session.get(RunnerGrantRow, session_id)
+            match = await session.get(MatchRow, match_id)
+            self._check_grant(grant, match_id, match.generation if match else 0, color, now)
+            if (
+                match is not None
+                and position_version is not None
+                and (
+                    (match_revision is not None and match.revision != match_revision)
+                    or match.position_version != position_version
+                    or match.lifecycle != MatchState.RUNNING.value
+                    or ("white" if chess.Board(match.current_fen).turn else "black") != color
+                )
+            ):
+                raise RunnerTrustError("The runner turn is stale or the match is not running.")
+
+    @staticmethod
+    def _grant_view(grant: RunnerGrantRow) -> dict[str, object]:
+        return {
+            "match_id": grant.match_id,
+            "generation": grant.generation,
+            "color": grant.color,
+            "turns_dispatched": grant.turns_dispatched,
+            "max_turns": grant.max_turns,
+            "expires_at": _utc(grant.expires_at).isoformat(),
+        }
+
+    async def runner_grant(self, session_id: str) -> dict[str, object] | None:
+        async with self.sessions() as session:
+            grant = await session.get(RunnerGrantRow, session_id)
+            return self._grant_view(grant) if grant else None
+
+    async def revoke_runner_session(self, session_id: str, *, now: datetime) -> bool:
+        async with self.sessions.begin() as session:
+            result = await session.execute(
+                update(RunnerSessionRow)
+                .execution_options(synchronize_session=False)
+                .where(RunnerSessionRow.id == session_id, RunnerSessionRow.revoked_at.is_(None))
+                .values(revoked_at=now)
+            )
+            if result.rowcount:
+                grant = await session.get(RunnerGrantRow, session_id)
+                self._audit(
+                    session, session_id, "session.revoked", now, grant.match_id if grant else None
+                )
+            return await session.get(RunnerSessionRow, session_id) is not None
+
+    async def runner_audit(self, session_id: str) -> list[dict[str, object]]:
+        async with self.sessions() as session:
+            rows = (
+                await session.scalars(
+                    select(RunnerAuditRow)
+                    .where(RunnerAuditRow.session_id == session_id)
+                    .order_by(RunnerAuditRow.id.desc())
+                    .limit(200)
+                )
+            ).all()
+            return [
+                {
+                    "sequence": row.id,
+                    "kind": row.kind,
+                    "match_id": row.match_id,
+                    "timestamp": _utc(row.created_at).isoformat(),
+                }
+                for row in reversed(rows)
+            ]
 
     async def acquire_turn_lease(
         self,
@@ -678,6 +890,8 @@ class DatabaseStore:
         """Delete test data while preserving the schema."""
         await self.initialize()
         async with self.sessions.begin() as session:
+            await session.execute(delete(RunnerAuditRow))
+            await session.execute(delete(RunnerGrantRow))
             await session.execute(delete(RunnerSessionRow))
             await session.execute(delete(RunnerPairingRow))
             await session.execute(delete(IdempotencyRow))

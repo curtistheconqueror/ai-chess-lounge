@@ -8,7 +8,6 @@ import json
 import math
 import os
 import secrets
-from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -33,7 +32,7 @@ from .models import (
     RunnerSessionStatus,
     RunnerTurnDelivery,
 )
-from .persistence import DatabaseStore
+from .persistence import DatabaseStore, RunnerTrustError
 from .player_protocol import (
     ConnectionMode,
     MoveProposal,
@@ -63,6 +62,7 @@ class _PendingTurn:
     session_id: str
     player_id: str
     future: asyncio.Future[MoveProposal]
+    match_revision: int | None = None
     idempotency_key: str | None = None
     payload_hash: str | None = None
 
@@ -97,9 +97,7 @@ class RemoteRunnerBroker:
         )
         self.store = store
         self._clock = clock or (lambda: datetime.now(UTC))
-        self._queues: defaultdict[str, asyncio.Queue[RunnerTurnDelivery]] = defaultdict(
-            asyncio.Queue
-        )
+        self._turn_changed = asyncio.Event()
         self._pending: dict[str, _PendingTurn] = {}
         self._completed: dict[str, tuple[str, str, str, datetime]] = {}
         self._connected: set[str] = set()
@@ -133,6 +131,8 @@ class RemoteRunnerBroker:
             settings={
                 "runner_id": player_id,
                 "move_timeout_ms": request.move_timeout_ms,
+                "max_turns": request.max_turns,
+                "match_ttl_ms": request.match_ttl_ms,
             },
         )
         expires_at = now + timedelta(milliseconds=request.pairing_ttl_ms)
@@ -231,8 +231,49 @@ class RemoteRunnerBroker:
     async def statuses(self) -> list[RunnerSessionStatus]:
         now = self._clock()
         return [
-            self._status(session, now=now) for session in await self.store.list_runner_sessions()
+            self._status(session, now=now).model_copy(
+                update={"match_grant": await self.store.runner_grant(session.session_id)}
+            )
+            for session in await self.store.list_runner_sessions()
         ]
+
+    async def revoke(self, session_id: str) -> None:
+        if not await self.store.revoke_runner_session(session_id, now=self._clock()):
+            raise RunnerPairingError("The runner session does not exist.")
+        self._turn_changed.set()
+        for pending in list(self._pending.values()):
+            if pending.session_id == session_id and not pending.future.done():
+                pending.future.set_exception(AdapterError("The runner session was revoked."))
+
+    async def _check_delivery(self, session_id: str, delivery: RunnerTurnDelivery) -> None:
+        if delivery.delivery_id not in self._pending:
+            raise RunnerAuthenticationError("The turn delivery is no longer active.")
+        try:
+            await self.store.check_runner_grant(
+                session_id,
+                delivery.request.match_id,
+                delivery.request.color,
+                now=self._clock(),
+                position_version=delivery.request.position_version,
+                match_revision=self._pending[delivery.delivery_id].match_revision,
+            )
+        except RunnerTrustError as exc:
+            raise RunnerAuthenticationError(str(exc)) from exc
+
+    async def validate_new_match(self, player: PlayerConfiguration) -> None:
+        session = await self.store.load_active_runner_session_for_player(
+            player.player_id, now=self._clock()
+        )
+        if (
+            session is None
+            or session.player != player
+            or not hmac.compare_digest(session.issuer_digest, self._issuer_digest())
+        ):
+            raise AdapterConfigurationError("Pair an active runner with this exact profile first.")
+        if await self.store.runner_grant(session.session_id) is not None:
+            raise AdapterConfigurationError(
+                "This runner is bound to a match. Pair again for a new game."
+            )
 
     async def request_turn(
         self,
@@ -250,9 +291,29 @@ class RemoteRunnerBroker:
             raise AdapterError("The match player profile does not match the paired runner profile.")
         if not hmac.compare_digest(session.issuer_digest, self._issuer_digest()):
             raise AdapterError("The paired remote runner session is no longer valid.")
+        if any(
+            p.session_id == session.session_id and not p.future.done()
+            for p in self._pending.values()
+        ):
+            raise AdapterError("The runner already has an active turn.")
+        try:
+            grant = await self.store.reserve_runner_turn(
+                session.session_id,
+                request.match_id,
+                request.color,
+                now=now,
+                position_version=request.position_version,
+                match_revision=request._match_revision,
+            )
+        except RunnerTrustError as exc:
+            raise AdapterError(str(exc)) from exc
+        deadline = min(
+            now + timedelta(milliseconds=request.move_deadline_ms),
+            datetime.fromisoformat(str(grant["expires_at"])),
+        )
         delivery = RunnerTurnDelivery(
             delivery_id=str(uuid4()),
-            expires_at=(now + timedelta(milliseconds=request.move_deadline_ms)).isoformat(),
+            expires_at=deadline.isoformat(),
             request=request,
         )
         loop = asyncio.get_running_loop()
@@ -261,13 +322,14 @@ class RemoteRunnerBroker:
             session_id=session.session_id,
             player_id=player.player_id,
             future=loop.create_future(),
+            match_revision=grant["match_revision"],
         )
         self._pending[delivery.delivery_id] = pending
-        await self._queues[session.session_id].put(delivery)
+        self._turn_changed.set()
         if session.webhook_url is not None:
             asyncio.create_task(self._send_webhook(session, delivery))
         try:
-            async with asyncio.timeout(request.move_deadline_ms / 1_000):
+            async with asyncio.timeout(max(0, (deadline - now).total_seconds())):
                 return await pending.future
         except TimeoutError as exc:
             raise AdapterError(
@@ -285,24 +347,27 @@ class RemoteRunnerBroker:
     ) -> RunnerTurnDelivery | None:
         session = await self.authenticate(runner_token)
         await self.store.touch_runner_session(session.session_id, now=self._clock())
-        queue = self._queues[session.session_id]
+        # Pending is the source of truth, not a consumed transport queue. A lost
+        # response/reconnect gets the identical delivery with its original deadline.
+        end = asyncio.get_running_loop().time() + wait_ms / 1_000
         while True:
+            self._turn_changed.clear()
+            for pending in list(self._pending.values()):
+                if (
+                    pending.session_id == session.session_id
+                    and not pending.future.done()
+                    and datetime.fromisoformat(pending.delivery.expires_at) > self._clock()
+                ):
+                    await self._check_delivery(session.session_id, pending.delivery)
+                    return pending.delivery
+            remaining = end - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                return None
             try:
-                if wait_ms == 0:
-                    delivery = queue.get_nowait()
-                else:
-                    async with asyncio.timeout(wait_ms / 1_000):
-                        delivery = await queue.get()
-            except (asyncio.QueueEmpty, TimeoutError):
-                return None
-            pending = self._pending.get(delivery.delivery_id)
-            if pending is None:
-                if wait_ms == 0:
-                    continue
-                return None
-            if datetime.fromisoformat(delivery.expires_at) <= self._clock():
-                continue
-            return delivery
+                await asyncio.wait_for(self._turn_changed.wait(), min(1.0, remaining))
+            except TimeoutError:
+                pass
+            await self.authenticate(runner_token)
 
     async def submit_proposal(
         self,
@@ -337,6 +402,9 @@ class RemoteRunnerBroker:
             raise RunnerSubmissionError("The runner session is not authorized for this delivery.")
         if datetime.fromisoformat(pending.delivery.expires_at) <= now:
             raise RunnerSubmissionError("The turn delivery has expired.")
+        await self._check_delivery(session.session_id, pending.delivery)
+        if pending.future.done():
+            raise RunnerSubmissionError("The turn delivery is no longer active.")
         expected_signature = self.proposal_signature(
             self._signing_key(session.session_id),
             delivery_id,
@@ -376,11 +444,13 @@ class RemoteRunnerBroker:
         session = await self.authenticate(runner_token)
         await websocket.accept()
         self._connected.add(session.session_id)
+        last_delivery_id = None
         try:
             await self.store.touch_runner_session(session.session_id, now=self._clock())
             while True:
+                await self.authenticate(runner_token)
                 receive_task = asyncio.create_task(websocket.receive_json())
-                delivery_task = asyncio.create_task(self._queues[session.session_id].get())
+                delivery_task = asyncio.create_task(self.next_turn(runner_token, wait_ms=1_000))
                 tasks = {receive_task, delivery_task}
                 try:
                     done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -398,13 +468,17 @@ class RemoteRunnerBroker:
                     await self._handle_socket_message(websocket, runner_token, message)
                 if delivery_task in done:
                     delivery = delivery_task.result()
-                    if delivery.delivery_id in self._pending:
+                    if delivery is not None and delivery.delivery_id != last_delivery_id:
+                        last_delivery_id = delivery.delivery_id
+                        await self._check_delivery(session.session_id, delivery)
                         await websocket.send_json(
                             {
                                 "type": "turn.requested",
                                 "payload": delivery.model_dump(mode="json"),
                             }
                         )
+                if delivery_task in done and delivery_task.result() is not None:
+                    await asyncio.sleep(0.05)
         except WebSocketDisconnect:
             return
         finally:
@@ -446,6 +520,10 @@ class RemoteRunnerBroker:
         delivery: RunnerTurnDelivery,
     ) -> None:
         if session.webhook_url is None:
+            return
+        try:
+            await self._check_delivery(session.session_id, delivery)
+        except RunnerAuthenticationError:
             return
         body = {
             "type": "turn.requested",

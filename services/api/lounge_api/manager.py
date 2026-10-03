@@ -22,6 +22,7 @@ from sqlalchemy.exc import (
 )
 
 from .adapters import (
+    AdapterConfigurationError,
     AdapterError,
     AdapterRegistry,
     PlayerAdapter,
@@ -56,6 +57,7 @@ from .persistence import (
     ConcurrentGameUpdate,
     DatabaseStore,
     IdempotencyConflict,
+    RunnerTrustError,
     TurnLeaseUnavailable,
 )
 from .player_protocol import MoveRequest as PlayerMoveRequest
@@ -165,6 +167,13 @@ class GameManager:
         )
         self.adapters.validate(white_player)
         self.adapters.validate(black_player)
+        remote_players = [
+            p for p in (white_player, black_player) if p.adapter_id == "remote_runner"
+        ]
+        if len({p.player_id for p in remote_players}) != len(remote_players):
+            raise AdapterConfigurationError("Each remote seat requires its own pairing.")
+        for player in remote_players:
+            await self.remote_runners.validate_new_match(player)
         legacy_opponent = (
             OpponentKind.STOCKFISH
             if white_player.is_human and black_player.adapter_id == "stockfish"
@@ -646,6 +655,7 @@ class GameManager:
                     move_deadline_ms=max(1, move_deadline_ms),
                     division=player.division,
                 )
+                request._match_revision = expected_revision
                 started = perf_counter()
                 provider_call_started = player.adapter_id in PROVIDER_RETRY_ADAPTERS
                 if provider_call_started:
@@ -764,6 +774,15 @@ class GameManager:
                         pass
                     return False
                 await self._recover_engine_turn(game.id, retry_fallback)
+                return False
+            except RunnerTrustError:
+                # A revoke can win after proposal receipt but before commit. Reload
+                # the unmodified board before pausing; never retain the tentative move.
+                game = await self.store.load_game(game.id)
+                if game is not None:
+                    await self._pause_for_invalid_proposal(
+                        game, game.revision, player, "runner_authorization_unavailable"
+                    )
                 return False
             except AdapterError:
                 await self._pause_for_invalid_proposal(
