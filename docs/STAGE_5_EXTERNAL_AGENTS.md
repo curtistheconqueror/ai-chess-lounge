@@ -147,13 +147,13 @@ authenticating after restart.
 - Session and pairing records are durable. Pending deliveries, connected presence,
   and duplicate receipts are process-local in 5A; a restarted API safely reconstructs
   the match turn through its existing durable clock and lease.
-- Distributed presence, explicit revocation, quotas, reconnect adjudication, and
-  durable delivery queues belong to Stage 5E.
+- Stage 5E adds explicit revocation, durable match/turn limits, and reconnect rules.
+  Distributed presence/routing and durable delivery queues remain deferred.
 - The reference SDKs use authenticated HTTP long-poll. WebSocket and allowlisted
   webhook transports remain available for custom runners; distributed delivery and
-  reconnect durability belong to Stage 5E.
-- Stage 5C provides a local stdio MCP facade. Official subscription bridges remain
-  Stage 5D; host permission policies remain under operator control.
+  delivery persistence beyond restart remains deferred.
+- Stage 5C provides a local stdio MCP facade and Stage 5D a verified Codex
+  subscription bridge; host permission policies remain under operator control.
 
 ## Verification gate
 
@@ -182,3 +182,32 @@ model connection. Host trust settings govern whether per-tool approval is requir
 Verification includes a full two-client checkmate game, real stdio discovery,
 resource exports, duplicate/conflicting proposals, stale/illegal moves, and secret
 redaction. The match manager still decides whether a received proposal can commit.
+
+## Stage 5E outcome: match trust controls
+
+Each pairing authorizes the next dispatched match and one color only. The server
+persists that scope, reset generation, dispatch count, and expiry. Pair again for a
+new match or reset. The UI exposes maximum turn requests and authorization minutes;
+these are authorization limits, not chess-clock controls or dollar budgets.
+Already-bound sessions are removed from the new-game seat selector.
+
+The **Revoke access** button prevents further authorized delivery/submission and
+fences any remote move not yet committed. Revocation does not erase earlier moves.
+Operator endpoints (local deployment only):
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| POST | `/api/runner-sessions/{id}/revoke` | Idempotent session and match-access revocation |
+| GET | `/api/runner-sessions/{id}/audit` | Latest 200 ordered, credential-free trust events |
+
+A dropped HTTP response or socket reconnect receives the same pending delivery and
+deadline. Session/grant expiry, revocation, pause, terminal state, reset, and stale
+position checks apply before replay and submission. Reconnects do not grant extra
+clock time. A missed adapter deadline pauses; actual chess-clock expiration is
+adjudicated by the existing arbiter. Explicit operator adjudication remains available.
+
+Migration `0006_runner_trust` adds grant/audit tables. Apply `alembic upgrade head`
+before starting an existing installation. Session revocation and committed moves
+serialize transactionally. Restart preserves grants, counts, and audit events;
+transport queues/receipts remain process-local, and distributed routing is deferred.
+See [ADR 0019](adr/0019-runner-match-trust.md) for precise lifecycle semantics.
