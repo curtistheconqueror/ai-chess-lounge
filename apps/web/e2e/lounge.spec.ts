@@ -695,3 +695,34 @@ test("OpenRouter can face a local Ollama model without invented effort", async (
   expect(JSON.stringify(submitted).toLowerCase()).not.toContain("base_url");
   expect(JSON.stringify(submitted).toLowerCase()).not.toContain("authorization");
 });
+
+test("runner authorization limits and revoke control", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Trust lifecycle runs once on desktop.");
+  await page.goto("/");
+  await page.getByLabel("Remote agent name").fill("Trust Control Bot");
+  await page.getByLabel("Runner turn limit").fill("20");
+  await page.getByLabel("Runner authorization minutes").fill("10");
+  const pairingResponse = page.waitForResponse((response) =>
+    response.url().endsWith("/api/runner-pairings") && response.request().method() === "POST"
+  );
+  await page.getByRole("button", { name: "Generate one-time pairing" }).click();
+  const pairing = await (await pairingResponse).json();
+  expect(pairing.player.settings.max_turns).toBe(20);
+  expect(pairing.player.settings.match_ttl_ms).toBe(600000);
+  const claimed = await page.request.post(`/api/runner-pairings/${pairing.pairing_id}/claim`, {
+    data: { pairing_code: pairing.pairing_code },
+  });
+  const credentials = await claimed.json();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  const revoke = page.getByRole("button", { name: "Revoke Trust Control Bot", exact: true });
+  await expect(revoke).toBeVisible();
+  await revoke.click();
+  await expect(page.getByRole("alert")).toContainText("Runner access revoked");
+  await expect(revoke).toHaveCount(0);
+  const heartbeat = await page.request.post("/api/runner-sessions/heartbeat", {
+    headers: { Authorization: `Bearer ${credentials.runner_token}` },
+  });
+  expect(heartbeat.status()).toBe(401);
+  const audit = await page.request.get(`/api/runner-sessions/${credentials.session_id}/audit`);
+  expect((await audit.json()).map((event: { kind: string }) => event.kind)).toEqual(["session.claimed", "session.revoked"]);
+});
