@@ -17,6 +17,7 @@ from .models import (
     MatchState,
     MoveRecord,
     OpponentKind,
+    SeatChange,
 )
 from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 
@@ -85,6 +86,7 @@ class GameSession:
     timed_out_by: str | None = None
     white_player: PlayerConfiguration | None = None
     black_player: PlayerConfiguration | None = None
+    seat_history: list[SeatChange] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.white_remaining_ms is None:
@@ -280,10 +282,45 @@ class GameSession:
         self.revision += 1
         self.updated_at = action_time
 
+    def change_seat(self, color: str, player: PlayerConfiguration, *, now: datetime) -> SeatChange:
+        if self.lifecycle is not MatchState.PAUSED:
+            raise MatchTransitionRejected("Pause the match before changing a seat.")
+        if color not in {"white", "black"}:
+            raise MatchTransitionRejected("Color must be white or black.")
+        previous = self.player_for_color(color)
+        if previous == player:
+            raise MatchTransitionRejected("This player already controls the seat.")
+        if player.settings.get("color", color) != color:
+            raise MatchTransitionRejected("The player configuration belongs to the other color.")
+        if color == "white":
+            self.white_player = player.model_copy(deep=True)
+        else:
+            self.black_player = player.model_copy(deep=True)
+        self.version += 1
+        self.revision += 1
+        self.updated_at = self._normalize_now(now)
+        change = SeatChange(
+            color=color,
+            previous_player=previous.model_copy(deep=True),
+            player=player.model_copy(deep=True),
+            after_ply=len(self.moves),
+            position_version=self.version,
+            timestamp=self.updated_at.isoformat(),
+        )
+        self.seat_history.append(change)
+        self.opponent = (
+            OpponentKind.STOCKFISH
+            if self.player_for_color("white").is_human
+            and self.player_for_color("black").adapter_id == "stockfish"
+            else OpponentKind.HUMAN
+        )
+        return change
+
     def reset(self, *, now: datetime | None = None) -> None:
         action_time = self._normalize_now(now)
         self.board.reset()
         self.moves.clear()
+        self.seat_history.clear()
         self.resigned_by = None
         self.draw_reason = None
         self.adjudicated_result = None
@@ -466,8 +503,30 @@ class GameSession:
         game.headers["Site"] = "AI Chess Lounge"
         game.headers["Date"] = self.created_at.strftime("%Y.%m.%d")
         game.headers["Round"] = "-"
-        game.headers["White"] = self.player_for_color("white").display_name
-        game.headers["Black"] = self.player_for_color("black").display_name
+        for color in ("white", "black"):
+            original = next(
+                (c.previous_player for c in self.seat_history if c.color == color),
+                self.player_for_color(color),
+            )
+            game.headers[color.title()] = original.display_name
+            if self.seat_history:
+                game.headers[f"{color.title()}Current"] = self.player_for_color(color).display_name
+        if self.seat_history:
+            game.headers["SeatChanges"] = str(len(self.seat_history))
+            nodes = [game, *game.mainline()]
+            for change in self.seat_history:
+                annotation = (
+                    (
+                        f"Seat change ({change.color}): {change.previous_player.display_name} "
+                        f"to {change.player.display_name} ({change.player.provider}, "
+                        f"{change.player.model}, {change.player.division.value})"
+                    )
+                    .replace("{", "(")
+                    .replace("}", ")")
+                    .replace("\n", " ")
+                )
+                node = nodes[change.after_ply]
+                node.comment = f"{node.comment} {annotation}".strip()
         game.headers["Result"] = self.result
         return str(game)
 
@@ -512,6 +571,7 @@ class GameSession:
             can_claim_draw=can_claim_draw,
             draw_claim_moves=draw_claim_moves,
             draw_reason=self.draw_reason,
+            seat_history=list(self.seat_history),
             opponent=self.opponent,
             engine=self.engine_summary,
             white_player=self.player_for_color("white"),

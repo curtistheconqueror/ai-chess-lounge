@@ -425,12 +425,60 @@ class GameManager:
             await self.broadcast(game, now=now)
             return game.snapshot(now=now)
 
-    async def pause(self, game_id: str) -> GameSnapshot:
-        self._cancel_agent_runner(game_id)
-        return await self._transition(game_id, MatchState.PAUSED, "match.paused")
+    async def change_seat(
+        self, game_id: str, color: str, player: PlayerConfiguration, expected_revision: int
+    ) -> GameSnapshot:
+        await self.get(game_id)
+        async with self._game_locks[game_id]:
+            game = deepcopy(await self._reload(game_id))
+            if game.revision != expected_revision:
+                raise MatchTransitionRejected("The match changed. Refresh before changing a seat.")
+            if game.lifecycle is not MatchState.PAUSED:
+                raise MatchTransitionRejected("Pause the match before changing a seat.")
+            self.adapters.validate(player)
+            if player.adapter_id == "remote_runner":
+                other = game.player_for_color("black" if color == "white" else "white")
+                if other.player_id == player.player_id:
+                    raise AdapterConfigurationError("Each remote seat requires its own pairing.")
+                await self.remote_runners.validate_new_match(
+                    player, match_id=game.id, generation=game.generation, color=color
+                )
+            change = game.change_seat(color, player, now=self._clock())
+            stockfish = next(
+                (p for p in (game.white_player, game.black_player) if p.adapter_id == "stockfish"),
+                None,
+            )
+            if stockfish:
+                game.stockfish_elo = int(stockfish.settings.get("target_elo", 1600))
+                game.engine_move_time_ms = int(stockfish.settings.get("move_time_ms", 450))
+                game.engine_summary = await self.engine.summary(
+                    game.stockfish_elo, game.engine_move_time_ms
+                )
+            else:
+                game.engine_summary = None
+            event = game.event("seat.changed", change.model_dump(mode="json"), now=game.updated_at)
+            await self._record_action(game, [event], expected_revision)
+            self._cancel_agent_runner(game_id)
+            self._cancel_timeout(game_id)
+            await self.broadcast(game, now=game.updated_at)
+            return game.snapshot(now=self._clock())
 
-    async def resume(self, game_id: str) -> GameSnapshot:
-        snapshot = await self._transition(game_id, MatchState.RUNNING, "match.resumed")
+    async def pause(self, game_id: str, expected_revision: int | None = None) -> GameSnapshot:
+        current = await self.get(game_id)
+        if expected_revision is not None and current.revision != expected_revision:
+            raise MatchTransitionRejected("The match changed. Refresh before pausing.")
+        self._cancel_agent_runner(game_id)
+        try:
+            return await self._transition(
+                game_id, MatchState.PAUSED, "match.paused", client_revision=expected_revision
+            )
+        finally:
+            self._schedule_agent_runner(self.games[game_id])
+
+    async def resume(self, game_id: str, expected_revision: int | None = None) -> GameSnapshot:
+        snapshot = await self._transition(
+            game_id, MatchState.RUNNING, "match.resumed", client_revision=expected_revision
+        )
         game = await self.get(game_id)
         self._schedule_agent_runner(game)
         return snapshot
@@ -832,7 +880,7 @@ class GameManager:
                 # A revoke can win after proposal receipt but before commit. Reload
                 # the unmodified board before pausing; never retain the tentative move.
                 game = await self.store.load_game(game.id)
-                if game is not None:
+                if game is not None and game.revision == expected_revision:
                     await self._pause_for_invalid_proposal(
                         game, game.revision, player, "runner_authorization_unavailable"
                     )
@@ -997,7 +1045,13 @@ class GameManager:
             ),
             game.event("match.paused", self._clock_payload(game, now), now=now),
         ]
-        await self._record_action(game, events, expected_revision)
+        try:
+            await self._record_action(game, events, expected_revision)
+        except ConcurrentGameUpdate:
+            # Another worker already paused, replaced or advanced this turn.
+            # _record_action reloads the winner; an old failure must not escape
+            # as an unhandled task error or pause the replacement controller.
+            return
         self._cancel_timeout(game.id)
         await self.broadcast(game, now=now)
 
@@ -1060,10 +1114,14 @@ class GameManager:
         game_id: str,
         target: MatchState,
         event_type: str,
+        *,
+        client_revision: int | None = None,
     ) -> GameSnapshot:
         await self.get(game_id)
         async with self._game_locks[game_id]:
             game = deepcopy(await self._reload(game_id))
+            if client_revision is not None and game.revision != client_revision:
+                raise MatchTransitionRejected("The match changed. Refresh before continuing.")
             expected_revision = game.revision
             now = self._clock()
             if await self._expire_locked(game, now, expected_revision=expected_revision):

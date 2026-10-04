@@ -19,7 +19,8 @@ connections, and the **Stage 4 broadcast vertical
 slice** and **Stage 5A–5E remote-runner transport, SDKs, MCP, subscription bridge, and trust controls** are implemented.
 **Stage 6A human-seat controls** add desktop dragging, both-color promotion, explicit
 resignation confirmation, draw claims, and reconnect input fencing; see
-[human play](docs/STAGE_6_HUMAN_PLAY.md).
+[human play](docs/STAGE_6_HUMAN_PLAY.md). **Stage 6B takeover** adds paused human/AI
+seat changes, restoration, persisted history and annotated PGN, with old-turn fencing.
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
 writers; Fischer clocks, deadlines, pause/resume, and timeout results are owned by the

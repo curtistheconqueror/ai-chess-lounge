@@ -164,6 +164,15 @@ export interface ClockSnapshot {
   timed_out_by: "white" | "black" | null;
 }
 
+export interface SeatChange {
+  color: "white" | "black";
+  previous_player: PlayerConfiguration;
+  player: PlayerConfiguration;
+  after_ply: number;
+  position_version: number;
+  timestamp: string;
+}
+
 export interface GameSnapshot {
   id: string;
   lifecycle: MatchState;
@@ -195,6 +204,7 @@ export interface GameSnapshot {
   can_claim_draw: boolean;
   draw_claim_moves: string[];
   draw_reason: string | null;
+  seat_history: SeatChange[];
   opponent: OpponentKind;
   engine: EngineSummary | null;
   white_player: PlayerConfiguration;
