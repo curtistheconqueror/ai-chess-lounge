@@ -931,3 +931,31 @@ test("Model Lab previews and saves a color-swapped plan without launching games"
   await lab.getByRole("button", { name: "Preview experiment", exact: true }).click();
   await expect(lab.getByRole("alert")).toBeVisible();
 });
+
+test("Model Lab prepares confirms and watches a bounded local batch", async ({ page }, testInfo) => {
+  test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Batch smoke runs on desktop and phone.");
+  await page.getByRole("button", { name: "Model Lab", exact: true }).click();
+  const lab = page.getByRole("region", { name: "Model Lab", exact: true });
+  await lab.getByRole("textbox", { name: "Experiment name", exact: true }).fill(`Batch smoke ${testInfo.project.name}`);
+  await lab.getByRole("textbox", { name: "Opening suite" }).fill("Start |");
+  await lab.getByRole("spinbutton", { name: "Maximum plies", exact: true }).fill("4");
+  await lab.getByRole("button", { name: "Preview experiment", exact: true }).click();
+  await expect(lab.getByRole("article", { name: "Experiment preview" })).toContainText("2 planned games");
+  await lab.getByRole("button", { name: "Save draft plan", exact: true }).click();
+  const execution = lab.getByRole("region", { name: "Experiment execution" });
+  await execution.getByRole("button", { name: "Prepare batch", exact: true }).click();
+  await expect(execution.getByRole("status")).toContainText("Batch ready");
+  await execution.getByRole("button", { name: "Start batch", exact: true }).click();
+  await execution.getByRole("button", { name: "Keep batch stopped", exact: true }).click();
+  await expect(execution.getByRole("status")).toContainText("Batch ready");
+  await execution.getByRole("button", { name: "Start batch", exact: true }).click();
+  await execution.getByRole("button", { name: "Confirm start batch", exact: true }).click();
+  await expect(execution.getByRole("status")).toContainText("Batch completed", { timeout: 15000 });
+  await expect(execution.getByRole("cell", { name: "limited", exact: true })).toHaveCount(2);
+  await expect(execution.getByRole("link", { name: /Game [12]/ })).toHaveCount(2);
+  await page.screenshot({ path: testInfo.outputPath(`batch-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
+  await execution.getByRole("button", { name: "Prepare another run", exact: true }).click();
+  await execution.getByRole("button", { name: "Prepare batch", exact: true }).click();
+  await execution.getByRole("button", { name: "Cancel batch", exact: true }).click();
+  await expect(execution.getByRole("status")).toContainText("Batch cancelled");
+});
