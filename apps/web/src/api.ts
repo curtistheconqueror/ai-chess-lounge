@@ -209,6 +209,25 @@ export function fetchExperimentRun(id: string) {
 export function fetchExperimentRunMetrics(id: string) {
   return request<import("./ComparisonMetrics").ComparisonMetricsData>(`/api/experiment-runs/${encodeURIComponent(id)}/metrics`);
 }
+export async function downloadExperimentRunBundle(id: string): Promise<Blob> {
+  const response = await fetch(`${apiBase}/api/experiment-runs/${encodeURIComponent(id)}/bundle`, {
+    headers: { Accept: "application/zip" },
+  });
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const payload = (await response.json()) as ApiError;
+      const detail: unknown = payload.detail;
+      message = typeof detail === "string" ? detail : Array.isArray(detail)
+        ? detail.map(item => typeof item?.msg === "string" ? item.msg : "Invalid request field").join("; ")
+        : message;
+    } catch {
+      // Keep the HTTP status when the response is not JSON.
+    }
+    throw new Error(message);
+  }
+  return response.blob();
+}
 export function listExperimentRuns(experimentId: string) {
   return request<{ id: string; state: string }[]>(`/api/experiments/${encodeURIComponent(experimentId)}/runs`);
 }
