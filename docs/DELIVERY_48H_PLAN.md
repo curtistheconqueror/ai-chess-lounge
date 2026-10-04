@@ -199,3 +199,20 @@ identity/invitations, followed by 8E hosted onboarding and integrated review. Ex
 engineering ranges and Oct 5 / Oct 6 checkpoints remain conditional; external waits
 can exceed them. Preserve the final 09:00–17:40 UTC Oct6 review/CI/restore/visual buffer.
 Stage 9 all-candidate scope remains unanswered rather than silently marked complete.
+
+## Verified transport and beta preparation — October4 21:20UTC
+
+PR29 source e6c2e40 passed CI37234869427:357 Python/3 absent-engine skips,
+3 SDK,34 browser, both migrations/native generated restore/performance/build gates.
+Measured native SQLite/PostgreSQL loopback32-request and100-spectator workloads;
+correctness, idempotent replays, reconnect and owned-resource cleanup passed. These
+short fixture measurements do not establish representative hosted capacity.
+PR28 final5f560ea and PR27 finalc267056 independently passed their final-head CI.
+
+8E preparation packet now makes the local reference exhibition and actual hosted
+acceptance sequence reviewable. Roughly44h remain to Oct6 17:40UTC at this checkpoint.
+The dated Oct5/Oct6 gates remain conditional on account/security/budget/topology and
+merge/release decisions; keep Oct6 09:00–17:40UTC for integrated review/CI/restore/visual
+acceptance. Local tested-candidate confidence is higher than hosted-beta confidence;
+all-stages feasibility cannot be established while Stage9 scope is unselected.
+No implementation estimate absorbs unanswered approvals or external service waits.

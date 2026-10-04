@@ -556,3 +556,18 @@ production/account/budget/performance and Stage9 decisions. Main remains087c565;
 all contributor branches/draft dependencies are preserved. Completed pickup branches
 remain gated on approved verified merges. Deadline Oct6 17:40UTC keeps final8–9h
 integration/review/CI/restore/visual buffer; external decisions can exceed this window.
+
+## Stage8E preparation packet in progress
+
+Contributor docs/stage-8e-beta-readiness starts from the verified PR29 source plus
+its documentation handoff. docs/BETA_READINESS.md separates the local no-credential
+reference exhibition, supported connection acceptance, hosted integration sequence,
+feedback/incident intake, deferred requirements and all eight unselected Stage9 areas.
+This is preparation only: no hosted beta, new account/access/security/budget change,
+paid connection call, deployment or complete Stage8E claim. No runtime behavior changed.
+
+Exact next target after publication/current-head verification: owner decisions in
+ACCOUNT_AND_RELEASE_DECISIONS.md and approved integration. Actual 2E/6D ownership,
+production operations/remediation, global paid-call enforcement, representative hosted
+load and onboarding require those decisions. No independent fixture work is claimed to
+replace them. Keep draft/contributor branches; do not merge or deploy without approval.
