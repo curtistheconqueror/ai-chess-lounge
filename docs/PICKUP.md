@@ -70,12 +70,13 @@ Artifact 11309053916 includes batch-desktop.png and batch-phone.png; both visual
 inspected with no blocking layout issue. PR18 description refreshed with verified
 7A evidence. This final handoff is docs-only; no merge or deployment is claimed.
 
-## Stage 7C continuation in progress
+## Stage 7C draft PR20 verified; merge approval pending
 
 Contributor: feat/stage-7c-tournaments, based on final verified 7B handoff
 62ea9f012fc79cd474df574ff5672dff8a5ec91d (identical tree to local 13c234a).
-Existing contributor branches remain intact. PR19 depends on PR18; new 7C PR must
-be a dependent draft against the 7B branch. No merges are authorized.
+Draft PR: https://github.com/curtistheconqueror/ai-chess-lounge/pull/20
+Existing contributor branches remain intact. PR20 depends on PR19, which depends on
+PR18. No merges are authorized; no completed pickup is claimed.
 
 Implemented separate schema 2.0 tournament plans without changing v1 hashes;
 round robin and gauntlet pairing; bounded knockout templates with winner-dependent
@@ -85,13 +86,22 @@ disclosures. Thirteen tournament regressions pass, including a real three-game
 knockout with the correct semifinal winners in its final and simultaneous final claims.
 Final warning-strict Python gate passed 274 tests (3 PostgreSQL environment skips).
 The earlier full make test also passed 3 SDK tests, Ruff and TypeScript.
-Publication, CI and desktop/phone visual checks remain pending.
+Final CI run 37219539437 / job 111486895987 passed on published code head
+14ef669560241e4b554e501fbab6577c3132d014: 275 Python tests (2 engine skips),
+3 SDK tests, 34 browser tests (76 intentional duplicate-viewport skips), SQLite and
+PostgreSQL migrations, format/lint/types/build. Remote tree matches local 36eb5a9.
+Artifact 11309074209 contains tournament and tournament-report screenshots for both
+desktop and phone; all four inspected. Wide tables stay contained, with no blocking
+layout issue. Local Chromium is unavailable; CI supplied browser acceptance.
+This final handoff is docs-only.
 
 ## Next target and limits
 
-Finish Stage 7C verification and dependent draft publication; record remote tree,
-CI and desktop/phone visual evidence before claiming completion. Then Stage 7D
-adds reliability/efficiency metrics and honest comparison uncertainty.
+Stage 7D adds reliability/efficiency metrics and honest comparison uncertainty.
+Branch from the final verified 7C handoff and keep the next PR dependent/draft.
+Use existing public move metadata; missing usage/cost is unknown, not zero.
+Do not imply repeated openings are independent evidence or that local ratings are
+calibrated human Elo. Preserve the established v1/v2 manifest hashes.
 Preserve legacy plan hashes, cap bracket jobs, never count failed/limited games as
 chess losses, and leave tied knockout series unresolved without inventing winners.
 Keep draft dependencies explicit. Merge and deployment need separate approval.
