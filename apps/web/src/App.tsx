@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 
 import {
   claimDraw,
+  changeSeat,
+  controlMatch,
   createGame,
   createRunnerPairing,
   fetchAnalysis,
@@ -16,6 +18,7 @@ import {
   websocketUrl,
 } from "./api";
 import { pairMoves, parseFen } from "./chess";
+import { SeatTakeoverDialog } from "./SeatTakeoverDialog";
 import { HumanActionDialog } from "./HumanActionDialog";
 import { ChessBoard } from "./ChessBoard";
 import { EvaluationChart } from "./EvaluationChart";
@@ -129,6 +132,8 @@ function App() {
   const [panelTab, setPanelTab] = useState<PanelTab>("moves");
   const [replayPly, setReplayPly] = useState<number | null>(null);
   const [replayRunning, setReplayRunning] = useState(false);
+  const [takeover, setTakeover] = useState<{ gameId: string; revision: number; color: Color; player: PlayerConfiguration } | null>(null);
+  const [matchControlBusy, setMatchControlBusy] = useState(false);
   const [humanAction, setHumanAction] = useState<"white" | "black" | "draw" | null>(null);
   const [promotion, setPromotion] = useState<PromotionRequest | null>(null);
   const cancelPromotion = useCallback(() => setPromotion(null), []);
@@ -243,6 +248,7 @@ function App() {
     ) {
       return;
     }
+    if (current?.id !== snapshot.id || current.revision !== snapshot.revision) setTakeover(null);
     const receivedAt = Date.now();
     gameRef.current = snapshot;
     clockSyncRef.current = {
@@ -697,6 +703,47 @@ function App() {
     }
   }
 
+  async function onMatchControl(action: "pause" | "resume") {
+    if (!game || !followingLive || connection !== "live" || matchControlBusy) return;
+    setMatchControlBusy(true);
+    setNotice(null);
+    try {
+      acceptSnapshot(await controlMatch(game.id, action, game.revision));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Match control failed.");
+      try { acceptSnapshot(await fetchGame(game.id)); } catch { /* Preserve action error. */ }
+    } finally { setMatchControlBusy(false); }
+  }
+
+  function prepareTakeover(color: Color, restore = false) {
+    if (!game || game.lifecycle !== "paused" || !followingLive || connection !== "live") return;
+    const previous = (game.seat_history ?? []).filter((change) => change.color === color).at(-1)?.previous_player;
+    const white = color === "white";
+    const player = restore && previous ? previous : createSelectedPlayerConfiguration(
+      white ? whiteSeat : blackSeat, color, stockfishElo,
+      white ? whiteProviderModel : blackProviderModel, white ? whiteEffort : blackEffort,
+      playerAdapters, white ? whiteRunnerId : blackRunnerId, activeRunnerSessions,
+    );
+    setTakeover({ gameId: game.id, revision: game.revision, color, player });
+  }
+
+  async function confirmTakeover() {
+    if (!game || !takeover || takeover.gameId !== game.id || takeover.revision !== game.revision
+      || game.lifecycle !== "paused" || connection !== "live" || !followingLive) return;
+    setMatchControlBusy(true);
+    setNotice(null);
+    try {
+      acceptSnapshot(await changeSeat(game.id, takeover.color, takeover.player, takeover.revision));
+      setTakeover(null);
+      setNotice("Seat changed. The match stays paused until you resume.");
+      void refreshRunnerSessions();
+    } catch (error) {
+      setTakeover(null);
+      setNotice(error instanceof Error ? error.message : "Seat change failed.");
+      try { acceptSnapshot(await fetchGame(game.id)); } catch { /* Preserve action error. */ }
+    } finally { setMatchControlBusy(false); }
+  }
+
   async function onRetryAgentTurn() {
     if (!game || game.lifecycle !== "paused") return;
     setBusy(true);
@@ -711,6 +758,7 @@ function App() {
   }
 
   function selectPly(ply: number) {
+    setTakeover(null);
     setPromotion(null);
     setHumanAction(null);
     setSelected(null);
@@ -991,6 +1039,28 @@ function App() {
             </button>
           </div>
 
+          <section className="takeover-panel" aria-label="Match control">
+            <h3>Match control</h3>
+            {game?.lifecycle === "running" && <button disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => void onMatchControl("pause")}>Pause match</button>}
+            {game?.lifecycle === "paused" && <>
+              <p>Match paused. Choose players in the seat selectors above, apply a change, then resume. Position and remaining time carry over.</p>
+              <div className="secondary-actions">
+                {(["white", "black"] as const).map((color) => <button key={color} disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => prepareTakeover(color)}>Apply {capitalize(color)} seat</button>)}
+                <button disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => void onMatchControl("resume")}>Resume match</button>
+              </div>
+              <div className="secondary-actions">
+                {(["white", "black"] as const).filter(color => (game.seat_history ?? []).some(change => change.color === color)).map(color => <button key={color} disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => prepareTakeover(color, true)}>Restore previous {color} player</button>)}
+              </div>
+            </>}
+            {!!game?.seat_history?.length && <details className="seat-history">
+              <summary>Seat history · {game.seat_history.length} changes · exhibition</summary>
+              <ol>{game.seat_history.map((change) => <li key={change.position_version}>
+                <strong>{capitalize(change.color)}</strong>: {change.previous_player.display_name} → {change.player.display_name}
+                <small>After move {Math.ceil(change.after_ply / 2)} · {change.player.provider} · {change.player.division.replaceAll("_", " ")}</small>
+              </li>)}</ol>
+            </details>}
+          </section>
+
           <div className="runner-pairing-panel" aria-label="Remote runner pairing">
             <div className="runner-pairing-heading">
               <div>
@@ -1154,6 +1224,7 @@ function App() {
 
       <footer className="lounge-footer"><span>AI Chess Lounge</span><span>Provider-neutral broadcast shell</span><span>PGN · FEN · JSON · Replay</span></footer>
       {promotion && <PromotionPicker color={promotion.color} onChoose={choosePromotion} onCancel={cancelPromotion} />}
+      {takeover && game && <SeatTakeoverDialog color={takeover.color} current={game[`${takeover.color}_player`]} player={takeover.player} busy={matchControlBusy} onConfirm={() => void confirmTakeover()} onCancel={() => setTakeover(null)} />}
       {humanAction && game && <HumanActionDialog action={humanAction} claimMoves={game.draw_claim_moves ?? []} busy={busy} onCancel={() => setHumanAction(null)} onConfirm={(move) => void onHumanAction(move)} />}
       {notice && <div className="toast" role="alert">{notice}</div>}
       <div className="sr-only" aria-live="polite">Position {displayPly}. {selectedPoint ? formatEvaluation(selectedPoint) : "Evaluation pending"}.</div>
@@ -1505,9 +1576,9 @@ function strategyForSeat(
   color: "white" | "black",
   player: PlayerConfiguration,
 ): string {
-  const move = game?.moves.filter((candidate) =>
-    color === "white" ? candidate.ply % 2 === 1 : candidate.ply % 2 === 0,
-  ).at(-1);
+  const afterPly = (game?.seat_history ?? []).filter(change => change.color === color).at(-1)?.after_ply ?? 0;
+  const move = game?.moves.filter(candidate => candidate.ply > afterPly &&
+    (color === "white" ? candidate.ply % 2 === 1 : candidate.ply % 2 === 0)).at(-1);
   if (game?.status === "active" && game.turn === color) {
     return player.adapter_id === "human"
       ? "Human-controlled decision. No private reasoning is captured."
@@ -1525,9 +1596,9 @@ function playerCardForSeat(
   clockMs: number,
 ): PlayerCardProps {
   const active = game?.status === "active" && game.turn === side;
-  const move = game?.moves.filter((candidate) =>
-    side === "white" ? candidate.ply % 2 === 1 : candidate.ply % 2 === 0,
-  ).at(-1);
+  const afterPly = (game?.seat_history ?? []).filter(change => change.color === side).at(-1)?.after_ply ?? 0;
+  const move = game?.moves.filter(candidate => candidate.ply > afterPly &&
+    (side === "white" ? candidate.ply % 2 === 1 : candidate.ply % 2 === 0)).at(-1);
   const metadata = move?.player_metadata;
   const targetElo = player.settings.target_elo;
   const moveTime = player.settings.move_time_ms;

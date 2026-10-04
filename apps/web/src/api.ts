@@ -136,6 +136,18 @@ export function claimDraw(gameId: string, positionVersion: number, intendedMove:
   });
 }
 
+export function controlMatch(gameId: string, action: "pause" | "resume", expectedRevision: number): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/${action}`, {
+    method: "POST", body: JSON.stringify({ expected_revision: expectedRevision }),
+  });
+}
+
+export function changeSeat(gameId: string, color: "white" | "black", player: PlayerConfigurationInput, expectedRevision: number): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/seats/${color}`, {
+    method: "POST", body: JSON.stringify({ player, expected_revision: expectedRevision }),
+  });
+}
+
 export function retryAgentTurn(gameId: string): Promise<GameSnapshot> {
   return request<GameSnapshot>(`/api/games/${gameId}/retry-agent`, { method: "POST" });
 }
