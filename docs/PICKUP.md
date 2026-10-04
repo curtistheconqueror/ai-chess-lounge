@@ -15,9 +15,10 @@ tested and published as draft PRs. Do not merge, deploy, purchase services, crea
 credentials, expand access, or perform destructive operations without the relevant
 approval. Parent supervisor handles monitoring; do not create duplicate monitors.
 
-## Current work: Stage 7A implementation ready; CI and draft publication pending
+## Current work: Stage 7A implementation ready; draft PR18 open; final CI pending
 
 Contributor: feat/stage-7a-experiment-builder, based on the exact main commit above.
+Draft PR: https://github.com/curtistheconqueror/ai-chess-lounge/pull/18
 No completed pickup branch is claimed until approved merge and verification.
 
 Implemented immutable experiment plans and migration 0010; preview/save/list/read API;
@@ -27,10 +28,10 @@ games; canonical SHA-256 manifest; provider effort mapping; mixed-division exhib
 labels. Model Lab UI previews/saves/reopens drafts. Saving never launches a match or
 calls a provider. Duplicate save UUIDs replay the original body or reject conflicts.
 
-Validation: make test passed 244 Python tests (2 environment/engine skips), 3 SDK tests,
-Ruff and TypeScript. Production build passed. Thirteen new experiment regressions
+Validation: make test passed 245 Python tests (2 environment/engine skips), 3 SDK tests,
+Ruff and TypeScript. Production build passed. Fourteen experiment regressions
 cover deterministic expansion/hashes, effort mapping, invalid/terminal openings,
-unsupported effort, oversized plans, idempotency, restart, no games created and
+unsupported effort, null moves, oversized plans, idempotency, restart, no games created and
 concurrent duplicate saves. Migration upgrade/downgrade test extended. Desktop/phone
 browser acceptance added; CI and screenshot review remain required before merge.
 
