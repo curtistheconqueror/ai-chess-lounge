@@ -140,15 +140,19 @@ version 2 under a five-second deadline, retaining exact attempt/move assertions.
 A 200 ms engine-response case reliably covers the old timing assumption.
 No runtime retry behavior changed. Local warning-strict suite: 260 passed,
 5 environment-dependent skips; manager tests: 15 passed; Ruff/checks passed.
-Published correction CI and browser acceptance are pending; do not call current
-PR19 green until its final head is verified. Propagate the test fix to 7C/7D.
+Correction CI 37220994565 / job 111491128151 passed on head
+f5992ec8930f2ed0625969ef33c02f1820996e4f: 263 Python tests (2 engine skips),
+3 SDK tests, 30 browser tests (70 intentional duplicate-viewport skips), both
+migrations, lint, types and build. The identical test fix is propagated to 7C/7D.
+This evidence names the tested head; the present follow-up only updates these notes.
 No merge or deployment performed.
 
 ## Stage 7D comparison metrics in progress
 
 Contributor: feat/stage-7d-comparison-metrics. Based on final 7C handoff
 1e5b1acd57dddd76ac9496cfb33e0a052f273af2, with the same retry-test correction
-subsequently published to PR19/PR20. New publication must remain a dependent draft.
+subsequently published to PR19/PR20. Published draft PR: https://github.com/curtistheconqueror/ai-chess-lounge/pull/21
+PR21 depends on PR20; both remain drafts.
 
 Implemented read-only comparison metrics from stored jobs, moves and public metadata:
 chess results separated from no-results, illegal/failure/timeout events, accepted-move
@@ -167,3 +171,19 @@ Black-to-move attribution, unknown versus zero cost, metadata privacy and read-o
 Manager regression suite: 15 passed. Type/lint/build and CI/browser evidence must
 be recorded before completion; local Chromium is unavailable. No merge/deployment.
 Next after verified 7D: Stage 7E comparison reports and export bundles.
+
+## Current validation and delivery target
+
+PR20 correction head f2b4bc3c11225f152673408c64a0a3aa2c18de0a passed CI
+37221279231 / job 111491962732: 276 Python (2 engine skips), 3 SDK,
+34 browser (76 intentional viewport skips), migrations, lint/types/build.
+Only source-branch synchronization resolved the pickup conflict; no PR was merged
+into its target and main is unchanged. PR19's verified correction is recorded above.
+Stage 7D source, eleven new regression cases, UI/types/build are locally verified;
+its current published CI/browser gate is pending.
+
+Requested target: October 6, 2026 17:40 UTC / 12:40 PM America/Chicago.
+Read DELIVERY_48H_PLAN.md for phased checkpoints, effort ranges, dependencies and
+explicit deferred requirements. Stage 9 is eight unselected expansion candidates,
+not an authorized fixed scope. Account/security/merge/deploy/spending decisions
+remain gates; do not treat the date as approval or promise all stages will finish.

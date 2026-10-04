@@ -1,0 +1,100 @@
+# 48-hour delivery target and scope decisions
+
+Updated October 4, 2026, 17:45 UTC. Requested target: October 6, 2026,
+17:40 UTC (12:40 PM America/Chicago). This is a target, not a guarantee or
+permission to merge, deploy, purchase services, create credentials or expand access.
+
+## Verified position
+
+Main remains Stage 6C at 087c565. Stage 7A–7C are stacked drafts PR18–PR20;
+7D is draft PR21. PR19 retry timing correction passed current-head CI at
+f5992ec (run 37220994565): 263 Python, 3 SDK, 30 browser tests, migrations,
+lint/types/build. PR20's dependent correction f2b4bc3 passed CI 37221279231 (276 Python, 34 browser). Stage 7D local
+warning-strict suite passed 286 tests with 3 environment skips; published CI and
+responsive visual acceptance remain required. No partial phase is called complete.
+
+## Phased target checkpoints
+
+Ranges below are engineering/validation effort estimates, not guaranteed elapsed
+completion times. Dependencies and approval waits can exceed the remaining window.
+Parallel read-only review can help, but does not remove serial integration gates.
+
+| Target checkpoint (UTC) | Deliverable | Estimated effort | Dependencies / acceptance |
+| --- | --- | --- | --- |
+| Oct 4, 20:00 | 7D metrics checkpoint; retry corrections verified across stacked heads | 1–3 h | Full current-head CI, desktop/phone visual inspection, precise pickup |
+| Oct 5, 00:00 | 7E reports and bounded CSV/JSON/PGN bundles in draft | 3–5 h | 7D schema; reproducible hash, export privacy and consistency tests |
+| Oct 5, 04:00 | 8A security assessment and prioritized findings; deployment/account design decision packet | 3–5 h | Threat model, secret/dependency audits, abuse/SSRF/injection tests; security changes require approval |
+| Oct 5, 12:00 | 8B operations and 8D cost-control implementation candidates | 6–10 h combined | Observable health/metrics, backup/restore rehearsal, retention/runbooks; durable quota semantics, cross-process rate/budget enforcement, kill switch tests |
+| Oct 5, 20:00 | 2E/6D account and invitation implementation candidate if decisions/authorization arrive | 6–12 h | Identity/hosting decision, role/visibility matrix, invitation expiry/revocation, two-user isolation tests; no public exposure without approval |
+| Oct 6, 03:00 | 8C measured performance results and bottleneck corrections | 3–5 h | Representative spectators/WebSockets, engine/queue/DB load; declared hardware and bounded resource use |
+| Oct 6, 09:00 | 8E release candidate and beta checklist | 3–5 h | Approved integration/deployment path, standalone URL, onboarding/connection test, deterministic exhibition, feedback and rollback |
+| Oct 6, 17:40 | Integration/review/CI/restore/visual buffer and final acceptance decision | Reserve 8–9 h | Re-run integrated gates; confirm secrets/quotas/access isolation, backup restore and rollback; operator approves launch |
+
+Implementation ranges total roughly 25–45 hours before the final buffer and
+unbounded external waits. The optimistic path fits; the upper range does not.
+A security finding or missing deployment/account authorization makes a hosted-beta
+finish unlikely inside 48 hours. A tested local release candidate is more plausible.
+Do not compress the final security, restore, CI or visual gates to meet the date.
+
+## Deferred requirements that must be reconciled
+
+- 2E accounts and 6D owner/player/spectator/moderator roles, private invitations and
+  private/public visibility are release dependencies for hosted multi-user operation.
+  Supabase is an option, not an assumed purchased or authorized dependency.
+- 6A negotiated draw offers remain deferred; track explicitly in acceptance scope.
+- Remote consultation requires purpose-scoped authorization; current grants cover
+  one match, not advisers or tournament batches. Extending access needs approval.
+- Distributed runner presence/routing and durable transport delivery remain deferred;
+  either implement/verify them or document a bounded single-worker beta limitation
+  with explicit scope acceptance, never imply multi-worker readiness.
+- Clock-supplied versus withheld conditions and model/controller-selected adaptive
+  effort experiments are disabled. Fixed effort/supplied-clock support does not
+  satisfy that full experimental requirement.
+- Global monetary quotas and cross-process request-rate limits belong to 8D;
+  batch concurrency limits alone do not satisfy them. Estimates depend on usage
+  availability and provider pricing; unknown costs must remain unknown.
+- Independent engine move-quality/ACPL and strategic-coherence measurements must
+  be audited against the original evaluation requirements; current 7D observed-score
+  metrics do not establish that every aspirational metric has shipped.
+- Provider-specific subscription availability, credential handling and paid live
+  validation depend on supported routes and explicit authorization; deterministic
+  adapter tests do not prove every provider/account works in production.
+
+## Stage 9: unresolved scope, not silently omitted
+
+MASTER_PLAN defines Stage 9 as **Expansion after proof**, prioritized only after
+real use. Its eight candidates are:
+
+1. Chess960 and additional variants.
+2. Commentary agents and audience-selectable broadcast styles.
+3. Opening/theme challenge packs.
+4. Public profiles and season rankings.
+5. Embeddable live boards.
+6. Mobile install/PWA and notifications.
+7. Agent marketplace/registry with signed capability manifests.
+8. Team battles with voting/debating agents and public summaries.
+
+No subset is selected or estimated as an approved commitment. “All stages” must
+resolve whether it means the defined Stage 0–8 release plus a Stage 9 prioritization
+checkpoint after actual use, or implementation of specific/all eight expansion areas.
+The latter cannot credibly be promised in this 48-hour window alongside production
+hardening; it requires a separate scope, acceptance criteria and estimate. Continue
+established work while the owner decides; do not invent a minimal Stage 9 completion.
+
+## Critical path, decisions and confidence
+
+The critical path is corrected stacked CI → 7D/7E exports → account/security/cost
+boundaries → operations/load validation → authorized integration and deployment →
+end-to-end beta acceptance. Draft review and safe local implementation can continue
+while approvals wait. Keep PR18–PR21 and subsequent contributor branches intact.
+
+Needed external decisions: merge approvals; identity/hosting choice; authorization
+for account/security changes; deployment URL/environment; provider spending ceiling
+and live test credentials if desired; deferred-feature beta acceptance; Stage 9 scope.
+Nothing in the deadline request supplies those approvals. Parent owns monitoring;
+do not create duplicate monitors. Report blockers promptly at each checkpoint.
+
+Confidence: moderate for 7D/7E and a substantial locally tested hardening candidate;
+low-to-moderate for a hosted multi-user Stage 8 beta within 48 hours, conditional on
+prompt decisions and no major findings; no credible commitment for all Stage 9
+candidates in that window. Revise ranges after the 8A review and first load results.
