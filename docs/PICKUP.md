@@ -364,7 +364,7 @@ Next safe work: publish dependent draft and verify exact current-head CI/artifac
 continue 8D attempt reservation contract and symbolic-unit offline invariants. Keep
 all contributor branches. Main remains 087c565. No immutable completed pickup before
 approved merge. Account/budget/release decisions and Stage9 selection remain open.
-Target October6 17:40 UTC with 8–9-hour integration buffer remains conditional.
+Target October 6 17:40 UTC with 8–9-hour integration buffer remains conditional.
 
 Local source checkpoint 79aac08: 321 Python tests passed with warnings as errors,
 4 PostgreSQL infrastructure skips; Ruff format/check passed. Default SQLite/ASGI/
@@ -390,7 +390,7 @@ This documentation follow-up receives a separate current-head CI verification.
 
 Contributor docs/stage-8d-reservation-contract follows the Stage8C final docs tree
 (local88745f9; published7b8f35b356a26cf7f129c37c98ae3488af5b0daf).
-PR26 source3c84e1f passed CI37230951795; final docs CI37231366411 is running.
+PR26 source3c84e1f passed CI 37230951795; final docs CI 37231366411 is running.
 Do not describe a pending final head as green. Preserve all branches and drafts.
 
 Added BUDGET_RESERVATION_CONTRACT.md/ADR0030 and a strictly test-only generated
@@ -402,9 +402,9 @@ rollover/adjustments and live integration remain open, as do owner policy decisi
 
 Next: independent review, full current-head CI, dependent draft publication and exact
 pickup. Continue safe local recovery/acceptance work where approvals do not apply.
-No merge/deployment/account/security/spending authorization is inferred. October6
+No merge/deployment/account/security/spending authorization is inferred. October 6
 17:40 UTC remains conditional with final integration buffer; Stage9 selection and
-deferred2E/6D are unchanged outstanding decisions.
+deferred 2E/6D are unchanged outstanding decisions.
 Read-only review prompted an 8C correction: move startup under its cleanup guard,
 bound fixture regression runs to20 seconds, and label persisted move/event agreement
 as an invariant rather than a measured duplicate-submission rate. Declare Linux
@@ -416,11 +416,36 @@ Tests explicitly cover symbolic reopen/recovery, not real process death or chess
 commit fencing. Disposable proof tokens state release/recovery preconditions without
 implementing actual authorization. Twelve focused tests pass, including both unique
 and duplicate attempt races across four spawned processes. No production policy is
-selected. Reviewed 8C head105eb2a CI37231626012 is pending at this update; verify
+selected. Reviewed 8C head105eb2a CI 37231626012 is pending at this update; verify
 before stating current-head green. Full 8D CI remains a separate publication gate.
 
 8D local reviewed source8f3383f: 334 Python tests passed with warnings as errors,
 4 PostgreSQL infrastructure skips; complete Ruff format/check passed. Reviewed
 8C correction is incorporated locally without discarding either contributor branch.
-Publication base is PR26 reviewed105eb2a7db08b0bdfe15e96e4adaaf673b591904;
+Publication base is PR26 reviewed 105eb2a7db08b0bdfe15e96e4adaaf673b591904;
 its full current-head CI is still running at this documentation update.
+
+## Stage 8D verified source checkpoint; full phase still in progress
+
+Dependent draft PR27:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/27
+Source 969eb7cf22fc566e3fd583be7537b992d1cdd6ea passed
+CI 37231957628 / job 111523407944: 336 Python (2 absent-engine skips),
+3 SDK, 34 browser (76 intentional viewport skips), native performance/restore,
+both migrations/lint/types/build. Artifact 11314172768 retains aggregate fixture
+and browser evidence. No paid calls, production quota or deployment were used.
+PR26 reviewed 105eb2a passed full CI  37231626012 (324 Python / 2 engine skips).
+Review's 8D oracle blockers were corrected and independently rereviewed without a
+remaining material flaw in the stated single-subject/static-symbolic-policy scope.
+
+This follow-up changes docs only; verify its final current-head CI independently.
+Retain all contributor branches/drafts. Main remains 087c565; no completed pickup
+or merge. BUDGET_RESERVATION_CONTRACT.md/ADR0030 list implemented scope and
+remaining shared-rate/multi-scope/PG/period/authority/live integration requirements.
+Owner identity/budget/pricing/unknown-cost/kill-switch choices remain gates.
+
+Next safe independent target: local UCI lifecycle/cancellation/failure recovery
+regressions and bounded real-engine interruption evidence on a separate contributor
+branch. No unrelated owner gate stops that work. Production 8A/8B/8C/8D acceptance,
+8E hosted onboarding and deferred 2E/6D remain distinct; Stage9 scope is unanswered.
+October 6 17:40 UTC target remains conditional with the final 8–9-hour buffer.
