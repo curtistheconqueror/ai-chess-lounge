@@ -32,7 +32,8 @@ heartbeats renew ten-second reservations. Recovery loads the same match and orig
 clocks. Only an explicitly batch-paused match resumes under a fresh reservation.
 A recovered running match has an uncertain dispatch outcome and is failed rather
 than replayed; a persisted provider failure is never automatically resumed. Graceful process
-shutdown cancels tasks without erasing queue state. Provider failures settle a job as
+shutdown drains in-progress queue database operations before closing the store,
+then cancels match runners without erasing queue state. Provider failures settle a job as
 failed; the configured failure threshold stops remaining work. Wall time includes
 pauses and downtime. A failure in orchestration retries durable bookkeeping, not a
 newly invented match ID.
