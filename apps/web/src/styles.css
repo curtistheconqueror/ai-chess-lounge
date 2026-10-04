@@ -2065,3 +2065,9 @@ select {
 .model-lab details { margin-top: 1.5rem; }
 .model-lab details button { margin: .5rem .5rem 0 0; }
 @media (max-width: 600px) { .lab-grid { grid-template-columns: 1fr; } .lab-heading { flex-direction: column; } }
+
+.model-lab button { min-height: 40px; padding: .6rem .9rem; margin: .25rem .35rem .25rem 0; border: 1px solid #4e6457; border-radius: 8px; background: #1a2b22; color: #e4ece7; font: inherit; cursor: pointer; }
+.model-lab button:disabled { opacity: .5; cursor: default; }
+.model-lab button:focus-visible { outline: 2px solid #e8c778; outline-offset: 3px; }
+.model-lab .primary-button { color: #171a13; background: linear-gradient(110deg, #efd58e, #bb8d39); border-color: #bb8d39; font-weight: 700; }
+.model-lab fieldset[hidden] { display: none; }

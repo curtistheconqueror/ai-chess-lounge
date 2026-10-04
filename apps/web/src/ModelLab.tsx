@@ -53,7 +53,8 @@ export function ModelLab({ catalog }: { catalog: PlayerAdapterCatalog | null }) 
   async function load(id: string) { setBusy(true); setError(null); try { setPlan(await fetchExperiment(id)); } catch (e) { setError(String(e)); } finally { setBusy(false); } }
   return <section className="model-lab" aria-label="Model Lab">
     <div className="lab-heading"><div><p className="eyebrow">MODEL LAB · EXPERIMENT BUILDER</p><h2>Design a fair comparison</h2><p>Preview a repeatable schedule. Saving a plan starts no games and makes no provider calls.</p></div><span className="lab-pill">DRAFT PLANS</span></div>
-    <fieldset disabled={busy} onChange={invalidate}><legend>Experiment configuration</legend>
+    {plan?.id && <button onClick={invalidate} disabled={busy}>Create another draft</button>}
+    <fieldset hidden={!!plan?.id} disabled={busy} onChange={invalidate}><legend>Experiment configuration</legend>
       <label>Experiment name<input value={name} maxLength={120} onChange={e => setName(e.target.value)} /></label>
       <div className="lab-grid">{entrants.map((e, i) => {
         const choice = choices.find(c => c.key === e.model);
