@@ -182,3 +182,5 @@ work from [`docs/PICKUP.md`](docs/PICKUP.md).
 MIT. See [`LICENSE`](LICENSE).
 
 Stage 7C tournament drafts add round robin, gauntlet and bounded knockout brackets, with live standings and explicitly provisional ratings separated by assistance division. Existing saved comparisons retain their original hashes. See [Model Lab](docs/STAGE_7_MODEL_LAB.md).
+
+Stage 7D comparison metrics read durable public telemetry: chess results, reliability, accepted-move latency and usage coverage, matched effort deltas, and explicitly conditional uncertainty. Missing cost is unknown, not free. No model calls are made by metrics.
