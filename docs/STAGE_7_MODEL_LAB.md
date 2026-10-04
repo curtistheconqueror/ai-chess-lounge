@@ -39,3 +39,27 @@ reserved for the final hosted multiplayer rollout. All publication PRs remain dr
 merge and deployment require separate approval under the current authorization.
 
 See ADR 0023 for hashing, schedule ordering, assistance disclosure and recovery.
+
+## 7B — Durable scheduler (dependent draft implementation)
+
+A saved plan now has **Prepare batch**, followed by a separate **Start batch** review.
+Choose 1–4 concurrent games. Direct API entrants require an explicit provider-usage
+checkbox. Local deterministic batches need no API credentials. The server revalidates
+adapter configuration before start and rejects a changed plan fingerprint.
+
+The run panel shows each job, result and a link once its match exists. Previous runs
+can be reopened. Pause/resume retains the original wall deadline; cancellation stops
+queued work and invalidates in-flight move commits. Games stopped at the configured
+ply limit are `limited`, never counted as draws. The initial opening FEN and normal
+match events remain durable. Provider failures count toward the batch stop threshold. An uncertain in-flight
+request after a crash is recorded as failed rather than automatically repeated.
+Only an explicitly batch-paused game is eligible for automatic resume.
+
+Endpoints: POST /api/experiments/{id}/runs ({id: UUID, concurrency}); GET that same
+path for recent runs; GET /api/experiment-runs/{id}; POST /api/experiment-runs/{id}/control
+({target: running|paused|cancelled, expected_revision, allow_provider_calls}).
+
+Migration 0011 adds runs, jobs, and the shared dispatch lock. The queue limits batch
+concurrency to four games globally. Existing provider retry/rate policy still applies,
+but cross-process monetary and request-rate quotas remain Stage 8 work. No live paid
+provider batches are run as part of the deterministic acceptance gate. See ADR 0024.

@@ -1,7 +1,7 @@
 # AI Chess Lounge contributor pickup
 
 Updated 2026-10-04. Read AGENTS.md, README.md, MASTER_PLAN.md, STAGE_7_MODEL_LAB.md
-and ADR 0023 before continuing.
+and ADRs 0023–0024 before continuing.
 
 ## Verified baseline and authorization
 
@@ -40,15 +40,36 @@ CI run 37215467880 / job 111474957890 passed on published code head
 migrations, lint, types and build. Source tree matched local 50579a6 exactly.
 This final handoff is docs-only. No merge or completed pickup is claimed.
 
+## Current continuation: Stage 7B dependent draft in progress
+
+Contributor: feat/stage-7b-durable-scheduler, based on the verified Stage 7A handoff
+023f928dfa4b94dbd15a191912ee9bb8005eec0a. Stage 7A remains draft PR18; main is unchanged.
+The remote contributor branch is retained. No completed pickup is claimed.
+
+Implemented migration 0011, durable run/job reservations, UUID-stable match identity,
+shared four-game concurrency, explicit prepare/start/provider-use confirmation,
+pause/resume/cancel controls, original wall deadlines, failure and ply limits,
+opening-FEN execution and per-job match links. Cancellation and lease replacement
+fence late move commits. Uncertain in-flight requests after a crash fail without
+redispatch; only explicit batch pauses resume. Provider failures never auto-retry
+through batch recovery. No live provider spending was used for acceptance.
+
+Initial local gate passed 257 Python tests (3 environment skips), 3 SDK tests,
+format/lint/types and production build. Added crash/reclaim and exact-lease regression
+coverage after independent review; final gate and browser CI evidence are pending.
+Do not claim this phase verified until those results replace this paragraph.
+
 ## Next target and limits
 
-Stage 7B durable scheduler: dispatch authorization, atomic durable jobs, concurrency
-budgets, cancellation/resume, stop-rule enforcement and original-match recovery.
-Can be developed on a dependent contributor branch while 7A awaits merge approval;
-keep draft dependencies explicit. Do not run paid-provider batches without approval.
+Finish Stage 7B final regressions and desktop/phone CI, publish a dependent draft PR
+against feat/stage-7a-experiment-builder, verify the remote tree and record evidence.
+Then Stage 7C adds tournament formats, standings and division-specific ratings.
+Keep draft dependencies explicit. Merge and deployment need separate approval.
 
 6D/2E account roles and invitations remain for the final hosted multiplayer rollout.
 Remote/subscription grants currently cover one match only, not a batch. Plans use
 supplied clock information and fixed effort; withheld/adaptive conditions are disabled.
+Global monetary and cross-process request-rate budgets remain Stage 8; batch concurrency
+is bounded, and existing provider retry/rate controls remain process-local.
 Hash identity does not guarantee provider determinism or pin changing model aliases.
 Local operator deployment only. No merge, deployment or security changes performed.
