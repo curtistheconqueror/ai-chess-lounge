@@ -1,3 +1,4 @@
+import { ModelLab } from "./ModelLab";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import {
@@ -104,6 +105,7 @@ const providerDetails: Record<AgentProviderChoice, { label: string; provider: st
 };
 
 function App() {
+  const [showLab, setShowLab] = useState(false);
   const [game, setGame] = useState<GameSnapshot | null>(null);
   const [analysis, setAnalysis] = useState<GameAnalysis | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -869,6 +871,7 @@ function App() {
           </div>
         </div>
         <div className="topbar-actions">
+          <button className="ghost-button" aria-expanded={showLab} onClick={() => setShowLab(v => !v)}>{showLab ? "Close Model Lab" : "Model Lab"}</button>
           <span className={`connection ${connection}`} aria-label={`Connection ${connection}`}>
             <span className="connection-dot" /> {connection}
           </span>
@@ -876,6 +879,8 @@ function App() {
           <button className="gold-ghost-button" onClick={() => void shareMatch()} disabled={!game}>Share match</button>
         </div>
       </header>
+
+      {showLab && <ModelLab catalog={playerAdapters} />}
 
       <section className="broadcast-ribbon" aria-label="Match broadcast status">
         <span className={game?.status === "active" ? "live-pulse" : "result-pulse"} />
