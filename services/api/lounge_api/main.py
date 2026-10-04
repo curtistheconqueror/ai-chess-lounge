@@ -19,6 +19,7 @@ from .domain import ClockExpired, MatchTransitionRejected, MoveRejected, StalePo
 from .engine import EngineFailure
 from .experiment_metrics import ExperimentMetrics
 from .experiment_queue import QueueConflict
+from .experiment_reports import ExperimentReports, ReportConflict, ReportTooLarge
 from .experiment_worker import ExperimentWorker
 from .experiments import ExperimentService, PlanConfiguration, SaveExperiment
 from .manager import AnalysisSuperseded, GameManager, GameNotFound
@@ -74,6 +75,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     active_manager = game_manager or GameManager()
 
     batch_worker = ExperimentWorker(active_manager)
+    export_slots = asyncio.Semaphore(2)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -156,6 +158,26 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             return await ExperimentMetrics(active_manager.store).get(run_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="Run not found.") from None
+
+    @application.get("/api/experiment-runs/{run_id}/bundle")
+    async def experiment_bundle(run_id: UUID):
+        try:
+            async with export_slots:
+                content = await ExperimentReports(active_manager.store).bundle(str(run_id))
+            return Response(
+                content,
+                media_type="application/zip",
+                headers={
+                    "Content-Disposition": f'attachment; filename="experiment-{run_id}.zip"',
+                    "Cache-Control": "no-store",
+                },
+            )
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Run not found.") from None
+        except ReportConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ReportTooLarge as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
 
     @application.post("/api/experiment-runs/{run_id}/control")
     async def control_experiment_run(run_id: str, request: ControlExperimentRun):
