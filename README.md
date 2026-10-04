@@ -26,6 +26,8 @@ confirmation, cancellation, and disclosed Human-AI Team history without automati
 **Stage 7A (draft)** adds the Model Lab experiment builder: deterministic schedules,
 effort sweeps, opening suites, color swaps, saved plans and configuration hashes.
 Saving a plan starts no games; see [Model Lab](docs/STAGE_7_MODEL_LAB.md).
+**Stage 7B (dependent draft)** adds durable batch preparation, explicit execution,
+concurrency limits, pause/resume/cancel, stop rules and recovery with stable match IDs.
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
 writers; Fischer clocks, deadlines, pause/resume, and timeout results are owned by the
