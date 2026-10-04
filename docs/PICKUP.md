@@ -147,7 +147,7 @@ migrations, lint, types and build. The identical test fix is propagated to 7C/7D
 This evidence names the tested head; the present follow-up only updates these notes.
 No merge or deployment performed.
 
-## Stage 7D comparison metrics in progress
+## Stage 7D draft PR21 verified; merge approval pending
 
 Contributor: feat/stage-7d-comparison-metrics. Based on final 7C handoff
 1e5b1acd57dddd76ac9496cfb33e0a052f273af2, with the same retry-test correction
@@ -168,8 +168,14 @@ See ADR0026; original v1/v2 hashes remain unchanged.
 Local warning-strict suite: 286 passed, 3 PostgreSQL environment skips. Eleven
 metrics cases cover block dependence, interval suppression, paired effort matching,
 Black-to-move attribution, unknown versus zero cost, metadata privacy and read-only API.
-Manager regression suite: 15 passed. Type/lint/build and CI/browser evidence must
-be recorded before completion; local Chromium is unavailable. No merge/deployment.
+Manager regression suite: 15 passed. Type/lint/build passed. CI 37221739158 /
+job 111493280284 passed on code head 6d52f5b4653daacaf1902b03f8daa7534a82e938:
+287 Python tests (2 engine skips), 3 SDK, 34 browser (76 intentional viewport skips),
+SQLite/PostgreSQL migrations, lint/types/build. Artifact 11311015337 includes
+metrics-desktop.png and metrics-phone.png; both inspected, wide tables contained,
+board remains usable. Local Chromium is unavailable; CI supplied browser acceptance.
+The selected-run guard prevents late metrics from another run appearing in the panel.
+This follow-up updates documentation only; no merge/deployment or completed pickup.
 Next after verified 7D: Stage 7E comparison reports and export bundles.
 
 ## Current validation and delivery target
@@ -180,10 +186,15 @@ PR20 correction head f2b4bc3c11225f152673408c64a0a3aa2c18de0a passed CI
 Only source-branch synchronization resolved the pickup conflict; no PR was merged
 into its target and main is unchanged. PR19's verified correction is recorded above.
 Stage 7D source, eleven new regression cases, UI/types/build are locally verified;
-its current published CI/browser gate is pending.
+its code-head CI/browser gate passed as recorded above. Final docs-head checks
+remain a distinct required check; do not substitute historical code-head success.
 
 Requested target: October 6, 2026 17:40 UTC / 12:40 PM America/Chicago.
 Read DELIVERY_48H_PLAN.md for phased checkpoints, effort ranges, dependencies and
 explicit deferred requirements. Stage 9 is eight unselected expansion candidates,
 not an authorized fixed scope. Account/security/merge/deploy/spending decisions
 remain gates; do not treat the date as approval or promise all stages will finish.
+
+PR19 final pickup head ade6bb27523b9fc6709dee15d3837ebf148a853d also passed
+CI 37221621195 / job 111492949368 after the evidence-only follow-up. PR19 and
+PR20 current-head statuses are green at this checkpoint. All drafts remain unmerged.
