@@ -363,12 +363,12 @@ scope and gaps; no full 8C completion or hosted capacity claim.
 Next safe work: publish dependent draft and verify exact current-head CI/artifacts;
 continue 8D attempt reservation contract and symbolic-unit offline invariants. Keep
 all contributor branches. Main remains 087c565. No immutable completed pickup before
-approved merge. Account/budget/release decisions and Stage9 selection remain open.
+approved merge. Account/budget/release decisions and Stage 9 selection remain open.
 Target October 6 17:40 UTC with 8–9-hour integration buffer remains conditional.
 
 Local source checkpoint 79aac08: 321 Python tests passed with warnings as errors,
 4 PostgreSQL infrastructure skips; Ruff format/check passed. Default SQLite/ASGI/
-queue plus actual Stockfish16 benchmark succeeded with explicit limits.
+queue plus actual Stockfish 16 benchmark succeeded with explicit limits.
 Remote publication history differs; record its head and full CI separately.
 
 Published dependent draft PR26:
@@ -377,7 +377,7 @@ Source head 3c84e1fe06bf3bb7a3c00ff9111da670eecae261 passed
 CI 37230951795 / job 111520263552: 323 Python (2 missing-engine skips),
 3 SDK, 34 browser (76 intentional viewport skips), both migrations/lint/types/build.
 Native benchmark measured SQLite and PostgreSQL17.11; installed engine absent in CI
-and explicitly skipped, while local Stockfish16 measurement succeeded. Artifact
+and explicitly skipped, while local Stockfish 16 measurement succeeded. Artifact
 11313727043 records tested synthetic merge SHA a4996b50aa1926408bfacea6404964db055707cd
 (the PR source SHA above is distinct), runner EPYC7763/four CPUs/~16GiB memory,
 100-spectator post-commit drain p95 386.6ms SQLite/615.6ms PG, eight-game queue
@@ -403,7 +403,7 @@ rollover/adjustments and live integration remain open, as do owner policy decisi
 Next: independent review, full current-head CI, dependent draft publication and exact
 pickup. Continue safe local recovery/acceptance work where approvals do not apply.
 No merge/deployment/account/security/spending authorization is inferred. October 6
-17:40 UTC remains conditional with final integration buffer; Stage9 selection and
+17:40 UTC remains conditional with final integration buffer; Stage 9 selection and
 deferred 2E/6D are unchanged outstanding decisions.
 Read-only review prompted an 8C correction: move startup under its cleanup guard,
 bound fixture regression runs to20 seconds, and label persisted move/event agreement
@@ -447,5 +447,36 @@ Owner identity/budget/pricing/unknown-cost/kill-switch choices remain gates.
 Next safe independent target: local UCI lifecycle/cancellation/failure recovery
 regressions and bounded real-engine interruption evidence on a separate contributor
 branch. No unrelated owner gate stops that work. Production 8A/8B/8C/8D acceptance,
-8E hosted onboarding and deferred 2E/6D remain distinct; Stage9 scope is unanswered.
+8E hosted onboarding and deferred 2E/6D remain distinct; Stage 9 scope is unanswered.
 October 6 17:40 UTC target remains conditional with the final 8–9-hour buffer.
+
+## Stage 8C engine lifecycle recovery candidate in progress
+
+Contributor fix/stage-8c-engine-recovery retains the 8D reviewed source tree
+(local8f73e96, published969eb7cf22fc566e3fd583be7537b992d1cdd6ea).
+PR26 reviewed 105eb2a passed fullCI 37231626012; PR27 source 969eb7c passed
+fullCI 37231957628. Published counts/artifact evidence are recorded separately at
+its checkpoint. No merge/deployment or completed pickup is claimed.
+
+Startup summary/shutdown now serialize with UCI commands. Thread work is drained
+on cancellation; failed or cancelled-and-failed handles are discarded; cancelled
+startup closes its newly created process. Later requests can restart without an
+engine-service move replay. Twenty-one focused engine tests pass, including a real
+installed Stockfish termination/reap/fresh legal move; the performance fixture adds
+explicit interrupted-service restart evidence. ADR0031 records boundaries. Full
+current candidate suite/CI and review are still gates; no hosted capacity claim.
+
+Next: verify latest cancellation/error corrections, full suite and real benchmark,
+finish source review, publish dependent draft and verify exact CI/browser artifacts.
+8C sustained/hosted load and operator targets remain open. 8D production money/rate
+integration requires owner policy; 8B production operations/8A reviewed remediation,
+8E hosted onboarding and2E/6D identity/release choices remain outstanding. Stage 9
+scope is still unselected; October6 17:40UTC target preserves integration buffer.
+
+Engine reviewed candidate 2e1996f: 353 Python passed with warnings as errors,
+4 local PG-infrastructure skips; complete Ruff format/check passed. Real Stockfish 16
+fixture interruption/reap/explicit restart succeeded; artifact is local fixture evidence,
+not hosted capacity. Independent review found no remaining material defect in the
+corrected lifecycle scope. Publication base is PR27 final docs c2670561a685dc93151ef86ded4269b51cff8b74
+(local 70df473 equivalent doc tree); CI 37232631478 is still pending at this update.
+New engine source needs its own complete published CI/browser check.

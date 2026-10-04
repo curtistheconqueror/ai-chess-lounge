@@ -163,6 +163,24 @@ hosted capacity. Full 8C still requires outstanding recovery/representative-load
 acceptance; 8B production operations and 8A approved remediation also remain open.
 8D ledger design can proceed with symbolic-unit tests independently of policy;
 live monetary enforcement still needs approved ownership/pricing/unknown-cost rules.
-8E hosted onboarding and deferred 2E/6D remain gated. Stage9 is still unselected.
+8E hosted onboarding and deferred 2E/6D remain gated. Stage 9 is still unselected.
 Keep the dated checkpoints and final 8–9-hour integration buffer; no new approval
 or improved all-stages guarantee is inferred from these local results.
+
+## Continuation checkpoint — October 4, 15:35 America/Chicago (20:35 UTC)
+
+8C PR26 reviewed 105eb2a passed CI 37231626012 (324 Python / 2 engine skips);
+8D PR27 source 969eb7c passed CI 37231957628 (336 Python / 2 engine skips);
+both include native fixtures, 3 SDK, 34 browser and all migration/lint/type/build gates.
+PR27's final documentation head c267056 has a separate check pending. The local
+engine lifecycle correction adds real interruption recovery and 353 passing tests;
+publication remains a separate gate. Generated-only 8C/8D checkpoints are ahead
+of discovery targets, but do not close production operations, policy or hosted scope.
+
+Keep the Oct 5 12:00 operational/cost-control target conditional on approved policy;
+Oct 5 20:00 account candidate still depends on owner choices/authorization. Oct 6
+03:00 representative-performance and 09:00 release-candidate targets depend on
+approved topology and integration. Preserve 09:00–17:40 for review/CI/restore/visual
+acceptance. Hosted-beta confidence remains conditional/low without decisions; a
+tested local candidate is more plausible. Stage 9 all-candidate delivery is unresolved
+and unestimated, not silently included in these ranges or excluded from the request.
