@@ -3,18 +3,22 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
+from uuid import UUID
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from . import __version__
 from .adapters import AdapterConfigurationError
 from .domain import ClockExpired, MatchTransitionRejected, MoveRejected, StalePosition
 from .engine import EngineFailure
+from .experiment_queue import QueueConflict
+from .experiment_worker import ExperimentWorker
 from .experiments import ExperimentConfiguration, ExperimentService, SaveExperiment
 from .manager import AnalysisSuperseded, GameManager, GameNotFound
 from .models import (
@@ -54,13 +58,28 @@ load_dotenv(repository_root / ".env.local", override=False)
 load_dotenv(repository_root / ".env", override=False)
 
 
+class CreateExperimentRun(BaseModel):
+    id: UUID
+    concurrency: int = Field(default=1, ge=1, le=4)
+
+
+class ControlExperimentRun(BaseModel):
+    target: Literal["running", "paused", "cancelled"]
+    expected_revision: int = Field(ge=0)
+    allow_provider_calls: bool = False
+
+
 def create_app(game_manager: GameManager | None = None) -> FastAPI:
     active_manager = game_manager or GameManager()
+
+    batch_worker = ExperimentWorker(active_manager)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         await active_manager.start()
+        batch_worker.start()
         yield
+        await batch_worker.close()
         await active_manager.close()
 
     application = FastAPI(
@@ -105,6 +124,41 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         if result is None:
             raise HTTPException(status_code=404, detail="Experiment not found.")
         return result["document"]
+
+    @application.post("/api/experiments/{experiment_id}/runs", status_code=201)
+    async def create_experiment_run(experiment_id: str, request: CreateExperimentRun):
+        try:
+            return await batch_worker.queue.create(
+                experiment_id, str(request.id), request.concurrency
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Experiment not found.") from exc
+        except QueueConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @application.get("/api/experiments/{experiment_id}/runs")
+    async def list_experiment_runs(experiment_id: str):
+        return await batch_worker.queue.list_runs(experiment_id)
+
+    @application.get("/api/experiment-runs/{run_id}")
+    async def get_experiment_run(run_id: str):
+        try:
+            return await batch_worker.queue.snapshot(run_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Run not found.") from exc
+
+    @application.post("/api/experiment-runs/{run_id}/control")
+    async def control_experiment_run(run_id: str, request: ControlExperimentRun):
+        try:
+            return await batch_worker.control(
+                run_id, request.target, request.expected_revision, request.allow_provider_calls
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Run not found.") from exc
+        except QueueConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (ValueError, AdapterConfigurationError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @application.get("/api/health", response_model=HealthResponse)
     async def health() -> HealthResponse:

@@ -40,6 +40,7 @@ from .domain import (
     StalePosition,
 )
 from .engine import EngineAnalysis, EngineFailure, StockfishService
+from .experiment_queue import ExperimentQueue
 from .gemini_adapter import GeminiInteractionsAdapter
 from .models import (
     AnalysisPoint,
@@ -146,18 +147,33 @@ class GameManager:
         self._analysis_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._worker_id = str(uuid4())
         self._closed = False
+        self._experiment_game_ids: set[str] = set()
+        self._experiment_tokens: dict[str, str] = {}
         self.consultation = ConsultationService(self)
+        self.experiment_queue = ExperimentQueue(self.store)
 
     async def start(self) -> None:
         self._closed = False
         await self.store.initialize()
+        self._experiment_tokens.clear()
+        self._experiment_game_ids = await self.store.experiment_game_ids()
         for game in await self.store.load_recoverable_games():
             self.games[game.id] = game
             self._schedule_timeout(game)
         for game in tuple(self.games.values()):
             self._schedule_agent_runner(game)
 
-    async def create(self, request: CreateGameRequest) -> GameSession:
+    async def create(
+        self,
+        request: CreateGameRequest,
+        *,
+        experiment_job: dict | None = None,
+        initial_fen: str = chess.STARTING_FEN,
+    ) -> GameSession:
+        if experiment_job:
+            await self.adopt_experiment_claim(
+                str(experiment_job["id"]), str(experiment_job["lease_token"])
+            )
         white_player = request.white_player or PlayerConfiguration.human("white")
         black_player = request.black_player or (
             PlayerConfiguration.stockfish(
@@ -202,6 +218,9 @@ class GameManager:
             else request.engine_move_time_ms
         )
         game = GameSession(
+            **({"id": experiment_job["id"]} if experiment_job else {}),
+            board=chess.Board(initial_fen),
+            initial_fen=initial_fen,
             opponent=legacy_opponent,
             stockfish_elo=stockfish_elo,
             engine_move_time_ms=engine_move_time_ms,
@@ -219,6 +238,8 @@ class GameManager:
             game.event(
                 "match.created",
                 {
+                    "initial_fen": initial_fen,
+                    "experiment_job": experiment_job["id"] if experiment_job else None,
                     "opponent": game.opponent.value,
                     "stockfish_elo": game.stockfish_elo,
                     "engine_move_time_ms": game.engine_move_time_ms,
@@ -232,7 +253,9 @@ class GameManager:
         ]
         game.start(now=now)
         events.append(game.event("match.started", self._clock_payload(game, now), now=now))
-        await self.store.create_game(game, events)
+        await self.store.create_game(
+            game, events, experiment_token=experiment_job["lease_token"] if experiment_job else None
+        )
         self.games[game.id] = game
         self._schedule_timeout(game)
         self._schedule_agent_runner(game)
@@ -247,6 +270,14 @@ class GameManager:
             raise GameNotFound(game_id)
         self.games[game_id] = game
         return game
+
+    async def adopt_experiment_claim(self, game_id: str, lease_token: str) -> None:
+        """Bind this manager to the exact current durable claim for a batch game."""
+
+        if not await self.store.validate_experiment_claim(game_id, lease_token, now=self._clock()):
+            raise ConcurrentGameUpdate(game_id)
+        self._experiment_game_ids.add(game_id)
+        self._experiment_tokens[game_id] = lease_token
 
     async def snapshot(self, game_id: str) -> GameSnapshot:
         await self.get(game_id)
@@ -350,7 +381,17 @@ class GameManager:
             await agent_task
         return await self.snapshot(game_id)
 
+    async def _reject_experiment_edit(self, game_id: str) -> None:
+        from .persistence import ExperimentJobRow
+
+        async with self.store.sessions() as session:
+            if await session.get(ExperimentJobRow, game_id) is not None:
+                raise MatchTransitionRejected(
+                    "Experiment identity is immutable; control the batch or create a new run."
+                )
+
     async def reset(self, game_id: str) -> GameSnapshot:
+        await self._reject_experiment_edit(game_id)
         self._cancel_agent_runner(game_id)
         await self.get(game_id)
         async with self._game_locks[game_id]:
@@ -450,6 +491,7 @@ class GameManager:
     async def change_seat(
         self, game_id: str, color: str, player: PlayerConfiguration, expected_revision: int
     ) -> GameSnapshot:
+        await self._reject_experiment_edit(game_id)
         await self.get(game_id)
         async with self._game_locks[game_id]:
             game = deepcopy(await self._reload(game_id))
@@ -485,14 +527,23 @@ class GameManager:
             await self.broadcast(game, now=game.updated_at)
             return game.snapshot(now=self._clock())
 
-    async def pause(self, game_id: str, expected_revision: int | None = None) -> GameSnapshot:
+    async def pause(
+        self,
+        game_id: str,
+        expected_revision: int | None = None,
+        *,
+        experiment_control: bool = False,
+    ) -> GameSnapshot:
         current = await self.get(game_id)
         if expected_revision is not None and current.revision != expected_revision:
             raise MatchTransitionRejected("The match changed. Refresh before pausing.")
         self._cancel_agent_runner(game_id)
         try:
             return await self._transition(
-                game_id, MatchState.PAUSED, "match.paused", client_revision=expected_revision
+                game_id,
+                MatchState.PAUSED,
+                "experiment.paused" if experiment_control else "match.paused",
+                client_revision=expected_revision,
             )
         finally:
             self._schedule_agent_runner(self.games[game_id])
@@ -507,6 +558,7 @@ class GameManager:
 
     async def retry_agent_turn(self, game_id: str) -> GameSnapshot:
         """Explicitly resume a paused automated turn as an operator recovery action."""
+        await self._reject_experiment_edit(game_id)
 
         self._cancel_agent_runner(game_id)
         await self.get(game_id)
@@ -545,6 +597,7 @@ class GameManager:
         return await self._transition(game_id, MatchState.ABORTED, "match.aborted")
 
     async def adjudicate(self, game_id: str, result: str) -> GameSnapshot:
+        await self._reject_experiment_edit(game_id)
         self._cancel_agent_runner(game_id)
         await self.get(game_id)
         async with self._game_locks[game_id]:
@@ -730,6 +783,24 @@ class GameManager:
         now = self._clock()
         if not self._automation_due(game):
             return False
+        is_experiment = game.id in self._experiment_game_ids
+        experiment_token = self._experiment_tokens.get(game.id) if is_experiment else None
+        if is_experiment and experiment_token is None:
+            return False
+        experiment_stop = await self.experiment_queue.guard(
+            game.id,
+            now=now,
+            plies=len(game.moves),
+            token=experiment_token,
+        )
+        if experiment_stop:
+            if experiment_stop == "ply_limit" and experiment_token is not None:
+                game.transition(MatchState.ABORTED, now=now)
+                event = game.event("experiment.turn_stopped", {"reason": experiment_stop}, now=now)
+                await self._record_action(
+                    game, [event], expected_revision, experiment_token=experiment_token
+                )
+            return False
         color = "white" if game.board.turn is chess.WHITE else "black"
         player = game.player_for_color(color)
         adapter = self.adapters.get(player.adapter_id)
@@ -859,6 +930,7 @@ class GameManager:
                     expected_revision=expected_revision,
                     turn_lease=lease,
                     lease_now=now,
+                    experiment_token=experiment_token,
                 )
                 self.games[game.id] = game
                 self._engine_retry_attempts.pop(game.id, None)
@@ -1088,6 +1160,8 @@ class GameManager:
 
     def _schedule_agent_runner(self, game: GameSession) -> None:
         if self._closed or not self._schedule_agents_enabled or not self._automation_due(game):
+            return
+        if game.id in self._experiment_game_ids and game.id not in self._experiment_tokens:
             return
         existing = self._agent_tasks.get(game.id)
         if existing is not None and not existing.done():
@@ -1333,12 +1407,15 @@ class GameManager:
         game: GameSession,
         events: list[MatchEvent],
         expected_revision: int,
+        *,
+        experiment_token: str | None = None,
     ) -> None:
         try:
             await self.store.record_action(
                 game,
                 events,
                 expected_revision=expected_revision,
+                experiment_token=experiment_token,
             )
             self.games[game.id] = game
         except ConcurrentGameUpdate:

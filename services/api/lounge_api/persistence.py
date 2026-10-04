@@ -46,7 +46,7 @@ from .models import (
 from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0010_experiments"
+SCHEMA_REVISION = "0011_experiment_queue"
 
 
 class ConcurrentGameUpdate(RuntimeError):
@@ -71,6 +71,40 @@ class ExperimentRow(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     document: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+
+
+class ExperimentDispatchRow(Base):
+    __tablename__ = "experiment_dispatch_lock"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+
+class ExperimentRunRow(Base):
+    __tablename__ = "experiment_runs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    experiment_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("experiments.id"), nullable=False
+    )
+    state: Mapped[str] = mapped_column(String(24), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    concurrency: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ExperimentJobRow(Base):
+    __tablename__ = "experiment_jobs"
+    __table_args__ = (UniqueConstraint("run_id", "number", name="uq_experiment_job_number"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("experiment_runs.id"), nullable=False
+    )
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(String(24), nullable=False)
+    lease_token: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    result: Mapped[str | None] = mapped_column(String(24), nullable=True)
 
 
 class MatchRow(Base):
@@ -295,15 +329,75 @@ class DatabaseStore:
         await self.engine.dispose()
         self._initialized = False
 
-    async def create_game(self, game: GameSession, events: list[MatchEvent]) -> None:
+    async def experiment_game_ids(self) -> set[str]:
+        await self.initialize()
+        async with self.sessions() as session:
+            return set(await session.scalars(select(ExperimentJobRow.id)))
+
+    async def validate_experiment_claim(self, game_id: str, token: str, *, now: datetime) -> bool:
         await self.initialize()
         async with self.sessions.begin() as session:
+            job = await session.get(ExperimentJobRow, game_id)
+            if job is None:
+                return False
+            await session.execute(
+                update(ExperimentRunRow)
+                .where(ExperimentRunRow.id == job.run_id)
+                .values(revision=ExperimentRunRow.revision)
+            )
+            await session.refresh(job)
+            run = await session.get(ExperimentRunRow, job.run_id)
+            return bool(
+                run is not None
+                and run.state == "running"
+                and run.deadline is not None
+                and _utc(run.deadline) > now
+                and job.state == "leased"
+                and job.lease_token == token
+                and job.lease_expires_at is not None
+                and _utc(job.lease_expires_at) > now
+            )
+
+    async def create_game(
+        self, game: GameSession, events: list[MatchEvent], *, experiment_token: str | None = None
+    ) -> None:
+        await self.initialize()
+        async with self.sessions.begin() as session:
+            await self._guard_experiment(session, game, datetime.now(UTC), experiment_token)
             session.add(self._match_row(game))
             # The event rows reference the match, but the ORM models intentionally
             # do not expose relationship properties. Flush the parent explicitly
             # so PostgreSQL never batches the child inserts ahead of it.
             await session.flush()
             session.add_all(self._event_rows(game.id, events))
+
+    async def _guard_experiment(self, session, game, now, token=None):
+        job = await session.get(ExperimentJobRow, game.id)
+        if job is None:
+            if token is not None:
+                raise ConcurrentGameUpdate(game.id)
+            return
+        await session.execute(
+            update(ExperimentRunRow)
+            .where(ExperimentRunRow.id == job.run_id)
+            .values(revision=ExperimentRunRow.revision)
+        )
+        await session.refresh(job)
+        run = await session.get(ExperimentRunRow, job.run_id)
+        if (
+            run.state != "running"
+            or job.state != "leased"
+            or job.lease_expires_at is None
+            or _utc(job.lease_expires_at) <= now
+            or run.deadline is None
+            or _utc(run.deadline) <= now
+            or token is None
+            or token != job.lease_token
+        ):
+            raise ConcurrentGameUpdate(game.id)
+        experiment = await session.get(ExperimentRow, run.experiment_id)
+        if len(game.moves) > experiment.document["configuration"]["stops"]["max_plies"]:
+            raise ConcurrentGameUpdate(game.id)
 
     async def record_move(
         self,
@@ -316,9 +410,16 @@ class DatabaseStore:
         request_hash: str | None = None,
         turn_lease: TurnLease | None = None,
         lease_now: datetime | None = None,
+        experiment_token: str | None = None,
     ) -> None:
         await self.initialize()
         async with self.sessions.begin() as session:
+            await self._guard_experiment(
+                session,
+                game,
+                lease_now or datetime.now(UTC),
+                experiment_token,
+            )
             if move.actor.startswith("remote_runner:"):
                 color = move.actor.split(":", 1)[1]
                 player = game.white_player if color == "white" else game.black_player
@@ -391,9 +492,17 @@ class DatabaseStore:
         events: list[MatchEvent],
         *,
         expected_revision: int,
+        experiment_token: str | None = None,
     ) -> None:
         await self.initialize()
         async with self.sessions.begin() as session:
+            if experiment_token is not None:
+                await self._guard_experiment(
+                    session,
+                    game,
+                    datetime.now(UTC),
+                    experiment_token,
+                )
             values = {**self._match_values(game), **self._cleared_lease_values()}
             result = await session.execute(
                 update(MatchRow)
