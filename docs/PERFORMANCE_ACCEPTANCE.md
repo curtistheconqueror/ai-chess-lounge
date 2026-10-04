@@ -120,3 +120,20 @@ a legal proposal on the unchanged board. Its field says explicit service restart
 not automatic turn replay. Full local suite: 353 passed, 4 PG infrastructure skips.
 Published-source CI is a new gate. Hard hang supervision, sustained/hosted engine
 pool load and end-to-end rendering latency remain open.
+
+## Loopback transport continuation candidate
+
+`--loopback` now adds an ephemeral 127.0.0.1 listener with an explicitly owned app
+lifespan, actual HTTP requests and WebSocket clients; no endpoint/real-DB option.
+The same schedules/caps apply on isolated SQLite and disposable CI PostgreSQL.
+Each four-move game resubmits all four commands with the same idempotency keys and
+checks exactly four accepted events, final revision/FEN/moves, reconnect and cleanup.
+The three focused tests also inject snapshot failure and reject unsafe schedules.
+
+Readiness samples are warm-cache samples. The final-request-to-snapshot-read interval
+includes the accepted HTTP command, idempotent replay and queued snapshot reads;
+it is not wire propagation or browser rendering. Queue four is the client's receive
+high-watermark, not a hard memory cap or a claim about the server's incoming queue.
+Generated clients send no WebSocket application messages. ADR0032 records lifecycle
+ownership and teardown limits. Output includes source tree clean/dirty state; SHA
+alone cannot establish exact working-source evidence. No hosted capacity claim.

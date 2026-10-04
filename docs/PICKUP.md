@@ -470,7 +470,7 @@ Next: verify latest cancellation/error corrections, full suite and real benchmar
 finish source review, publish dependent draft and verify exact CI/browser artifacts.
 8C sustained/hosted load and operator targets remain open. 8D production money/rate
 integration requires owner policy; 8B production operations/8A reviewed remediation,
-8E hosted onboarding and2E/6D identity/release choices remain outstanding. Stage 9
+8E hosted onboarding and 2E/6D identity/release choices remain outstanding. Stage 9
 scope is still unselected; October 6 17:40 UTC target preserves integration buffer.
 
 Engine reviewed candidate 2e1996f: 353 Python passed with warnings as errors,
@@ -502,3 +502,36 @@ The next safe target is the generated loopback transport rehearsal, separate fro
 in-process overhead and hosted/TLS/proxy/browser measurements. Preserve cleanup
 and native/browser/restore gates. Owner account/budget/release decisions and Stage 9
 selection remain unanswered; October 6 17:40 UTC target keeps final 8–9-hour buffer.
+
+## Stage 8C loopback transport candidate in progress
+
+Contributor test/stage-8c-loopback-performance is based on PR28 final docs
+5f560eaa64679d5ffd0c47a151df0878ddd0b8dd (local 032ff54 equivalent tree).
+PR28 source 603c216 passed CI 37233085222; its final docs CI 37233840243 is pending
+at this update. Local source 98f86cf adds bounded generated-only loopback TCP across
+HTTP/readiness and spectators, four actual idempotent command replays per game,
+exact revision/FEN/event continuity/reconnect and owned server/socket/lifespan cleanup.
+No provider calls, grants, external endpoint, public exposure, permissions or deployment.
+
+Three focused loopback tests and 16 combined performance tests pass; the default local
+100-spectator ramp succeeded. Independent read-only review found no material issue.
+Queue/protocol and metric wording were checked against locked dependency source;
+actual client receive high-watermark is disclosed, no server inbound-queue/flood or
+hard-memory-cap claim. CLI source metadata now marks dirty trees. ADR0032 records
+scope. Full current suite/native CI/browser gates and exact clean-source measurement
+remain before source acceptance. Retain all branches/drafts; no completed pickup.
+
+Exact next safe target: publish/review full loopback/native acceptance and retained
+aggregate evidence, then reconcile the release-readiness packet with the verified
+local scope. Actual hosted performance, ownership, account/access/security changes,
+monetary enforcement, paid validation, deployment and Stage 9 selection remain external
+decision gates. Main remains 087c565. October 6 17:40 UTC target preserves the final
+8–9-hour integration buffer and does not waive these decisions or quality gates.
+
+Local loopback reviewed checkpoint b4dab469d808d3626900d303a7acd37b6b88313e:
+356 Python passed with warnings as errors (4 local PG-infrastructure skips), full
+Ruff format/check passed; actual default SQLite/ASGI/queue/loopback/Stockfish
+scenarios all measured successfully. Source tree was clean. Retained loopback
+evidence is docs/verification/stage8c-loopback-local.json; no hosted capacity claim.
+PR28 final5f560ea independently passed CI37233840243. Native PostgreSQL
+loopback and this contributor's published full/browser CI remain new gates.

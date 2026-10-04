@@ -184,3 +184,18 @@ approved topology and integration. Preserve 09:00–17:40 for review/CI/restore/
 acceptance. Hosted-beta confidence remains conditional/low without decisions; a
 tested local candidate is more plausible. Stage 9 all-candidate delivery is unresolved
 and unestimated, not silently included in these ranges or excluded from the request.
+
+## Loopback checkpoint — October 4, 15:55 America/Chicago (20:55 UTC)
+
+8D final docs c267056 passed CI 37232631478. Engine PR28 source 603c216 passed
+CI 37233085222 (354 Python/3 engine skips, 3 SDK, 34 browser and native/build gates);
+its final docs head 5f560ea has a separate CI check. Local loopback transport tests
+and the 100-spectator discovery ramp passed; full current candidate/native CI remain
+before publication acceptance. No topology/identity/pricing scope was selected.
+
+The remaining release critical path is still approved 8A remediation, production 8B
+operations, representative 8C targets/topology, live 8D ownership/policy and 2E/6D
+identity/invitations, followed by 8E hosted onboarding and integrated review. Existing
+engineering ranges and Oct 5 / Oct 6 checkpoints remain conditional; external waits
+can exceed them. Preserve the final 09:00–17:40 UTC Oct6 review/CI/restore/visual buffer.
+Stage 9 all-candidate scope remains unanswered rather than silently marked complete.
