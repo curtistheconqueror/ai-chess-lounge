@@ -153,3 +153,16 @@ Current local readiness/capped telemetry and fixture recovery are verified; the 
 The final documentation follow-up receives a separate current-head CI check.
 No new owner decision has arrived; continue independent fixture performance work
 and budget design. The production/account/Stage 9 confidence and gates remain as above.
+
+## Performance checkpoint — October 4, 15:05 America/Chicago (20:05 UTC)
+
+PR25 final head 076c82a passed CI 37227215973. Stage8C generated-fixture harness
+now measures five workload areas locally, including installed Stockfish; native
+PostgreSQL and final browser CI remain upcoming gates. In-process latency is not
+hosted capacity. Full 8C still requires outstanding recovery/representative-load
+acceptance; 8B production operations and 8A approved remediation also remain open.
+8D ledger design can proceed with symbolic-unit tests independently of policy;
+live monetary enforcement still needs approved ownership/pricing/unknown-cost rules.
+8E hosted onboarding and deferred 2E/6D remain gated. Stage9 is still unselected.
+Keep the dated checkpoints and final 8–9-hour integration buffer; no new approval
+or improved all-stages guarantee is inferred from these local results.

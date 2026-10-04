@@ -343,3 +343,30 @@ available, preserving correctness and cleanup gates. Continue 8D budget reservat
 contract design; account/security/budget-owner/release policies remain decisions.
 Keep the October 6 12:40 PM America/Chicago target and final integration buffer
 visible; Stage 9 scope is still unresolved and 2E/6D requirements remain deferred.
+
+## Stage 8C bounded performance continuation in progress
+
+PR25 final docs head 076c82aabcaf77312389c99625c37ac955a313bf independently
+passed CI 37227215973. Local retained 2836835 has the equivalent final tree;
+remote/local browser-upload commit histories differ. Preserve both histories.
+Contributor test/stage-8c-bounded-performance starts from that verified tree.
+The harness exercises HTTP/readiness, coalesced spectators/reconnect, shared queue
+claims/fencing/database recovery/report exports, plus real bounded Stockfish when
+available. No live provider, account/security change, deployment or merge.
+
+Initial local discovery succeeded across all default schedules; regression tests
+cover rejected unsafe bounds, non-CI PG refusal, real pipelines, sibling cancellation
+and socket validation-failure cleanup. Native PG benchmark and final full/browser CI
+remain publication gates. See PERFORMANCE_ACCEPTANCE.md/ADR0029 for measured
+scope and gaps; no full 8C completion or hosted capacity claim.
+
+Next safe work: publish dependent draft and verify exact current-head CI/artifacts;
+continue 8D attempt reservation contract and symbolic-unit offline invariants. Keep
+all contributor branches. Main remains 087c565. No immutable completed pickup before
+approved merge. Account/budget/release decisions and Stage9 selection remain open.
+Target October6 17:40 UTC with 8–9-hour integration buffer remains conditional.
+
+Local source checkpoint 79aac08: 321 Python tests passed with warnings as errors,
+4 PostgreSQL infrastructure skips; Ruff format/check passed. Default SQLite/ASGI/
+queue plus actual Stockfish16 benchmark succeeded with explicit limits.
+Remote publication history differs; record its head and full CI separately.
