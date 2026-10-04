@@ -206,6 +206,9 @@ export function createExperimentRun(experimentId: string, id: string, concurrenc
 export function fetchExperimentRun(id: string) {
   return request<import("./ExperimentRunPanel").ExperimentRun>(`/api/experiment-runs/${encodeURIComponent(id)}`);
 }
+export function fetchExperimentRunMetrics(id: string) {
+  return request<import("./ComparisonMetrics").ComparisonMetricsData>(`/api/experiment-runs/${encodeURIComponent(id)}/metrics`);
+}
 export function listExperimentRuns(experimentId: string) {
   return request<{ id: string; state: string }[]>(`/api/experiments/${encodeURIComponent(experimentId)}/runs`);
 }
