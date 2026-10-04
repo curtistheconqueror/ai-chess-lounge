@@ -11,6 +11,7 @@ import chess
 import chess.pgn
 from sqlalchemy import select
 
+from .domain import GameSession
 from .experiment_metrics import ExperimentMetrics
 from .experiment_queue import ExperimentQueue
 from .experiments import canonical_hash
@@ -191,6 +192,17 @@ class ExperimentReports:
                     raise ReportConflict(
                         "Saved match changed or is inconsistent; retry the export."
                     )
+                if job["state"] == "completed" and job["result"] in CHESS_RESULTS:
+                    recorded_result = GameSession(
+                        id=match.id,
+                        board=board,
+                        draw_reason=match.draw_reason,
+                        adjudicated_result=match.adjudicated_result,
+                        timed_out_by=match.timed_out_by,
+                        resigned_by=match.resigned_by,
+                    ).result
+                    if match.lifecycle != "completed" or recorded_result != job["result"]:
+                        raise ReportConflict("Saved match outcome disagrees with its job result.")
                 games[match.id] = {
                     "generation": match.generation,
                     "revision": match.revision,
