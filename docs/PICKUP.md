@@ -250,3 +250,29 @@ complete until reviewed findings and authorized remediation are dispositioned.
 PR22 final documentation head 5baac32a098d21bf046d2c201daea25be7812097
 passed CI 37223844056. Its description now records source and final-head evidence.
 Stage 7E implementation and browser acceptance are verified; merge remains gated.
+
+## Stage 8B offline operations preparation in progress
+
+Stage 8A assessment was published as dependent draft PR23:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/23
+Its source head is 786f8b70cdb12b29bf009e2214817c4c31e63494 (local b87cbbd
+has the same tree). It remains an assessment/decision packet, not 8A completion.
+
+Current contributor: test/stage-8b-restore-rehearsal, based on that published head.
+Two offline generated-fixture SQLite recovery tests verify complete persisted data,
+terminal game/run/report reconstruction and committed-versus-uncommitted WAL handling.
+OPERATIONS_RUNBOOK.md tracks health/readiness, telemetry, alerting, backup/restore,
+retention and incident/rollback deliverables honestly; production acceptance is pending.
+No live data, credentials, security settings, paid providers or deployment changed.
+Next: verify this branch's complete checks, publish a dependent draft, then bounded
+local readiness/instrumentation and native PostgreSQL fixture recovery. Keep 8B open.
+
+Local 8B checkpoint: 303 Python tests passed with warnings as errors (3 PostgreSQL
+environment skips), including both restore rehearsals; Ruff format/check and
+`git diff --check` passed. No PostgreSQL client/server binary is available locally;
+native PostgreSQL backup/restore acceptance remains outstanding. Current-head CI
+and published browser checks must be recorded separately after publication.
+
+PR23 source head 786f8b7 passed CI 37224743392 / job 111501964970, including
+both migrations, Python, SDK, web build and responsive browser gates. This verifies
+the assessment branch's unchanged runtime, not completion of 8A remediation.
