@@ -8,15 +8,18 @@ export type PromotionPiece = (typeof promotions)[number];
 
 export function PromotionPicker({
   onChoose,
+  color,
   onCancel,
 }: {
   onChoose: (piece: PromotionPiece) => void;
+  color: "white" | "black";
   onCancel: () => void;
 }) {
   const firstOption = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
     firstOption.current?.focus();
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onCancel();
@@ -37,7 +40,10 @@ export function PromotionPicker({
       }
     }
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      previousFocus?.focus();
+    };
   }, [onCancel]);
 
   return (
@@ -60,7 +66,7 @@ export function PromotionPicker({
               onClick={() => onChoose(type)}
               aria-label={`Promote to ${type}`}
             >
-              <ChessPiece piece={{ type, color: "white", symbol: "" }} />
+              <ChessPiece piece={{ type, color, symbol: "" }} />
               <span>{type}</span>
             </button>
           ))}

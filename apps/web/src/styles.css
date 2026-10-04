@@ -2011,3 +2011,9 @@ select {
     height: 52px;
   }
 }
+
+.human-action-dialog { margin: auto; max-width: min(440px, calc(100vw - 32px)); color: var(--text, #e8edf4); }
+.human-action-dialog::backdrop { background: rgb(4 8 16 / 78%); }
+.human-action-dialog p { line-height: 1.5; }
+.human-action-dialog label { display: grid; gap: 8px; margin: 16px 0; }
+.human-action-dialog select { padding: 10px; }

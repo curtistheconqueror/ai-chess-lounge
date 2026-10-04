@@ -5,6 +5,7 @@ import { ChessPiece } from "./ChessPiece";
 
 interface ChessBoardProps {
   fen: string;
+  positionKey: string;
   flipped: boolean;
   legalMoves: string[];
   selected: string | null;
@@ -12,10 +13,12 @@ interface ChessBoardProps {
   inCheck: boolean;
   disabled: boolean;
   onSquareClick: (square: string) => void;
+  onMoveDrop: (from: string, to: string) => void;
 }
 
 export function ChessBoard({
   fen,
+  positionKey,
   flipped,
   legalMoves,
   selected,
@@ -23,6 +26,7 @@ export function ChessBoard({
   inCheck,
   disabled,
   onSquareClick,
+  onMoveDrop,
 }: ChessBoardProps) {
   const squares = useMemo(
     () => boardForOrientation(parseFen(fen), flipped),
@@ -58,6 +62,22 @@ export function ChessBoard({
               }`}
               key={square.name}
               onClick={() => onSquareClick(square.name)}
+              draggable={!disabled && square.piece?.color === checkedKingColor}
+              onDragStart={(event) => {
+                event.dataTransfer.setData("application/x-chess-move", JSON.stringify({ from: square.name, positionKey }));
+                event.dataTransfer.effectAllowed = "move";
+              }}
+              onDragOver={(event) => {
+                if (!disabled && event.dataTransfer.types.includes("application/x-chess-move")) event.preventDefault();
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (disabled) return;
+                try {
+                  const source = JSON.parse(event.dataTransfer.getData("application/x-chess-move"));
+                  if (source.positionKey === positionKey && typeof source.from === "string") onMoveDrop(source.from, square.name);
+                } catch { /* Ignore unrelated or stale drag payloads. */ }
+              }}
               disabled={disabled}
               aria-label={`${square.name}${square.piece ? ` ${square.piece.color} ${square.piece.type}` : " empty"}`}
             >
