@@ -956,6 +956,18 @@ test("Model Lab prepares confirms and watches a bounded local batch", async ({ p
   await expect(execution.getByRole("cell", { name: "limited", exact: true })).toHaveCount(2);
   await expect(execution.getByRole("link", { name: /Game [12]/ })).toHaveCount(2);
   await page.screenshot({ path: testInfo.outputPath(`batch-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
+  const metricsResponse = page.waitForResponse(response => response.url().includes("/api/experiment-runs/") && response.url().endsWith("/metrics") && response.request().method() === "GET");
+  await execution.getByRole("button", { name: "Load comparison metrics", exact: true }).click();
+  expect((await metricsResponse).ok()).toBeTruthy();
+  const metrics = execution.getByRole("region", { name: "Comparison metrics", exact: true });
+  await expect(metrics).toContainText("Every scheduled game must finish with a chess result.");
+  await expect(metrics).toContainText("Unknown (0/");
+  await expect(metrics).toContainText("not calibrated human Elo");
+  const efficiency = metrics.getByRole("region", { name: "Efficiency metrics", exact: true });
+  await expect(efficiency.locator("tbody tr").first().locator("td").nth(8)).toContainText("Unknown");
+  const metricsDimensions = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+  expect(metricsDimensions.scroll).toBeLessThanOrEqual(metricsDimensions.width + 1);
+  await page.screenshot({ path: testInfo.outputPath(`metrics-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
   await execution.getByRole("button", { name: "Prepare another run", exact: true }).click();
   await execution.getByRole("button", { name: "Prepare batch", exact: true }).click();
   await execution.getByRole("button", { name: "Cancel batch", exact: true }).click();
