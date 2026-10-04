@@ -357,8 +357,8 @@ async def queue_and_database(root, backend):
         worker = ExperimentWorker(manager)
         observer = DatabaseStore(url)
         result = {"backend": backend, "worker_processes": 1, "queue": []}
-        await manager.start()
         try:
+            await manager.start()
             plan = await worker.plans.save(
                 SaveExperiment(id=uuid4(), configuration=configuration())
             )
@@ -432,7 +432,7 @@ async def queue_and_database(root, backend):
                         "observed_max_leases": maximum,
                         "snapshot_latency": distribution(timings),
                         "bundle_bytes": len(archive),
-                        "duplicate_moves": 0,
+                        "persisted_move_event_alignment": True,
                         "results": "limited_no_result_not_draw",
                     }
                 )
