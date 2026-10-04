@@ -15,7 +15,7 @@ tested and published as draft PRs. Do not merge, deploy, purchase services, crea
 credentials, expand access, or perform destructive operations without the relevant
 approval. Parent supervisor handles monitoring; do not create duplicate monitors.
 
-## Current work: Stage 7A implementation ready; draft PR18 open; final CI pending
+## Current work: Stage 7A implementation ready; draft PR18 verified; merge approval pending
 
 Contributor: feat/stage-7a-experiment-builder, based on the exact main commit above.
 Draft PR: https://github.com/curtistheconqueror/ai-chess-lounge/pull/18
@@ -33,7 +33,12 @@ Ruff and TypeScript. Production build passed. Fourteen experiment regressions
 cover deterministic expansion/hashes, effort mapping, invalid/terminal openings,
 unsupported effort, null moves, oversized plans, idempotency, restart, no games created and
 concurrent duplicate saves. Migration upgrade/downgrade test extended. Desktop/phone
-browser acceptance added; CI and screenshot review remain required before merge.
+browser acceptance passed on desktop/phone; screenshots inspected after UI polish.
+CI run 37215467880 / job 111474957890 passed on published code head
+5b931af33f0e753a790dea8a7a066f862c9709f4: 245 Python (2 skips), 3 SDK,
+28 browser tests (67 intentional duplicate-viewport skips), SQLite/PostgreSQL
+migrations, lint, types and build. Source tree matched local 50579a6 exactly.
+This final handoff is docs-only. No merge or completed pickup is claimed.
 
 ## Next target and limits
 
