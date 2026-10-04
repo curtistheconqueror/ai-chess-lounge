@@ -113,6 +113,21 @@ def source_sha():
         return None
 
 
+def source_tree_state():
+    try:
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=Path(__file__).parent,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=2,
+        ).stdout
+        return "dirty" if status.strip() else "clean"
+    except (OSError, subprocess.SubprocessError):
+        return "unavailable"
+
+
 def resources():
     usage = resource.getrusage(resource.RUSAGE_SELF)
     return {
@@ -272,6 +287,7 @@ async def http_and_spectators(root, backend, http_levels, spectator_levels):
                                 snapshot = await item.snapshot()
                                 assert snapshot["version"] >= last
                                 last = snapshot["version"]
+                            assert snapshot["version"] == len(moves)
                             assert snapshot["fen"] == board.fen()
                             assert [row["uci"] for row in snapshot["moves"]] == moves
                             elapsed.append((monotonic() - started_observe) * 1000)
@@ -524,6 +540,7 @@ async def benchmark(
     http_levels=(1, 8, 32),
     spectator_levels=(1, 10, 50, 100),
     include_engine=False,
+    include_loopback=False,
 ):
     if (
         not http_levels
@@ -550,6 +567,7 @@ async def benchmark(
         "timestamp_utc": datetime.now(UTC).isoformat(),
         "version": __version__,
         "source_sha": source_sha(),
+        "source_tree_state": source_tree_state(),
         "resource_interpretation": (
             "Linux peak RSS is cumulative, not current memory or leak proof; "
             "child RSS includes all reaped children."
@@ -577,6 +595,13 @@ async def benchmark(
             async with asyncio.timeout(MAX_SECONDS):
                 value = await call()
             report["scenarios"].append({"name": name, "status": "measured", **value})
+    if include_loopback:
+        from .performance_loopback import loopback
+
+        for backend in backends:
+            async with asyncio.timeout(MAX_SECONDS):
+                result = await loopback(root, backend, http_levels, spectator_levels)
+            report["scenarios"].append({"name": "loopback", "status": "measured", **result})
     if include_engine:
         async with asyncio.timeout(MAX_SECONDS):
             report["scenarios"].append({"name": "engine", **await engine_workload()})
@@ -592,6 +617,7 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--postgres-ci", action="store_true")
     parser.add_argument("--engine", action="store_true")
+    parser.add_argument("--loopback", action="store_true")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="lounge-performance-") as directory:
         result = asyncio.run(
@@ -599,6 +625,7 @@ def main():
                 Path(directory),
                 backends=("sqlite", "postgresql") if args.postgres_ci else ("sqlite",),
                 include_engine=args.engine,
+                include_loopback=args.loopback,
             )
         )
     args.out.parent.mkdir(parents=True, exist_ok=True)
