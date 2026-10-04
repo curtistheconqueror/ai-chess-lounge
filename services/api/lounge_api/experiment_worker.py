@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from .domain import MatchTransitionRejected
 from .experiment_queue import QueueConflict
-from .experiments import ExperimentConfiguration, ExperimentService
+from .experiments import ExperimentService, parse_configuration
 from .manager import GameNotFound
 from .models import CreateGameRequest
 from .persistence import ConcurrentGameUpdate
@@ -48,9 +48,7 @@ class ExperimentWorker:
             )
             if has_provider and not allow_provider_calls:
                 raise ValueError("Explicit provider-call authorization is required for this batch.")
-            current = self.plans.preview(
-                ExperimentConfiguration.model_validate(plan["configuration"])
-            )
+            current = self.plans.preview(parse_configuration(plan["configuration"]))
             if current["configuration_hash"] != plan["configuration_hash"]:
                 raise ValueError(
                     "Adapter configuration changed. Create a fresh plan before execution."
@@ -135,10 +133,10 @@ class ExperimentWorker:
                     game = await self.manager.create(
                         CreateGameRequest(
                             white_player=PlayerConfiguration.model_validate(
-                                variants[item["white"]]
+                                variants[claim.get("white", item["white"])]
                             ),
                             black_player=PlayerConfiguration.model_validate(
-                                variants[item["black"]]
+                                variants[claim.get("black", item["black"])]
                             ),
                             initial_time_ms=config["initial_time_ms"],
                             increment_ms=config["increment_ms"],

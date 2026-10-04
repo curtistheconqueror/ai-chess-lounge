@@ -19,7 +19,7 @@ from .domain import ClockExpired, MatchTransitionRejected, MoveRejected, StalePo
 from .engine import EngineFailure
 from .experiment_queue import QueueConflict
 from .experiment_worker import ExperimentWorker
-from .experiments import ExperimentConfiguration, ExperimentService, SaveExperiment
+from .experiments import ExperimentService, PlanConfiguration, SaveExperiment
 from .manager import AnalysisSuperseded, GameManager, GameNotFound
 from .models import (
     AdjudicateRequest,
@@ -101,7 +101,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     experiments = ExperimentService(active_manager.store, active_manager.adapters)
 
     @application.post("/api/experiments/preview")
-    async def preview_experiment(request: ExperimentConfiguration):
+    async def preview_experiment(request: PlanConfiguration):
         try:
             return experiments.preview(request)
         except (ValueError, AdapterConfigurationError) as exc:
