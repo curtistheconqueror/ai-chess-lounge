@@ -604,7 +604,7 @@ work on desktop and mobile with full audit history.
 
 | Sub-phase | Deliverables |
 | --- | --- |
-| 7A Experiment builder | Entrants, effort sweep, opening suite, clocks, game count, color swaps, stop rules |
+| 7A Experiment builder | Draft implementation: persisted entrants, effort sweeps, legal opening suites, clocks, bounded deterministic game schedule, color swaps, stop-rule configuration and SHA-256 manifest |
 | 7B Scheduler | Durable queue, concurrency budgets, provider rate limits, resume, and cancellation |
 | 7C Tournaments | Round robin, knockout, gauntlet, standings, and division-specific ratings |
 | 7D Metrics | Chess strength, reliability, efficiency, effort response, confidence intervals |

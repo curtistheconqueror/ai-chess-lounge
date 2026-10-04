@@ -1,55 +1,48 @@
 # AI Chess Lounge contributor pickup
 
-Updated: 2026-10-04. Read AGENTS.md, README.md, MASTER_PLAN.md and ADR 0022.
+Updated 2026-10-04. Read AGENTS.md, README.md, MASTER_PLAN.md, STAGE_7_MODEL_LAB.md
+and ADR 0023 before continuing.
 
-## Verified baseline
+## Verified baseline and authorization
 
-Stage 6B merged in PR #16 at `655ce42154d59e97dd2d8db9ee0b2e8f0d3f280d`.
-Immutable pickup/stage-6b-complete and retained feat/stage-6b-seat-takeover remain.
-PR CI 37183260435 and postmerge CI 37183451633 passed: 215 Python, 3 SDK,
-23 browser tests (57 intentional duplicate-viewport skips).
+Main and immutable pickup/stage-6c-complete are verified at
+087c565bbba7e88473e36d17584d08ba6db230d4 (Stage 6C PR17).
+The retained feat/stage-6c-consultation branch has its final handoff at fe596148.
+Main was unchanged and the working tree clean before Stage 7A began.
 
-## Current work — Stage 6C
+Today's explicit continuation supersedes last night's stop. New work may be built,
+tested and published as draft PRs. Do not merge, deploy, purchase services, create
+credentials, expand access, or perform destructive operations without the relevant
+approval. Parent supervisor handles monitoring; do not create duplicate monitors.
 
-Contributor feat/stage-6c-consultation was created from that exact verified merge.
-Implementation complete; final CI/publication gates are in progress. Do not label
-complete until merged and the immutable pickup branch is verified.
+## Current work: Stage 7A implementation ready; CI and draft publication pending
 
-- Human-turn-only adviser requests; never apply a move automatically.
-- Background advice uses bounded existing adapter policy, deadline and lease; CAS
-  rejects late results after any match revision change.
-- Human confirmation includes consultation ID/revision; manual moves remain available.
-- Migration 0009 persists advice/history; events and PGN disclose Human-AI Team assistance.
-- Configured provider/local models, Stockfish strength and deterministic practice adviser UI.
-- Cancellation, graceful shutdown recovery, deadline refresh and stale-dialog fencing.
-- Provider errors are sanitized and do not pause a human turn.
-- ADR 0022 and STAGE_6_HUMAN_PLAY.md cover contracts, recovery and boundaries.
+Contributor: feat/stage-7a-experiment-builder, based on the exact main commit above.
+No completed pickup branch is claimed until approved merge and verification.
 
-## Verification gates
+Implemented immutable experiment plans and migration 0010; preview/save/list/read API;
+2–8 direct/local entrants; supported effort variants; legal opening suites; repetitions,
+color swaps, clocks, stop-limit configuration; deterministic schedule capped at 512
+games; canonical SHA-256 manifest; provider effort mapping; mixed-division exhibition
+labels. Model Lab UI previews/saves/reopens drafts. Saving never launches a match or
+calls a provider. Duplicate save UUIDs replay the original body or reject conflicts.
 
-Sixteen consultation regressions cover no-auto-move, explicit human confirmation,
-idempotency, saved history/PGN, restart, cross-worker supersession/cancellation,
-duplicate requests, time expiry, provider retries and sanitized failures.
-Local make test/build and pytest -W error passed: 231 Python tests, 2 environment/engine
-skips, 3 SDK tests, Ruff lint/format and web typecheck. Independent backend review
-found no remaining blocker after graceful shutdown recovery was tightened. Exact-head
-CI is required before merge. Desktop/phone browser
-acceptance covers reload, review/cancel/confirm, Black advice and stale confirmation.
-Local Chromium is absent; CI supplies browser execution and visual artifacts.
+Validation: make test passed 244 Python tests (2 environment/engine skips), 3 SDK tests,
+Ruff and TypeScript. Production build passed. Thirteen new experiment regressions
+cover deterministic expansion/hashes, effort mapping, invalid/terminal openings,
+unsupported effort, oversized plans, idempotency, restart, no games created and
+concurrent duplicate saves. Migration upgrade/downgrade test extended. Desktop/phone
+browser acceptance added; CI and screenshot review remain required before merge.
 
-## Stop and next target
+## Next target and limits
 
-The owner explicitly requested Stage 6C be the LAST phase tonight. Stop after its
-verified merge, postmerge smoke and contributor/pickup handoff. Do not start more work.
-When the owner resumes, Stage 7A Model Lab experiment configuration is the proposed
-next target. Stage 6D account roles/invitations remain reserved for the final multiplayer
-rollout, alongside Stage 2E accounts. Stage 6 has four phases; 6A–6C are implemented.
+Stage 7B durable scheduler: dispatch authorization, atomic durable jobs, concurrency
+budgets, cancellation/resume, stop-rule enforcement and original-match recovery.
+Can be developed on a dependent contributor branch while 7A awaits merge approval;
+keep draft dependencies explicit. Do not run paid-provider batches without approval.
 
-## Boundaries
-
-Local operator only. Consultation request deadline <=30 seconds and remaining clock.
-No automatic retry after abrupt crash; cancel pending advice or wait for its original
-deadline. Graceful shutdown records cancellation only for this worker's owned requests.
-Remote runner/MCP/subscription seat grants cannot be repurposed as adviser grants;
-remote adviser authorization remains deferred. Provider budgets remain process-local.
-No live provider credits are required by the deterministic acceptance suite.
+6D/2E account roles and invitations remain for the final hosted multiplayer rollout.
+Remote/subscription grants currently cover one match only, not a batch. Plans use
+supplied clock information and fixed effort; withheld/adaptive conditions are disabled.
+Hash identity does not guarantee provider determinism or pin changing model aliases.
+Local operator deployment only. No merge, deployment or security changes performed.
