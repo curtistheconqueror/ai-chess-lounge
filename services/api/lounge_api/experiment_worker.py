@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from time import monotonic
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -24,9 +25,11 @@ class ExperimentWorker:
         self.task = None
         self.jobs = {}
         self.closed = False
+        self.last_success_at = None
 
     def start(self):
         self.closed = False
+        self.last_success_at = None
         self.task = asyncio.create_task(self._loop())
 
     async def close(self):
@@ -111,6 +114,7 @@ class ExperimentWorker:
         while not self.closed:
             try:
                 await self.tick()
+                self.last_success_at = monotonic()
             except (SQLAlchemyError, QueueConflict, ConcurrentGameUpdate):
                 # Durable reservations survive; retry orchestration, never invent a new job ID.
                 pass

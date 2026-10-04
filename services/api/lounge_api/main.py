@@ -9,7 +9,7 @@ from uuid import UUID
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -45,6 +45,7 @@ from .models import (
     RunnerTurnDelivery,
     SeatTakeoverRequest,
 )
+from .operations import LocalOperations, OperationsMiddleware, Readiness
 from .persistence import ConcurrentGameUpdate, IdempotencyConflict
 from .player_protocol import PROTOCOL_VERSION
 from .remote_runner import (
@@ -76,14 +77,18 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
 
     batch_worker = ExperimentWorker(active_manager)
     export_slots = asyncio.Semaphore(2)
+    operations = LocalOperations()
+    readiness = Readiness(active_manager, batch_worker)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         await active_manager.start()
         batch_worker.start()
+        readiness.started = True
         try:
             yield
         finally:
+            await readiness.close()
             await batch_worker.close()
             await active_manager.close()
 
@@ -93,6 +98,9 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.state.game_manager = active_manager
+    application.state.operations = operations
+    application.state.readiness = readiness
+    application.add_middleware(OperationsMiddleware, operations=operations)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -196,6 +204,15 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     async def health() -> HealthResponse:
         return HealthResponse(
             version=__version__, stockfish_available=active_manager.engine.available
+        )
+
+    @application.get("/api/ready")
+    async def ready(require_engine: bool = False):
+        result = await readiness.check(require_engine=require_engine)
+        return JSONResponse(
+            content={"version": __version__, **result},
+            status_code=200 if result["ok"] else 503,
+            headers={"Cache-Control": "no-store"},
         )
 
     @application.get("/api/player-adapters")
