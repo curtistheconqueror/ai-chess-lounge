@@ -24,6 +24,7 @@ export function ExperimentRunPanel({ plan }: { plan: ExperimentPlan }) {
   const [runId, setRunId] = useState(() => crypto.randomUUID());
   const hasProvider = plan.configuration.entrants.some(e => e.player.connection_mode === "direct_api");
   const tournament = isTournamentConfig(plan.configuration);
+  const visibleMetrics = metrics?.run_id === run?.id ? metrics : null;
   useEffect(() => { let active = true; void listExperimentRuns(plan.id!).then(items => { if (active) setRuns(items); }).catch(e => { if (active) setError(String(e)); }); return () => { active = false; }; }, [plan.id]);
   useEffect(() => { if (!run || !["running", "paused", "pausing", "ready"].includes(run.state)) return; let active = true; const timer = window.setInterval(() => { void fetchExperimentRun(run.id).then(value => { if (active) setRun(old => old?.id === value.id && old.revision <= value.revision ? value : old); }).catch(e => { if (active) setError(String(e)); }); }, 1000); return () => { active = false; window.clearInterval(timer); }; }, [run?.id, run?.state]);
   async function act(work: () => Promise<ExperimentRun>) { setBusy(true); setError(null); try { const next = await work(); setRun(next); setMetrics(null); setMetricsError(null); setRuns(await listExperimentRuns(plan.id!)); } catch (e) { setError(String(e)); if (run) { try { setRun(await fetchExperimentRun(run.id)); } catch { /* Keep original error. */ } } } finally { setBusy(false); setConfirmStart(false); } }
@@ -47,9 +48,9 @@ export function ExperimentRunPanel({ plan }: { plan: ExperimentPlan }) {
       {["ready", "running", "paused", "pausing"].includes(run.state) && <button disabled={busy} onClick={() => void act(() => controlExperimentRun(run.id, "cancelled", run.revision))}>Cancel batch</button>}
       {["completed", "cancelled", "stopped"].includes(run.state) && <button onClick={() => { setRun(null); setRunId(crypto.randomUUID()); }}>Prepare another run</button>}
       {run.report && <TournamentStandings report={run.report} />}
-      <div className="comparison-metrics-controls"><button disabled={metricsBusy} onClick={() => void loadMetrics()}>{metricsBusy ? "Loading metrics…" : metrics ? "Refresh comparison metrics" : "Load comparison metrics"}</button><small>Metrics are read from this run’s saved results and accepted-move metadata. Loading them makes no model or provider calls.</small></div>
+      <div className="comparison-metrics-controls"><button disabled={metricsBusy} onClick={() => void loadMetrics()}>{metricsBusy ? "Loading metrics…" : visibleMetrics ? "Refresh comparison metrics" : "Load comparison metrics"}</button><small>Metrics are read from this run’s saved results and accepted-move metadata. Loading them makes no model or provider calls.</small></div>
       {metricsError && <p role="alert">{metricsError}</p>}
-      {metrics && <ComparisonMetrics data={metrics} currentRevision={run.revision} />}
+      {visibleMetrics && <ComparisonMetrics data={visibleMetrics} currentRevision={run.revision} />}
       <div className="lab-table"><table><thead><tr><th>Game</th><th>Status</th><th>Result</th></tr></thead><tbody>{run.jobs.map(j => <tr key={j.id}><td>{j.has_game ? <a href={`/games/${j.id}`} target="_blank" rel="noreferrer">Game {j.number}</a> : `Game ${j.number}`}</td><td>{j.state === "leased" ? "Preparing / playing" : j.state === "blocked" ? "Not played · prior series unresolved" : j.state}</td><td>{j.result ?? "—"}</td></tr>)}</tbody></table></div>
     </>}
   </section>;
