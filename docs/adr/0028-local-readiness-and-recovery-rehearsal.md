@@ -59,3 +59,9 @@ Production tracing/collectors, alert destinations/thresholds, backup storage, re
 identity/roles and rollout need the existing decisions. Stage 8B remains open until
 those deliverables and production acceptance are complete. No schema or protocol
 breaking change is introduced; existing health/game/event responses remain compatible.
+
+## References
+
+Native backup/restore semantics were checked against PostgreSQL 17 documentation:
+https://www.postgresql.org/docs/17/app-pgdump.html
+https://www.postgresql.org/docs/17/app-pgrestore.html
