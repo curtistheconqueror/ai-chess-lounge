@@ -385,3 +385,8 @@ and explicitly skipped, while local Stockfish16 measurement succeeded. Artifact
 cleanup checks passed; no hosted capacity claim. Native restore evidence remains
 in the artifact. Desktop/phone screenshots inspected with no layout blocker found.
 This documentation follow-up receives a separate current-head CI verification.
+
+Read-only review prompted an 8C correction: move startup under its cleanup guard,
+bound fixture regression runs to20 seconds, and label persisted move/event agreement
+as an invariant rather than a measured duplicate-submission rate. Declare Linux
+resource units explicitly. These changes require a new source-head full CI check.
