@@ -45,6 +45,7 @@ from .models import (
     CreateGameRequest,
     GameAnalysis,
     GameSnapshot,
+    GameStatus,
     MatchEvent,
     MatchState,
     OpponentKind,
@@ -344,8 +345,56 @@ class GameManager:
             await self.broadcast(game, now=now)
             return snapshot
 
-    async def resign(self, game_id: str, color: str = "white") -> GameSnapshot:
+    @staticmethod
+    def _human_resign_color(game: GameSession, color: str | None) -> str:
+        if color is None:
+            humans = [side for side in ("white", "black") if game.player_for_color(side).is_human]
+            color = humans[0] if len(humans) == 1 else ("white" if game.board.turn else "black")
+        if color not in {"white", "black"} or not game.player_for_color(color).is_human:
+            raise MoveRejected("Only a human seat may resign through this control.")
+        return color
+
+    async def resign(
+        self, game_id: str, color: str | None = None, position_version: int | None = None
+    ) -> GameSnapshot:
+        # Validate before interrupting a paid/in-flight agent request.
+        current = await self.get(game_id)
+        color = self._human_resign_color(current, color)
+        if position_version is not None and current.version != position_version:
+            raise StalePosition("The position changed. Refresh before resigning.")
+        if current.status is not GameStatus.ACTIVE:
+            raise MoveRejected("The game is not active.")
         self._cancel_agent_runner(game_id)
+        try:
+            async with self._game_locks[game_id]:
+                game = deepcopy(await self._reload(game_id))
+                self._human_resign_color(game, color)
+                expected_revision = game.revision
+                now = self._clock()
+                if await self._expire_locked(game, now, expected_revision=expected_revision):
+                    raise ClockExpired(f"{game.timed_out_by.title()} lost on time.")
+                if position_version is not None and game.version != position_version:
+                    raise StalePosition("The position changed. Refresh before resigning.")
+                game.resign(color, now=now)
+                events = [
+                    game.event(
+                        "match.resigned",
+                        {"color": color, "result": game.result, **self._clock_payload(game, now)},
+                        now=now,
+                    ),
+                    game.event("match.completed", {"result": game.result}, now=now),
+                ]
+                await self._record_action(game, events, expected_revision)
+                self._cancel_timeout(game_id)
+                await self.broadcast(game, now=now)
+                return game.snapshot(now=now)
+        finally:
+            # A concurrent move can invalidate the request after preflight.
+            self._schedule_agent_runner(self.games[game_id])
+
+    async def claim_draw(
+        self, game_id: str, position_version: int, intended_move: str | None = None
+    ) -> GameSnapshot:
         await self.get(game_id)
         async with self._game_locks[game_id]:
             game = deepcopy(await self._reload(game_id))
@@ -353,13 +402,17 @@ class GameManager:
             now = self._clock()
             if await self._expire_locked(game, now, expected_revision=expected_revision):
                 raise ClockExpired(f"{game.timed_out_by.title()} lost on time.")
-            game.resign(color, now=now)
+            if game.version != position_version:
+                raise StalePosition("The position changed. Refresh before claiming a draw.")
+            color = "white" if game.board.turn else "black"
+            game.claim_draw(intended_move, now=now)
             events = [
                 game.event(
-                    "match.resigned",
+                    "match.draw_claimed",
                     {
                         "color": color,
-                        "result": game.result,
+                        "reason": game.draw_reason,
+                        "intended_move": intended_move,
                         **self._clock_payload(game, now),
                     },
                     now=now,
@@ -368,9 +421,9 @@ class GameManager:
             ]
             await self._record_action(game, events, expected_revision)
             self._cancel_timeout(game_id)
-            snapshot = game.snapshot(now=now)
+            self._cancel_agent_runner(game_id)
             await self.broadcast(game, now=now)
-            return snapshot
+            return game.snapshot(now=now)
 
     async def pause(self, game_id: str) -> GameSnapshot:
         self._cancel_agent_runner(game_id)

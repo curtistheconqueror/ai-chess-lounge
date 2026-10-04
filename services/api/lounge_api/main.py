@@ -19,11 +19,13 @@ from .manager import AnalysisSuperseded, GameManager, GameNotFound
 from .models import (
     AdjudicateRequest,
     CreateGameRequest,
+    DrawClaimRequest,
     GameAnalysis,
     GameSnapshot,
     HealthResponse,
     MatchEvent,
     MoveRequest,
+    ResignRequest,
     RunnerPairingClaim,
     RunnerPairingCreate,
     RunnerPairingResponse,
@@ -284,17 +286,31 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="Concurrent match update.") from exc
 
     @application.post("/api/games/{game_id}/resign", response_model=GameSnapshot)
-    async def resign_game(game_id: str) -> GameSnapshot:
+    async def resign_game(game_id: str, request: ResignRequest | None = None) -> GameSnapshot:
         try:
-            return await active_manager.resign(game_id)
+            request = request or ResignRequest()
+            return await active_manager.resign(game_id, request.color, request.position_version)
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
-        except ClockExpired as exc:
+        except (ClockExpired, StalePosition) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except MoveRejected as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except ConcurrentGameUpdate as exc:
             raise HTTPException(status_code=409, detail="Concurrent match update.") from exc
+
+    @application.post("/api/games/{game_id}/claim-draw", response_model=GameSnapshot)
+    async def claim_draw(game_id: str, request: DrawClaimRequest) -> GameSnapshot:
+        try:
+            return await active_manager.claim_draw(
+                game_id, request.position_version, request.intended_move
+            )
+        except GameNotFound as exc:
+            raise HTTPException(status_code=404, detail="Game not found.") from exc
+        except (ClockExpired, StalePosition, ConcurrentGameUpdate) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except MoveRejected as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     async def lifecycle_action(action, game_id: str) -> GameSnapshot:
         try:

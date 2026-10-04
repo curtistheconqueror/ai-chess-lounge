@@ -15,7 +15,6 @@ from decimal import Decimal
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
-import anyio
 import httpx
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
@@ -455,14 +454,11 @@ class RemoteRunnerBroker:
                 try:
                     done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                 finally:
-                    # ASGI cancellation can interrupt the wait itself. Drain both
-                    # children even then, without a second cancellation interrupting
-                    # cleanup or losing the original cancellation scope identity.
-                    with anyio.CancelScope(shield=True):
-                        for task in tasks:
-                            if not task.done():
-                                task.cancel()
-                        await asyncio.gather(*tasks, return_exceptions=True)
+                    # ASGI servers can cancel an asyncio task more than once while
+                    # shutdown is unwinding. An AnyIO shield does not mask direct
+                    # Task.cancel() calls, so keep the gather shielded and drain it
+                    # even if another cancellation arrives during cleanup.
+                    await self._cancel_and_drain(tasks)
                 if receive_task in done:
                     message = receive_task.result()
                     await self._handle_socket_message(websocket, runner_token, message)
@@ -483,6 +479,23 @@ class RemoteRunnerBroker:
             return
         finally:
             self._connected.discard(session.session_id)
+
+    @staticmethod
+    async def _cancel_and_drain(tasks: set[asyncio.Task]) -> None:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        cleanup = asyncio.gather(*tasks, return_exceptions=True)
+        cancelled_during_cleanup = False
+        while not cleanup.done():
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                cancelled_during_cleanup = True
+        # Consume gather's result so exceptions raised by either child are observed.
+        cleanup.result()
+        if cancelled_during_cleanup:
+            raise asyncio.CancelledError
 
     async def _handle_socket_message(
         self,

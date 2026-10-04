@@ -44,7 +44,7 @@ from .models import (
 from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0006_runner_trust"
+SCHEMA_REVISION = "0007_human_draws"
 
 
 class ConcurrentGameUpdate(RuntimeError):
@@ -83,6 +83,7 @@ class MatchRow(Base):
     revision: Mapped[int] = mapped_column(Integer, nullable=False)
     generation: Mapped[int] = mapped_column(Integer, nullable=False)
     event_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    draw_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
     resigned_by: Mapped[str | None] = mapped_column(String(5), nullable=True)
     adjudicated_result: Mapped[str | None] = mapped_column(String(7), nullable=True)
     engine_summary: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
@@ -927,6 +928,7 @@ class DatabaseStore:
             "generation": game.generation,
             "event_sequence": game.event_sequence,
             "resigned_by": game.resigned_by,
+            "draw_reason": game.draw_reason,
             "adjudicated_result": game.adjudicated_result,
             "engine_summary": (
                 game.engine_summary.model_dump(mode="json") if game.engine_summary else None
@@ -1043,6 +1045,7 @@ class DatabaseStore:
             created_at=_utc(row.created_at),
             updated_at=_utc(row.updated_at),
             resigned_by=row.resigned_by,
+            draw_reason=row.draw_reason,
             adjudicated_result=row.adjudicated_result,
             engine_summary=(
                 EngineSummary.model_validate(row.engine_summary) if row.engine_summary else None
