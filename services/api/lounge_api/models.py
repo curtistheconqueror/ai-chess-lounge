@@ -11,6 +11,7 @@ from .player_protocol import (
     EffortLevel,
     PlayerConfiguration,
     PlayerMoveMetadata,
+    UsageMetrics,
 )
 from .player_protocol import (
     MoveProposal as PlayerMoveProposal,
@@ -61,6 +62,8 @@ class CreateGameRequest(BaseModel):
 class MoveRequest(BaseModel):
     move: str = Field(min_length=4, max_length=5)
     position_version: int = Field(ge=0)
+    consultation_id: str | None = Field(default=None, max_length=120)
+    consultation_revision: int | None = Field(default=None, ge=0)
 
     @field_validator("move")
     @classmethod
@@ -81,6 +84,32 @@ class DrawClaimRequest(BaseModel):
 class SeatTakeoverRequest(BaseModel):
     player: PlayerConfiguration
     expected_revision: int = Field(ge=0)
+
+
+class ConsultationRequest(BaseModel):
+    advisor: PlayerConfiguration
+    expected_revision: int = Field(ge=0)
+
+
+class Consultation(BaseModel):
+    id: str
+    color: Literal["white", "black"]
+    advisor: PlayerConfiguration
+    position_version: int
+    revision: int
+    after_ply: int
+    status: Literal["pending", "ready", "failed", "cancelled", "stale", "played"]
+    timestamp: str
+    deadline_at: str
+    move: str | None = None
+    san: str | None = None
+    plan: str | None = None
+    threat: str | None = None
+    confidence: float | None = None
+    usage: UsageMetrics | None = None
+    latency_ms: int | None = None
+    attempts: int = 0
+    error: str | None = None
 
 
 class LifecycleRequest(BaseModel):
@@ -320,6 +349,7 @@ class GameSnapshot(BaseModel):
     draw_claim_moves: list[str] = Field(default_factory=list)
     draw_reason: str | None = None
     seat_history: list[SeatChange] = Field(default_factory=list)
+    consultations: list[Consultation] = Field(default_factory=list)
     opponent: OpponentKind
     engine: EngineSummary | None
     white_player: PlayerConfiguration

@@ -592,7 +592,7 @@ credential reaches the Lounge server from the subscription bridge.
 | --- | --- |
 | 6A Human seats | Implemented: desktop drag/mobile tap, both-color promotion, versioned resign/draw claims, clocks and reconnect. Negotiated draw offers remain deferred; see STAGE_6_HUMAN_PLAY.md. |
 | 6B Takeover | Implemented: confirmed paused seat changes, saved history/PGN, original-runner restoration and stale-result fencing; see STAGE_6_HUMAN_PLAY.md. |
-| 6C Consultation | AI suggestion card where only the human may submit the final move |
+| 6C Consultation | Implemented: persisted position-bound adviser suggestions, public usage/plan card, human confirmation, cancellation and PGN assistance disclosure. Remote advisers await purpose-scoped authorization. |
 | 6D Permissions | Owner, player, spectator, moderator roles and private invitations |
 
 **Exit gate:** Human-vs-model, human-vs-Stockfish, takeover, and consultation games

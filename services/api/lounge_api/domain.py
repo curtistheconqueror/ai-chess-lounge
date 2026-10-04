@@ -10,6 +10,7 @@ import chess.pgn
 
 from .models import (
     ClockSnapshot,
+    Consultation,
     EngineSummary,
     GameSnapshot,
     GameStatus,
@@ -87,6 +88,7 @@ class GameSession:
     white_player: PlayerConfiguration | None = None
     black_player: PlayerConfiguration | None = None
     seat_history: list[SeatChange] = field(default_factory=list)
+    consultations: list[Consultation] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.white_remaining_ms is None:
@@ -321,6 +323,7 @@ class GameSession:
         self.board.reset()
         self.moves.clear()
         self.seat_history.clear()
+        self.consultations.clear()
         self.resigned_by = None
         self.draw_reason = None
         self.adjudicated_result = None
@@ -527,8 +530,38 @@ class GameSession:
                 )
                 node = nodes[change.after_ply]
                 node.comment = f"{node.comment} {annotation}".strip()
+        if self.consultations:
+            game.headers["Assistance"] = "Human-AI Team exhibition"
+            game.headers["Consultations"] = str(len(self.consultations))
+            nodes = [game, *game.mainline()]
+            for advice in self.consultations:
+                text = (
+                    (
+                        f"Consultation ({advice.color}): {advice.advisor.display_name}; "
+                        f"{advice.advisor.provider}/{advice.advisor.model}; "
+                        f"{advice.advisor.effort or 'default'}; {advice.advisor.division.value}; "
+                        f"suggested {advice.san or 'no published move'}"
+                    )
+                    .replace("{", "(")
+                    .replace("}", ")")
+                    .replace("\n", " ")
+                )
+                node = nodes[advice.after_ply]
+                node.comment = f"{node.comment} {text}".strip()
         game.headers["Result"] = self.result
         return str(game)
+
+    def consultation_snapshots(self, now: datetime) -> list[Consultation]:
+        records = []
+        for item in self.consultations:
+            stale = item.status in {"pending", "ready"} and (
+                item.revision != self.revision
+                or item.position_version != self.version
+                or self.lifecycle is not MatchState.RUNNING
+                or (item.status == "pending" and datetime.fromisoformat(item.deadline_at) <= now)
+            )
+            records.append(item.model_copy(update={"status": "stale"}) if stale else item)
+        return records
 
     def snapshot(self, *, now: datetime | None = None) -> GameSnapshot:
         snapshot_time = self._normalize_now(now)
@@ -572,6 +605,7 @@ class GameSession:
             draw_claim_moves=draw_claim_moves,
             draw_reason=self.draw_reason,
             seat_history=list(self.seat_history),
+            consultations=self.consultation_snapshots(snapshot_time),
             opponent=self.opponent,
             engine=self.engine_summary,
             white_player=self.player_for_color("white"),

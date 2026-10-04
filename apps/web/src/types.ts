@@ -164,6 +164,15 @@ export interface ClockSnapshot {
   timed_out_by: "white" | "black" | null;
 }
 
+export interface Consultation {
+  id: string; color: "white" | "black"; advisor: PlayerConfiguration;
+  position_version: number; revision: number; after_ply: number;
+  status: "pending" | "ready" | "failed" | "cancelled" | "stale" | "played";
+  timestamp: string; deadline_at: string; move: string | null; san: string | null;
+  plan: string | null; threat: string | null; confidence: number | null;
+  usage: UsageMetrics | null; latency_ms: number | null; attempts: number; error: string | null;
+}
+
 export interface SeatChange {
   color: "white" | "black";
   previous_player: PlayerConfiguration;
@@ -205,6 +214,7 @@ export interface GameSnapshot {
   draw_claim_moves: string[];
   draw_reason: string | null;
   seat_history: SeatChange[];
+  consultations: Consultation[];
   opponent: OpponentKind;
   engine: EngineSummary | null;
   white_player: PlayerConfiguration;

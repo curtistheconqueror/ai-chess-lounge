@@ -846,3 +846,57 @@ test("a concurrent lifecycle change dismisses a stale takeover dialog", async ({
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(page.getByRole("button", { name: "Pause match", exact: true })).toBeVisible();
 });
+
+test("human consultation suggests without moving and needs confirmation", async ({ page }, testInfo) => {
+  test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Consultation on desktop and phone.");
+  await page.getByLabel("Black seat").selectOption("human");
+  const created = page.waitForResponse(r => r.url().endsWith("/api/games") && r.request().method() === "POST");
+  await page.getByRole("button", { name: "New match", exact: true }).click();
+  await created;
+  await page.getByLabel("Adviser model").selectOption("scripted:deterministic-v1");
+  await page.getByRole("button", { name: "Request suggestion", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review suggested move", exact: true })).toBeVisible();
+  const url = `/api/games/${page.url().split("/").pop()}`;
+  const advice = await (await page.request.get(url)).json();
+  expect(advice.moves).toHaveLength(0);
+  expect(advice.consultations[0].status).toBe("ready");
+  expect(advice.pgn).toContain('Human-AI Team exhibition');
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Review suggested move", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Review suggested move", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath(`consultation-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
+  await page.getByRole("button", { name: "Review suggested move", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm suggested move", exact: true }).click();
+  await expect(page.locator(".move-row").first()).toBeVisible();
+  const played = await (await page.request.get(url)).json();
+  expect(played.moves).toHaveLength(1);
+  expect(played.moves[0].actor).toBe("human:white");
+  expect(played.consultations[0].status).toBe("played");
+  await page.getByRole("button", { name: "Request suggestion", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review suggested move", exact: true })).toBeVisible();
+  const black = await (await page.request.get(url)).json();
+  expect(black.consultations.at(-1).color).toBe("black");
+  expect(black.moves).toHaveLength(1);
+});
+
+test("a human can ignore advice and stale confirmation closes", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Consultation race smoke runs on desktop.");
+  await page.getByRole("button", { name: "Request suggestion", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review suggested move", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Review suggested move", exact: true }).click();
+  const url = `/api/games/${page.url().split("/").pop()}`;
+  const game = await (await page.request.get(url)).json();
+  expect((await page.request.post(url + "/pause", { data: { expected_revision: game.revision } })).ok()).toBeTruthy();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "Review suggested move", exact: true })).not.toBeVisible();
+  await page.getByRole("button", { name: "Resume match", exact: true }).click();
+  await page.getByRole("gridcell", { name: "e2 white pawn" }).click();
+  await page.getByRole("gridcell", { name: "e4 empty" }).click();
+  await expect(page.locator(".move-row").first()).toContainText("e4");
+  const result = await (await page.request.get(url)).json();
+  expect(result.consultations[0].status).toBe("stale");
+  expect(result.moves[0].uci).toBe("e2e4");
+});

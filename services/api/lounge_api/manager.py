@@ -31,6 +31,7 @@ from .adapters import (
     StockfishPlayerAdapter,
 )
 from .anthropic_adapter import AnthropicMessagesAdapter
+from .consultation import ConsultationService
 from .domain import (
     ClockExpired,
     GameSession,
@@ -145,6 +146,7 @@ class GameManager:
         self._analysis_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._worker_id = str(uuid4())
         self._closed = False
+        self.consultation = ConsultationService(self)
 
     async def start(self) -> None:
         self._closed = False
@@ -268,11 +270,18 @@ class GameManager:
         uci: str,
         position_version: int,
         idempotency_key: str | None = None,
+        *,
+        consultation_id: str | None = None,
+        consultation_revision: int | None = None,
     ) -> GameSnapshot:
         await self.get(game_id)
         agent_task: asyncio.Task[None] | None = None
         async with self._game_locks[game_id]:
             request_hash = self._move_request_hash(uci, position_version)
+            if consultation_id is not None:
+                request_hash = hashlib.sha256(
+                    f"{request_hash}|{consultation_id}|{consultation_revision}".encode()
+                ).hexdigest()
             if idempotency_key is not None:
                 replay = await self._idempotent_snapshot(
                     game_id,
@@ -289,6 +298,19 @@ class GameManager:
             side = "white" if game.board.turn is chess.WHITE else "black"
             if not game.player_for_color(side).is_human:
                 raise MoveRejected(f"The {side} seat is controlled by an automated player.")
+            if consultation_id is not None:
+                advice = next((c for c in game.consultations if c.id == consultation_id), None)
+                if (
+                    advice is None
+                    or advice.status != "ready"
+                    or advice.move != uci
+                    or advice.revision != game.revision
+                    or consultation_revision != game.revision
+                    or advice.position_version != game.version
+                    or advice.color != side
+                ):
+                    raise StalePosition("This suggestion no longer belongs to the current turn.")
+                advice.status = "played"
             move = game.apply_uci(
                 uci,
                 actor=f"human:{side}",
@@ -683,6 +705,7 @@ class GameManager:
 
     async def close(self) -> None:
         self._closed = True
+        await self.consultation.close()
         tasks = list(self._timeout_tasks.values())
         self._timeout_tasks.clear()
         tasks.extend(self._engine_retry_tasks.values())

@@ -1,50 +1,55 @@
 # AI Chess Lounge contributor pickup
 
-Updated: 2026-10-04. Read AGENTS.md, README.md, MASTER_PLAN.md and ADR 0021.
+Updated: 2026-10-04. Read AGENTS.md, README.md, MASTER_PLAN.md and ADR 0022.
 
 ## Verified baseline
 
-Stage 6A merged as PR #15 at `ac22b7b5fa7faa5ac6041b1c4a6ca7302597d5c8`.
-Immutable `pickup/stage-6a-complete` and retained `feat/stage-6a-human-controls`
-remain. Final PR CI 37176580915 and postmerge CI 37176717656 passed, including
-207 Python tests, 3 SDK tests and 20 browser tests (50 duplicate-viewport skips).
+Stage 6B merged in PR #16 at `655ce42154d59e97dd2d8db9ee0b2e8f0d3f280d`.
+Immutable pickup/stage-6b-complete and retained feat/stage-6b-seat-takeover remain.
+PR CI 37183260435 and postmerge CI 37183451633 passed: 215 Python, 3 SDK,
+23 browser tests (57 intentional duplicate-viewport skips).
 
-## Current work — Stage 6B
+## Current work — Stage 6C
 
-Contributor: `feat/stage-6b-seat-takeover`, created from the exact merge above.
-Implementation complete; publication and CI gates are in progress. Do not mark
-complete until merge and the immutable pickup checkpoint are verified.
+Contributor feat/stage-6c-consultation was created from that exact verified merge.
+Implementation complete; final CI/publication gates are in progress. Do not label
+complete until merged and the immutable pickup branch is verified.
 
-- Revision-bound, confirmed paused replacement of either human/AI seat and explicit resume.
-- Persistent seat history, original/current PGN headers and at-ply annotations; migration 0008.
-- Position/version/revision and lease fencing, including late old runner trust failures.
-- Remote runner can return to its original seat with unchanged authorization budget/expiry.
-- Player cards reset strategy/usage attribution at takeover; desktop/phone acceptance added.
-- ADR 0021 and STAGE_6_HUMAN_PLAY.md describe contracts and scope.
+- Human-turn-only adviser requests; never apply a move automatically.
+- Background advice uses bounded existing adapter policy, deadline and lease; CAS
+  rejects late results after any match revision change.
+- Human confirmation includes consultation ID/revision; manual moves remain available.
+- Migration 0009 persists advice/history; events and PGN disclose Human-AI Team assistance.
+- Configured provider/local models, Stockfish strength and deterministic practice adviser UI.
+- Cancellation, graceful shutdown recovery, deadline refresh and stale-dialog fencing.
+- Provider errors are sanitized and do not pause a human turn.
+- ADR 0022 and STAGE_6_HUMAN_PLAY.md cover contracts, recovery and boundaries.
 
-## Verification and remaining gates
+## Verification gates
 
-Local make test passes; final pytest -W error passes 215 Python tests, with 2
-environment/engine skips. Also passed: 3 SDK tests,
-Ruff format/lint and web typecheck. Targeted takeover tests cover stale requests,
-concurrent writes, old results/errors, restart/clock/PGN and runner grant retention.
-Migration upgrade/downgrade includes 0008. Production build passed. Independent
-review found a wrapped stale runner error escaping as a task exception; fixed the
-CAS recovery and added real delayed-reservation coverage. Exact-head CI (including
-PostgreSQL and desktop/phone browser smoke) is the remaining gate.
-Local Chromium is absent; browser execution is required in CI before merge.
+Sixteen consultation regressions cover no-auto-move, explicit human confirmation,
+idempotency, saved history/PGN, restart, cross-worker supersession/cancellation,
+duplicate requests, time expiry, provider retries and sanitized failures.
+Local make test/build and pytest -W error passed: 231 Python tests, 2 environment/engine
+skips, 3 SDK tests, Ruff lint/format and web typecheck. Independent backend review
+found no remaining blocker after graceful shutdown recovery was tightened. Exact-head
+CI is required before merge. Desktop/phone browser
+acceptance covers reload, review/cancel/confirm, Black advice and stale confirmation.
+Local Chromium is absent; CI supplies browser execution and visual artifacts.
 
-## Next target
+## Stop and next target
 
-Merge Stage 6B after green gates, create immutable pickup/stage-6b-complete at the
-verified merge, retain this contributor branch and update this handoff with evidence.
-Then Stage 6C: human consultation suggestions, with only the human submitting a move.
-Stage 6 has four phases (6A–6D); multiuser ownership/invitations in 6D remain final
-account/deployment work per owner direction.
+The owner explicitly requested Stage 6C be the LAST phase tonight. Stop after its
+verified merge, postmerge smoke and contributor/pickup handoff. Do not start more work.
+When the owner resumes, Stage 7A Model Lab experiment configuration is the proposed
+next target. Stage 6D account roles/invitations remain reserved for the final multiplayer
+rollout, alongside Stage 2E accounts. Stage 6 has four phases; 6A–6C are implemented.
 
 ## Boundaries
 
-Loopback operator only; no account identity or seat ownership yet. No live provider
-credits are needed for this phase. Handoffs are exhibitions and remain paused until
-explicitly resumed. Runner grants do not transfer seats, reset, renew or expand.
-Distributed runner delivery routing and negotiated draw offers remain deferred.
+Local operator only. Consultation request deadline <=30 seconds and remaining clock.
+No automatic retry after abrupt crash; cancel pending advice or wait for its original
+deadline. Graceful shutdown records cancellation only for this worker's owned requests.
+Remote runner/MCP/subscription seat grants cannot be repurposed as adviser grants;
+remote adviser authorization remains deferred. Provider budgets remain process-local.
+No live provider credits are required by the deterministic acceptance suite.

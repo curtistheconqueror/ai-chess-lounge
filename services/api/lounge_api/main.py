@@ -18,6 +18,7 @@ from .engine import EngineFailure
 from .manager import AnalysisSuperseded, GameManager, GameNotFound
 from .models import (
     AdjudicateRequest,
+    ConsultationRequest,
     CreateGameRequest,
     DrawClaimRequest,
     GameAnalysis,
@@ -266,6 +267,8 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
                 request.move,
                 request.position_version,
                 idempotency_key,
+                consultation_id=request.consultation_id,
+                consultation_revision=request.consultation_revision,
             )
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
@@ -339,6 +342,32 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             game_id,
             expected_revision=request.expected_revision if request else None,
         )
+
+    @application.post(
+        "/api/games/{game_id}/consultations", response_model=GameSnapshot, status_code=202
+    )
+    async def request_consultation(game_id: str, request: ConsultationRequest):
+        try:
+            return await active_manager.consultation.request(game_id, request)
+        except GameNotFound as exc:
+            raise HTTPException(status_code=404, detail="Game not found.") from exc
+        except (MatchTransitionRejected, StalePosition, ConcurrentGameUpdate) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except AdapterConfigurationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @application.post(
+        "/api/games/{game_id}/consultations/{advice_id}/cancel", response_model=GameSnapshot
+    )
+    async def cancel_consultation(game_id: str, advice_id: str, request: LifecycleRequest):
+        try:
+            return await active_manager.consultation.cancel(
+                game_id, advice_id, request.expected_revision
+            )
+        except GameNotFound as exc:
+            raise HTTPException(status_code=404, detail="Game not found.") from exc
+        except (MatchTransitionRejected, StalePosition, ConcurrentGameUpdate) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @application.post("/api/games/{game_id}/seats/{color}", response_model=GameSnapshot)
     async def change_seat(game_id: str, color: str, request: SeatTakeoverRequest) -> GameSnapshot:

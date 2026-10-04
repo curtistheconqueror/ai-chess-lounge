@@ -2027,3 +2027,17 @@ select {
 .seat-history ol { padding-left: 18px; }
 .seat-history li { margin-top: 8px; }
 .seat-history small { display: block; color: #aaa; }
+
+.consultation-panel { margin: 18px 0; padding: 16px; border: 1px solid #49466c; border-radius: 12px; background: linear-gradient(135deg, #151621, #0c1612); overflow-wrap: anywhere; }
+.consultation-panel h3 { margin: 0 0 8px; color: #e5c474; }
+.consultation-panel p, .consultation-panel details { font-size: 12px; line-height: 1.6; }
+.consultation-panel small { display: block; margin: 8px 0; color: #aeb8b3; font-size: 11px; line-height: 1.5; }
+.consultation-options { display: grid; gap: 10px; margin: 12px 0; }
+.consultation-options label { display: grid; gap: 6px; min-width: 0; font-size: 12px; }
+.consultation-options select { width: 100%; min-width: 0; padding: 10px; }
+.consultation-panel button { padding: 10px 14px; border: 1px solid #605784; border-radius: 8px; background: #232137; color: #f2ecff; margin: 4px 6px 4px 0; }
+.consultation-panel button:disabled { opacity: .45; cursor: not-allowed; }
+.suggestion-card { border-top: 1px solid #39364f; margin-top: 14px; padding-top: 10px; }
+.suggestion-card h4 { margin: 10px 0; font-size: 19px; color: #e5c474; }
+.consultation-panel ol { padding-left: 18px; }
+.consultation-panel li { margin: 8px 0; }

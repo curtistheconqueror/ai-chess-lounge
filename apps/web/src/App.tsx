@@ -18,6 +18,7 @@ import {
   websocketUrl,
 } from "./api";
 import { pairMoves, parseFen } from "./chess";
+import { ConsultationPanel } from "./ConsultationPanel";
 import { SeatTakeoverDialog } from "./SeatTakeoverDialog";
 import { HumanActionDialog } from "./HumanActionDialog";
 import { ChessBoard } from "./ChessBoard";
@@ -1061,6 +1062,10 @@ function App() {
             </details>}
           </section>
 
+          {game && <ConsultationPanel key={game.id} game={game} catalog={playerAdapters}
+            enabled={followingLive && connection === "live" && !busy}
+            onSnapshot={snapshot => { if (gameRef.current?.id === snapshot.id) acceptSnapshot(snapshot); }} />}
+
           <div className="runner-pairing-panel" aria-label="Remote runner pairing">
             <div className="runner-pairing-heading">
               <div>
@@ -1608,13 +1613,14 @@ function playerCardForSeat(
       ? "Manual input · server validated"
       : `${player.model} · protocol v1.0`;
   const knownCost = metadata?.usage.estimated_cost_usd;
+  const consulted = player.adapter_id === "human" && (game?.consultations ?? []).some(c => c.color === side);
   return {
     side,
     title: player.display_name,
     provider: player.provider,
     configuration,
-    division: player.division.replaceAll("_", " "),
-    cost: knownCost !== null && knownCost !== undefined
+    division: consulted ? "Human + AI Team" : player.division.replaceAll("_", " "),
+    cost: consulted ? "Advice tracked below" : knownCost !== null && knownCost !== undefined
       ? `$${knownCost.toFixed(4)}`
       : player.connection_mode === "local" || player.connection_mode === "human"
         ? "Local · $0"
