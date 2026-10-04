@@ -84,3 +84,21 @@ points; no-results are shown separately. Ratings start at 1500 with K=24 and are
 recomputed in schedule order within each assistance/clock/protocol pool. These are
 local experimental ratings, not calibrated human Elo or an established strength claim.
 See ADR 0025. Stage 7D adds metrics/uncertainty; 7E adds comparison exports.
+
+## 7D — Comparison metrics (dependent draft)
+
+A run can load or refresh comparison metrics from local records. The API is
+GET /api/experiment-runs/{id}/metrics. Metrics preserve both original plan hashes
+and include a method version, source revision and generation timestamp.
+
+The report separates completed chess score from failed/limited/cancelled games,
+agent failure events, illegal moves, timeouts, accepted-move latency and supplied
+usage/cost coverage. Unknown usage stays unknown; partial cost sums are not bills.
+Effort deltas match opponent, opening, repetition and color conditions and are
+labelled right minus left.
+
+Conditional 95% ranges use equally weighted initial-FEN opening blocks. Repeated
+colors/games at one opening do not create independent samples. Incomplete, mixed-pool,
+knockout or single-opening comparisons have no interval and display a reason. The
+independence assumption is explicit, and these ranges do not measure general
+intelligence or calibrated human strength. See ADR 0026 for the formula and limits.

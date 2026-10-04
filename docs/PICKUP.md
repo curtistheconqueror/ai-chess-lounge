@@ -40,7 +40,7 @@ CI run 37215467880 / job 111474957890 passed on published code head
 migrations, lint, types and build. Source tree matched local 50579a6 exactly.
 This final handoff is docs-only. No merge or completed pickup is claimed.
 
-## Current continuation: Stage 7B draft PR19 verified; merge approval pending
+## Current continuation: Stage 7B draft PR19 retry-test correction; current CI pending
 
 Contributor: feat/stage-7b-durable-scheduler, based on the verified Stage 7A handoff
 023f928dfa4b94dbd15a191912ee9bb8005eec0a. Stage 7A remains draft PR18; main is unchanged.
@@ -125,3 +125,45 @@ Local warning-strict 7C suite: 273 passed, 5 environment-dependent skips.
 Prior final 7C docs head 1e5b1ac passed CI 37219857364, but current corrected-head
 CI and browser acceptance must be verified separately. No runtime code changed.
 No merge, deployment or completed pickup is claimed.
+## PR19 current-head verification correction (2026-10-04)
+
+Docs-only head 62ea9f012fc79cd474df574ff5672dff8a5ec91d failed CI
+37218427567 / job 111483628735: 261 passed, 2 skipped, one retry-test failure.
+The earlier code-head success above remains historical evidence, not a green
+check for that later head. Both migrations passed; browser/SDK/build were skipped.
+
+The retry test observed engine.calls == 2 but read version 1 before the second
+move committed. Its fixed 600 ms sleep allowed only 100 ms beyond the 500 ms
+retry delay. Snapshot intentionally returns the last committed position while a
+writer owns the lock. Both engine and lease-retry tests now wait for committed
+version 2 under a five-second deadline, retaining exact attempt/move assertions.
+A 200 ms engine-response case reliably covers the old timing assumption.
+No runtime retry behavior changed. Local warning-strict suite: 260 passed,
+5 environment-dependent skips; manager tests: 15 passed; Ruff/checks passed.
+Published correction CI and browser acceptance are pending; do not call current
+PR19 green until its final head is verified. Propagate the test fix to 7C/7D.
+No merge or deployment performed.
+
+## Stage 7D comparison metrics in progress
+
+Contributor: feat/stage-7d-comparison-metrics. Based on final 7C handoff
+1e5b1acd57dddd76ac9496cfb33e0a052f273af2, with the same retry-test correction
+subsequently published to PR19/PR20. New publication must remain a dependent draft.
+
+Implemented read-only comparison metrics from stored jobs, moves and public metadata:
+chess results separated from no-results, illegal/failure/timeout events, accepted-move
+latency/retries, usage/cost coverage, and matched effort comparisons. Unknown usage
+is unknown, not zero. Exact opening FEN defines a block; repetitions/color swaps
+do not increase independent evidence. Conditional 95% Hoeffding ranges require
+complete natural-result fixed schedules, comparable pools and at least two blocks.
+Knockout, incomplete, mixed-pool or unmatched conditions suppress intervals with reasons.
+The UI explicitly loads/refreshes snapshots, discloses stale revision and assumptions,
+and contains wide tables on mobile. No provider or engine call is made by metrics.
+See ADR0026; original v1/v2 hashes remain unchanged.
+
+Local warning-strict suite: 286 passed, 3 PostgreSQL environment skips. Eleven
+metrics cases cover block dependence, interval suppression, paired effort matching,
+Black-to-move attribution, unknown versus zero cost, metadata privacy and read-only API.
+Manager regression suite: 15 passed. Type/lint/build and CI/browser evidence must
+be recorded before completion; local Chromium is unavailable. No merge/deployment.
+Next after verified 7D: Stage 7E comparison reports and export bundles.
