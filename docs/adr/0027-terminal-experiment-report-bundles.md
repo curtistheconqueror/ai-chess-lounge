@@ -28,7 +28,8 @@ Metrics must name the same run revision. This is optimistic validation, not a cl
 that the separate database sessions share one transaction snapshot.
 
 Moves are read in bounded batches and validated for ply order, legality, resulting
-FEN, final position and expected ply count. Exports cap accepted moves at 25,000 and
+FEN, final position and expected ply count. Completed chess-result jobs also require
+a completed match whose saved authoritative outcome agrees with the queue result. Exports cap accepted moves at 25,000 and
 uncompressed contents at 16 MiB. Exceeding a cap returns 413 without silently truncating
 records. The existing 512-job manifest bound also applies. Two export requests may
 build at once per API process; compression runs off the event loop. No temporary files
