@@ -58,6 +58,7 @@ def test_deterministic_schedule_color_balance_hash_and_opening():
     "change",
     [
         "illegal",
+        "null",
         "terminal",
         "duplicate",
         "unsupported",
@@ -72,6 +73,8 @@ def test_invalid_plans_rejected(client, change):
     config = configuration()
     if change == "illegal":
         config["openings"][0]["moves"] = ["e2e5"]
+    elif change == "null":
+        config["openings"][0]["moves"] = ["0000"]
     elif change == "terminal":
         config["openings"][0]["moves"] = ["f2f3", "e7e5", "g2g4", "d8h4"]
     elif change == "duplicate":
