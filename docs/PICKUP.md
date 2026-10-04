@@ -198,3 +198,21 @@ remain gates; do not treat the date as approval or promise all stages will finis
 PR19 final pickup head ade6bb27523b9fc6709dee15d3837ebf148a853d also passed
 CI 37221621195 / job 111492949368 after the evidence-only follow-up. PR19 and
 PR20 current-head statuses are green at this checkpoint. All drafts remain unmerged.
+
+## Stage 7E reports and bundles in progress
+
+Contributor: feat/stage-7e-report-bundles, based on verified final 7D handoff
+fa2e9a106bb47a5a60c083b9048b2fdebd2ae581. That final docs head passed
+CI 37222067606; PR21 remains draft and unmerged. 7E must remain dependent/draft.
+
+Implemented bounded terminal-run report ZIP, immutable manifest/hash verification,
+explicit public-data projection, exact initial-FEN PGN replay and honest no-results,
+CSV formula neutralization, per-file checksums, optimistic revision validation and
+size/move caps. Frontend comparison filters and download controls are being verified.
+Local full warning-strict suite passed 298 Python tests (3 PostgreSQL environment
+skips) before the final malformed-UCI case; final focused export suite: 13 passed.
+Ruff and 3 SDK tests pass. Browser/current-head CI remains pending.
+See ADR0027. The current code is not yet a verified phase checkpoint.
+After 7E acceptance, proceed to 8A read-only security assessment and approval-ready
+account/deployment design; do not implement security/access expansion without approval.
+DELIVERY_48H_PLAN.md remains the dated target with explicit Stage 9 scope decision.

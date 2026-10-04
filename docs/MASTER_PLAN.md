@@ -608,7 +608,7 @@ work on desktop and mobile with full audit history.
 | 7B Scheduler | Dependent draft: durable runs/jobs, shared batch concurrency, existing provider retry/rate policy, restart/resume, stop rules and cancellation; global monetary/request-rate quotas remain Stage 8 work |
 | 7C Tournaments | Dependent draft: versioned round robin/gauntlet/knockout plans, winner-dependent dispatch, honest no-result standings and division/clock/protocol-specific provisional local ratings |
 | 7D Metrics | Dependent draft: observed chess scores, structured reliability, accepted-move efficiency/usage coverage, matched effort deltas and conditional opening-block confidence ranges |
-| 7E Reports | Interactive comparisons and CSV/JSON/PGN experiment bundles |
+| 7E Reports | Dependent draft: interactive comparison filters and bounded terminal-run CSV/JSON/PGN bundles with manifest hash, checksums, privacy filtering and explicit no-results |
 
 **Exit gate:** A color-swapped, multi-opening model comparison can run to completion,
 resume after interruption, and produce a reproducible report with configuration hash.
