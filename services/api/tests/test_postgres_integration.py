@@ -110,3 +110,45 @@ def test_postgres_runner_grant_concurrency_and_revocation() -> None:
             await second.close()
 
     asyncio.run(run())
+
+
+def test_postgres_experiment_queue_claim_and_cancel_fences() -> None:
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    from lounge_api.adapters import AdapterRegistry, ScriptedPlayerAdapter
+    from lounge_api.experiment_queue import ExperimentQueue, QueueConflict
+    from lounge_api.experiments import ExperimentConfiguration, ExperimentService, SaveExperiment
+    from test_experiments import configuration
+
+    async def run():
+        assert POSTGRES_URL is not None
+        stores = [DatabaseStore(POSTGRES_URL), DatabaseStore(POSTGRES_URL)]
+        for store in stores:
+            await store.initialize()
+        queues = [ExperimentQueue(store) for store in stores]
+        try:
+            plan = await ExperimentService(
+                stores[0], AdapterRegistry([ScriptedPlayerAdapter()])
+            ).save(
+                SaveExperiment(
+                    id=uuid4(),
+                    configuration=ExperimentConfiguration.model_validate(configuration()),
+                )
+            )
+            rid = str(uuid4())
+            await queues[0].create(plan["id"], rid)
+            now = datetime.now(UTC)
+            await queues[0].transition(rid, "running", 0, now=now)
+            claims = await asyncio.gather(*(q.claim(rid, now=now) for q in queues))
+            assert sum(c is not None for c in claims) == 1
+            claim = next(c for c in claims if c)
+            await queues[1].transition(rid, "cancelled", 1, now=now)
+            with pytest.raises(QueueConflict):
+                await queues[0].finish(claim["id"], claim["lease_token"], "1-0", now=now)
+            assert all(j["state"] == "cancelled" for j in (await queues[0].snapshot(rid))["jobs"])
+        finally:
+            for store in stores:
+                await store.close()
+
+    asyncio.run(run())
