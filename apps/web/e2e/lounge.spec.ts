@@ -925,6 +925,7 @@ test("Model Lab previews and saves a color-swapped plan without launching games"
   const width = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
   expect(width.scroll).toBeLessThanOrEqual(width.client + 1);
   await page.screenshot({ path: testInfo.outputPath(`lab-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
+  await lab.getByRole("button", { name: "Create another draft", exact: true }).click();
   await lab.getByRole("textbox", { name: "Opening suite" }).fill("Bad | e2e5");
   await expect(preview).not.toBeVisible();
   await lab.getByRole("button", { name: "Preview experiment", exact: true }).click();
