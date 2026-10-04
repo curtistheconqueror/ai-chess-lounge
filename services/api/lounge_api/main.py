@@ -23,6 +23,7 @@ from .models import (
     GameAnalysis,
     GameSnapshot,
     HealthResponse,
+    LifecycleRequest,
     MatchEvent,
     MoveRequest,
     ResignRequest,
@@ -34,6 +35,7 @@ from .models import (
     RunnerSessionCredentials,
     RunnerSessionStatus,
     RunnerTurnDelivery,
+    SeatTakeoverRequest,
 )
 from .persistence import ConcurrentGameUpdate, IdempotencyConflict
 from .player_protocol import PROTOCOL_VERSION
@@ -312,9 +314,9 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         except MoveRejected as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    async def lifecycle_action(action, game_id: str) -> GameSnapshot:
+    async def lifecycle_action(action, game_id: str, **kwargs) -> GameSnapshot:
         try:
-            return await action(game_id)
+            return await action(game_id, **kwargs)
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
         except MatchTransitionRejected as exc:
@@ -323,12 +325,35 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="Concurrent match update.") from exc
 
     @application.post("/api/games/{game_id}/pause", response_model=GameSnapshot)
-    async def pause_game(game_id: str) -> GameSnapshot:
-        return await lifecycle_action(active_manager.pause, game_id)
+    async def pause_game(game_id: str, request: LifecycleRequest | None = None) -> GameSnapshot:
+        return await lifecycle_action(
+            active_manager.pause,
+            game_id,
+            expected_revision=request.expected_revision if request else None,
+        )
 
     @application.post("/api/games/{game_id}/resume", response_model=GameSnapshot)
-    async def resume_game(game_id: str) -> GameSnapshot:
-        return await lifecycle_action(active_manager.resume, game_id)
+    async def resume_game(game_id: str, request: LifecycleRequest | None = None) -> GameSnapshot:
+        return await lifecycle_action(
+            active_manager.resume,
+            game_id,
+            expected_revision=request.expected_revision if request else None,
+        )
+
+    @application.post("/api/games/{game_id}/seats/{color}", response_model=GameSnapshot)
+    async def change_seat(game_id: str, color: str, request: SeatTakeoverRequest) -> GameSnapshot:
+        if color not in {"white", "black"}:
+            raise HTTPException(status_code=422, detail="Color must be white or black.")
+        try:
+            return await active_manager.change_seat(
+                game_id, color, request.player, request.expected_revision
+            )
+        except GameNotFound as exc:
+            raise HTTPException(status_code=404, detail="Game not found.") from exc
+        except (MatchTransitionRejected, ConcurrentGameUpdate) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except AdapterConfigurationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @application.post("/api/games/{game_id}/retry-agent", response_model=GameSnapshot)
     async def retry_agent_turn(game_id: str) -> GameSnapshot:

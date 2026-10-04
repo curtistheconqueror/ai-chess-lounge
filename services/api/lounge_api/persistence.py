@@ -39,12 +39,13 @@ from .models import (
     OpponentKind,
     RunnerPairingRecord,
     RunnerSessionRecord,
+    SeatChange,
     TurnLease,
 )
 from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0007_human_draws"
+SCHEMA_REVISION = "0008_seat_history"
 
 
 class ConcurrentGameUpdate(RuntimeError):
@@ -89,6 +90,7 @@ class MatchRow(Base):
     engine_summary: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     white_player: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     black_player: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    seat_history: Mapped[list[dict[str, object]] | None] = mapped_column(JSON, nullable=True)
     turn_lease_owner: Mapped[str | None] = mapped_column(String(120), nullable=True)
     turn_lease_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
     turn_lease_position_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -593,6 +595,7 @@ class DatabaseStore:
                 or ("white" if chess.Board(match.current_fen).turn else "black") != color
             ):
                 raise RunnerTrustError("The runner turn is stale or the match is not running.")
+            self._check_runner_seat(match, runner, color)
             generation = match.generation if match else 0
             if grant is None:
                 settings = runner.player.get("settings", {})
@@ -641,9 +644,10 @@ class DatabaseStore:
         match_revision: int | None = None,
     ) -> None:
         async with self.sessions.begin() as session:
-            await self._lock_runner(session, session_id, now)
+            runner = await self._lock_runner(session, session_id, now)
             grant = await session.get(RunnerGrantRow, session_id)
             match = await session.get(MatchRow, match_id)
+            self._check_runner_seat(match, runner, color)
             self._check_grant(grant, match_id, match.generation if match else 0, color, now)
             if (
                 match is not None
@@ -656,6 +660,13 @@ class DatabaseStore:
                 )
             ):
                 raise RunnerTrustError("The runner turn is stale or the match is not running.")
+
+    @staticmethod
+    def _check_runner_seat(match: MatchRow | None, runner: RunnerSessionRow, color: str) -> None:
+        if match is not None:
+            player = match.white_player if color == "white" else match.black_player
+            if not player or player.get("player_id") != runner.player_id:
+                raise RunnerTrustError("This runner no longer controls the seat.")
 
     @staticmethod
     def _grant_view(grant: RunnerGrantRow) -> dict[str, object]:
@@ -939,6 +950,7 @@ class DatabaseStore:
             "black_player": (
                 game.black_player.model_dump(mode="json") if game.black_player else None
             ),
+            "seat_history": [change.model_dump(mode="json") for change in game.seat_history],
             "created_at": game.created_at,
             "updated_at": game.updated_at,
         }
@@ -1050,6 +1062,7 @@ class DatabaseStore:
             engine_summary=(
                 EngineSummary.model_validate(row.engine_summary) if row.engine_summary else None
             ),
+            seat_history=[SeatChange.model_validate(change) for change in (row.seat_history or [])],
             white_remaining_ms=row.white_remaining_ms,
             black_remaining_ms=row.black_remaining_ms,
             turn_started_at=(

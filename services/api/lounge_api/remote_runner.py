@@ -271,7 +271,14 @@ class RemoteRunnerBroker:
         except RunnerTrustError as exc:
             raise RunnerAuthenticationError(str(exc)) from exc
 
-    async def validate_new_match(self, player: PlayerConfiguration) -> None:
+    async def validate_new_match(
+        self,
+        player: PlayerConfiguration,
+        *,
+        match_id: str | None = None,
+        generation: int = 0,
+        color: str | None = None,
+    ) -> None:
         session = await self.store.load_active_runner_session_for_player(
             player.player_id, now=self._clock()
         )
@@ -281,9 +288,16 @@ class RemoteRunnerBroker:
             or not hmac.compare_digest(session.issuer_digest, self._issuer_digest())
         ):
             raise AdapterConfigurationError("Pair an active runner with this exact profile first.")
-        if await self.store.runner_grant(session.session_id) is not None:
+        grant = await self.store.runner_grant(session.session_id)
+        if grant is not None and (
+            grant["match_id"] != match_id
+            or grant["generation"] != generation
+            or grant["color"] != color
+            or datetime.fromisoformat(grant["expires_at"]) <= self._clock()
+            or grant["turns_dispatched"] >= grant["max_turns"]
+        ):
             raise AdapterConfigurationError(
-                "This runner is bound to a match. Pair again for a new game."
+                "Pair a new runner, or return an authorized runner to its original match and seat."
             )
 
     async def request_turn(

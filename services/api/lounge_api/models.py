@@ -78,6 +78,24 @@ class DrawClaimRequest(BaseModel):
     intended_move: str | None = Field(default=None, min_length=4, max_length=5)
 
 
+class SeatTakeoverRequest(BaseModel):
+    player: PlayerConfiguration
+    expected_revision: int = Field(ge=0)
+
+
+class LifecycleRequest(BaseModel):
+    expected_revision: int = Field(ge=0)
+
+
+class SeatChange(BaseModel):
+    color: Literal["white", "black"]
+    previous_player: PlayerConfiguration
+    player: PlayerConfiguration
+    after_ply: int
+    position_version: int
+    timestamp: str
+
+
 class AdjudicateRequest(BaseModel):
     result: str
 
@@ -301,6 +319,7 @@ class GameSnapshot(BaseModel):
     can_claim_draw: bool = False
     draw_claim_moves: list[str] = Field(default_factory=list)
     draw_reason: str | None = None
+    seat_history: list[SeatChange] = Field(default_factory=list)
     opponent: OpponentKind
     engine: EngineSummary | None
     white_player: PlayerConfiguration
