@@ -17,6 +17,7 @@ from . import __version__
 from .adapters import AdapterConfigurationError
 from .domain import ClockExpired, MatchTransitionRejected, MoveRejected, StalePosition
 from .engine import EngineFailure
+from .experiment_metrics import ExperimentMetrics
 from .experiment_queue import QueueConflict
 from .experiment_worker import ExperimentWorker
 from .experiments import ExperimentService, PlanConfiguration, SaveExperiment
@@ -148,6 +149,13 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             return await batch_worker.queue.snapshot(run_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Run not found.") from exc
+
+    @application.get("/api/experiment-runs/{run_id}/metrics")
+    async def experiment_metrics(run_id: str):
+        try:
+            return await ExperimentMetrics(active_manager.store).get(run_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Run not found.") from None
 
     @application.post("/api/experiment-runs/{run_id}/control")
     async def control_experiment_run(run_id: str, request: ControlExperimentRun):
