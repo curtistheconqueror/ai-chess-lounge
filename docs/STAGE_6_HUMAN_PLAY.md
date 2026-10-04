@@ -81,4 +81,43 @@ expiry or budget; a fresh pairing is needed for a different seat/match or reset.
 Regression coverage includes revision races, late old proposals and trust errors,
 clock/history recovery, PGN round-trip, runner-grant preservation, schema rollback,
 and desktop/phone takeover, cancellation, restoration and stale-dialog dismissal.
-Next: Stage 6C, human consultation with a human making the final move.
+Consultation is described below.
+
+## Stage 6C — human consultation
+
+During a running human turn, select an **Adviser model** and supported effort (or
+Stockfish target strength), then **Request suggestion**. The human clock keeps
+running. Advice never moves a piece automatically: **Review suggested move** opens
+confirmation; **Confirm suggested move** submits your human move. You may cancel
+that dialog or ignore the advice and move directly on the board.
+
+The card shows the adviser, suggested SAN move, public plan/threat, latency and any
+reported tokens/cost. History and PGN disclose Human-AI Team exhibition assistance,
+including requests whose advice was not used. Advice survives reload, while stale
+results cannot be played after another action changes the match. **Cancel consultation**
+stops a pending request without pausing the match. Provider errors leave you able to play.
+
+API: `POST /api/games/{id}/consultations` accepts `{advisor, expected_revision}` and
+returns 202 with a pending snapshot; normal WebSocket snapshots deliver the result.
+`POST /api/games/{id}/consultations/{advice_id}/cancel` accepts `{expected_revision}`.
+The existing `/moves` endpoint accepts optional `consultation_id` and
+`consultation_revision` for explicit use, alongside `move` and `position_version`.
+The server rechecks the stored suggestion and current turn before applying it.
+
+Apply migration `0009_consultations` before serving an existing database. Advice is
+bounded by the remaining clock and a maximum 30-second request deadline. Graceful
+shutdown cancels owned work; abrupt crashes leave no automatic billable retries.
+Cancel a leftover pending request or wait until its original deadline to request again.
+The snapshot renders expired/superseded pending advice stale; the browser refreshes
+at the deadline. Reset clears the current consultation projection, not past audit events.
+
+Available advisers: Stockfish, configured OpenAI/Anthropic/Google/OpenRouter providers,
+Ollama/vLLM, and a credential-free deterministic practice adviser. The practice adviser
+is a test harness, not a frontier model. Remote runner and subscription seats continue
+to play games; adviser use is deferred until separate consultation authorization exists.
+Only supported model/effort choices from the existing capability catalog are offered.
+No private reasoning or raw provider errors are stored or displayed.
+
+Stage 6C completes this evening's work. Stage 6D account roles/private invitations
+remain deferred to the final multiplayer rollout; the next implementation target is
+Stage 7A Model Lab experiment configuration when the owner resumes.
