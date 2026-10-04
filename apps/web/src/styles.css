@@ -2071,3 +2071,7 @@ select {
 .model-lab button:focus-visible { outline: 2px solid #e8c778; outline-offset: 3px; }
 .model-lab .primary-button { color: #171a13; background: linear-gradient(110deg, #efd58e, #bb8d39); border-color: #bb8d39; font-weight: 700; }
 .model-lab fieldset[hidden] { display: none; }
+
+.lab-run { margin: 1.5rem 0; padding: 1rem; border: 1px solid #736038; border-radius: 12px; }
+.lab-run-confirm { padding: 1rem; margin: 1rem 0; border: 1px solid #af8c4d; border-radius: 8px; background: #302a1b; }
+.lab-run a { color: #e8c778; }

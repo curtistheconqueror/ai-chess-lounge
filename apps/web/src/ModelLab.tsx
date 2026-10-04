@@ -1,3 +1,4 @@
+import { ExperimentRunPanel } from "./ExperimentRunPanel";
 import { useEffect, useState } from "react";
 import { fetchExperiment, listExperiments, previewExperiment, saveExperiment } from "./api";
 import type { EffortLevel, PlayerAdapterCatalog, PlayerConfiguration } from "./types";
@@ -80,6 +81,7 @@ export function ModelLab({ catalog }: { catalog: PlayerAdapterCatalog | null }) 
     </fieldset>
     {error && <p role="alert">{error}</p>}
     {plan && <article className="lab-preview" aria-label="Experiment preview"><h3>{plan.configuration.name} · {plan.game_count} planned games</h3><p>{plan.id ? "Saved draft" : "Unsaved preview"} · {plan.exhibition ? "Mixed-division exhibition" : "Single assistance division"}</p><code>{plan.configuration_hash}</code>{plan.warnings.map(w => <p key={w}>{w}</p>)}<button disabled={busy || !!plan.id} onClick={() => void save()}>{plan.id ? "Plan saved" : "Save draft plan"}</button><div className="lab-table"><table><thead><tr><th>Game</th><th>White</th><th>Black</th><th>Opening</th><th>Repeat</th></tr></thead><tbody>{plan.schedule.map(g => <tr key={g.number}><td>{g.number}</td><td>{g.white}</td><td>{g.black}</td><td>{g.opening}</td><td>{g.repetition}</td></tr>)}</tbody></table></div></article>}
+    {plan?.id && <ExperimentRunPanel key={plan.id} plan={plan} />}
     <details><summary>Saved experiments · {saved.length}</summary>{saved.map(s => <button key={s.id} disabled={busy} onClick={() => void load(s.id)}>{s.name} · {s.game_count} games</button>)}<div><button disabled={busy || offset === 0} onClick={() => setOffset(Math.max(0, offset - 50))}>Previous plans</button><button disabled={busy || saved.length < 50} onClick={() => setOffset(offset + 50)}>More plans</button></div></details>
   </section>;
 }

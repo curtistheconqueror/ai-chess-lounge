@@ -199,3 +199,16 @@ export function listExperiments(offset = 0) {
 export function fetchExperiment(id: string) {
   return request<import("./ModelLab").ExperimentPlan>(`/api/experiments/${encodeURIComponent(id)}`);
 }
+
+export function createExperimentRun(experimentId: string, id: string, concurrency: number) {
+  return request<import("./ExperimentRunPanel").ExperimentRun>(`/api/experiments/${encodeURIComponent(experimentId)}/runs`, { method: "POST", body: JSON.stringify({ id, concurrency }) });
+}
+export function fetchExperimentRun(id: string) {
+  return request<import("./ExperimentRunPanel").ExperimentRun>(`/api/experiment-runs/${encodeURIComponent(id)}`);
+}
+export function listExperimentRuns(experimentId: string) {
+  return request<{ id: string; state: string }[]>(`/api/experiments/${encodeURIComponent(experimentId)}/runs`);
+}
+export function controlExperimentRun(id: string, target: "running" | "paused" | "cancelled", expected_revision: number, allow_provider_calls = false) {
+  return request<import("./ExperimentRunPanel").ExperimentRun>(`/api/experiment-runs/${encodeURIComponent(id)}/control`, { method: "POST", body: JSON.stringify({ target, expected_revision, allow_provider_calls }) });
+}
