@@ -21,6 +21,8 @@ slice** and **Stage 5A–5E remote-runner transport, SDKs, MCP, subscription bri
 resignation confirmation, draw claims, and reconnect input fencing; see
 [human play](docs/STAGE_6_HUMAN_PLAY.md). **Stage 6B takeover** adds paused human/AI
 seat changes, restoration, persisted history and annotated PGN, with old-turn fencing.
+**Stage 6C consultation** adds adviser suggestions for human turns, separate move
+confirmation, cancellation, and disclosed Human-AI Team history without automatic moves.
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
 writers; Fischer clocks, deadlines, pause/resume, and timeout results are owned by the
