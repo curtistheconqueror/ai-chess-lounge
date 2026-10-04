@@ -54,10 +54,12 @@ fence late move commits. Uncertain in-flight requests after a crash fail without
 redispatch; only explicit batch pauses resume. Provider failures never auto-retry
 through batch recovery. No live provider spending was used for acceptance.
 
-Initial local gate passed 257 Python tests (3 environment skips), 3 SDK tests,
-format/lint/types and production build. Added crash/reclaim and exact-lease regression
-coverage after independent review; final gate and browser CI evidence are pending.
-Do not claim this phase verified until those results replace this paragraph.
+Final local gate: make test passed 260 Python tests (3 PostgreSQL environment skips),
+3 SDK tests, Ruff and TypeScript. pytest -W error separately passed 260/3; production
+build passed. Fifteen queue regressions include two-worker claims/cancellation,
+lease replacement, explicit pause/restart, uncertain dispatch and failed-provider
+recovery, authorization, deadlines and exact ply caps. Independent review found and
+fixed restart redispatch and stale-claim move acceptance. Browser CI remains pending.
 
 ## Next target and limits
 
