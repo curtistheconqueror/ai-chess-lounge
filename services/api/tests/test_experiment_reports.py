@@ -19,7 +19,7 @@ from lounge_api.experiment_reports import (
 from lounge_api.experiments import canonical_hash
 from lounge_api.manager import GameManager
 from lounge_api.models import CreateGameRequest
-from lounge_api.persistence import ExperimentRow, MoveRow
+from lounge_api.persistence import ExperimentRow, MatchRow, MoveRow
 from lounge_api.player_protocol import PlayerConfiguration, PlayerMoveMetadata
 from sqlalchemy import select
 from test_experiment_metrics import make_run
@@ -241,7 +241,7 @@ def test_bundle_http_requires_terminal_run_and_handles_unplayed_jobs(client):
         )
 
 
-@pytest.mark.parametrize("corruption", ["manifest", "position", "uci"])
+@pytest.mark.parametrize("corruption", ["manifest", "position", "uci", "lifecycle", "result"])
 def test_inconsistent_saved_content_is_not_packaged(tmp_path, corruption):
     async def run():
         manager, plan, _, rid = await terminal_run(tmp_path)
@@ -250,6 +250,12 @@ def test_inconsistent_saved_content_is_not_packaged(tmp_path, corruption):
                 if corruption == "manifest":
                     row = await session.get(ExperimentRow, plan["id"])
                     row.document = {**row.document, "game_count": 100}
+                elif corruption in {"lifecycle", "result"}:
+                    row = await session.scalar(select(MatchRow))
+                    if corruption == "lifecycle":
+                        row.lifecycle = "paused"
+                    else:
+                        row.timed_out_by = "black"
                 else:
                     row = await session.scalar(select(MoveRow).order_by(MoveRow.id))
                     if corruption == "uci":
