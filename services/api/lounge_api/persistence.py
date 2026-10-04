@@ -32,6 +32,7 @@ from sqlalchemy.pool import StaticPool
 
 from .domain import GameSession
 from .models import (
+    Consultation,
     EngineSummary,
     MatchEvent,
     MatchState,
@@ -45,7 +46,7 @@ from .models import (
 from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0008_seat_history"
+SCHEMA_REVISION = "0009_consultations"
 
 
 class ConcurrentGameUpdate(RuntimeError):
@@ -91,6 +92,7 @@ class MatchRow(Base):
     white_player: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     black_player: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     seat_history: Mapped[list[dict[str, object]] | None] = mapped_column(JSON, nullable=True)
+    consultations: Mapped[list[dict[str, object]] | None] = mapped_column(JSON, nullable=True)
     turn_lease_owner: Mapped[str | None] = mapped_column(String(120), nullable=True)
     turn_lease_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
     turn_lease_position_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -951,6 +953,7 @@ class DatabaseStore:
                 game.black_player.model_dump(mode="json") if game.black_player else None
             ),
             "seat_history": [change.model_dump(mode="json") for change in game.seat_history],
+            "consultations": [item.model_dump(mode="json") for item in game.consultations],
             "created_at": game.created_at,
             "updated_at": game.updated_at,
         }
@@ -1063,6 +1066,7 @@ class DatabaseStore:
                 EngineSummary.model_validate(row.engine_summary) if row.engine_summary else None
             ),
             seat_history=[SeatChange.model_validate(change) for change in (row.seat_history or [])],
+            consultations=[Consultation.model_validate(item) for item in (row.consultations or [])],
             white_remaining_ms=row.white_remaining_ms,
             black_remaining_ms=row.black_remaining_ms,
             turn_started_at=(
