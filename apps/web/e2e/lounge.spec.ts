@@ -726,3 +726,73 @@ test("runner authorization limits and revoke control", async ({ page }, testInfo
   const audit = await page.request.get(`/api/runner-sessions/${credentials.session_id}/audit`);
   expect((await audit.json()).map((event: { kind: string }) => event.kind)).toEqual(["session.claimed", "session.revoked"]);
 });
+
+test("human seats support drag, confirmation, and reconnect", async ({ page, request }, testInfo) => {
+  test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Human acceptance on desktop and phone.");
+  const created = await request.post("/api/games", { data: { opponent: "human" } });
+  const game = await created.json();
+  await page.goto(`/games/${game.id}`);
+  const from = page.getByRole("gridcell", { name: "e2 white pawn" });
+  const to = page.getByRole("gridcell", { name: "e4 empty" });
+  await expect(from).toBeEnabled();
+  if (testInfo.project.name === "desktop") await from.dragTo(to);
+  else { await from.click(); await to.click(); }
+  await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeEnabled();
+  await expect(page.locator(".move-row").first()).toContainText("e4");
+  await page.getByRole("button", { name: "Resign Black", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Resign Black?" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect((await (await request.get(`/api/games/${game.id}`)).json()).status).toBe("active");
+  await page.getByRole("button", { name: "Resign Black", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm resignation" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect.poll(async () => (await (await request.get(`/api/games/${game.id}`)).json()).result).toBe("1-0");
+  await expect(page.getByRole("button", { name: "Resign Black", exact: true })).toBeDisabled();
+});
+
+test("promotion supports both colors, underpromotion, and keyboard cancel", async ({ page, request }, testInfo) => {
+  test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Promotion acceptance on desktop and phone.");
+  let game = await (await request.post("/api/games", { data: { opponent: "human" } })).json();
+  for (const move of ["a2a4", "h7h5", "a4a5", "h5h4", "a5a6", "h4h3", "a6b7", "h3g2"]) {
+    const response = await request.post(`/api/games/${game.id}/moves`, { data: { move, position_version: game.version } });
+    expect(response.ok()).toBeTruthy();
+    game = await response.json();
+  }
+  await page.goto(`/games/${game.id}`);
+  await page.getByRole("gridcell", { name: "b7 white pawn" }).click();
+  await page.getByRole("gridcell", { name: "a8 black rook" }).click();
+  await expect(page.getByRole("dialog", { name: "Choose your piece" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("gridcell", { name: "b7 white pawn" }).click();
+  await page.getByRole("gridcell", { name: "a8 black rook" }).click();
+  await page.getByRole("button", { name: "Promote to knight" }).click();
+  await expect(page.getByRole("gridcell", { name: "a8 white knight" })).toBeVisible();
+  await page.getByRole("gridcell", { name: "g2 black pawn" }).click();
+  await page.getByRole("gridcell", { name: "h1 white rook" }).click();
+  await page.getByRole("button", { name: "Promote to rook" }).click();
+  await expect(page.getByRole("gridcell", { name: "h1 black rook" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("gridcell", { name: "h1 black rook" })).toBeVisible();
+});
+
+test("announced repetition claim is durable without playing the intended move", async ({ page, request }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Draw acceptance runs once.");
+  let game = await (await request.post("/api/games", { data: { opponent: "human" } })).json();
+  for (const move of ["g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1"]) {
+    game = await (await request.post(`/api/games/${game.id}/moves`, { data: { move, position_version: game.version } })).json();
+  }
+  await page.goto(`/games/${game.id}`);
+  await page.getByRole("button", { name: "Claim draw", exact: true }).click();
+  await expect(page.getByLabel("Intended draw-claim move")).toHaveValue("f6g8");
+  await page.getByRole("button", { name: "Confirm draw claim" }).click();
+  await expect.poll(async () => (await (await request.get(`/api/games/${game.id}`)).json()).status).toBe("draw");
+  await page.reload();
+  await expect(page.getByRole("gridcell", { name: "f6 black knight" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Claim draw", exact: true })).toBeDisabled();
+  const restored = await (await request.get(`/api/games/${game.id}`)).json();
+  expect(restored.moves).toHaveLength(7);
+  expect(restored.result).toBe("1/2-1/2");
+});
