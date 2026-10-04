@@ -1,4 +1,4 @@
-# Stage 6A — human-seat controls
+# Stage 6 — human play and takeover
 
 The local operator can play either human seat. This remains a loopback application;
 seat colors are not account identities. Remote ownership and invitations are later work.
@@ -52,6 +52,33 @@ A second regression disconnects a real ASGI TestClient during an in-flight SQLit
 driver query. Short runner database calls are shielded against AnyIO level cancellation;
 model thinking and turn waits stay cancellable. CI treats Python warnings as errors.
 
-Next: **Stage 6B**, explicit pause-safe human/AI seat takeover with immutable events
-and stale agent-result fencing. Consultation follows in 6C; authenticated remote
-ownership and invitations remain a final deployment-stage concern.
+Authenticated remote ownership and invitations remain a final deployment-stage concern.
+
+## Stage 6B — mid-game takeover
+
+1. Select **Pause match**. The server settles the active clock and cancels local thinking.
+2. Choose the replacement in the White/Black seat selectors, then **Apply White/Black seat**.
+3. Review and confirm the player, provider, effort and assistance division. The board,
+   move history and remaining clocks carry over. The match stays paused.
+4. **Resume match** starts the next turn. **Restore previous white/black player** offers
+   the most recent controller with its saved configuration, including an eligible runner.
+
+The seat-history panel and exported PGN disclose every substitution. Reload preserves
+these records and the paused state. Public strategy/usage cards stop displaying the
+previous controller's last move after a switch. These are exhibition games.
+
+`POST /api/games/{id}/seats/{white|black}` requires `{expected_revision, player}`.
+Stale requests, an unchanged player, wrong-color configuration or a running match
+return 409; invalid/unavailable adapter configurations return 422. Snapshot
+`seat_history` is additive. Pause/resume now accept `{expected_revision}`; legacy
+bodyless requests remain supported. Apply migration `0008_seat_history` before serving.
+
+A remote runner can return only to its original authorized match, generation and
+color while its grant remains valid and has dispatch budget. Taking it out of the
+seat blocks new dispatch and proposal submission. Returning it does not renew its
+expiry or budget; a fresh pairing is needed for a different seat/match or reset.
+
+Regression coverage includes revision races, late old proposals and trust errors,
+clock/history recovery, PGN round-trip, runner-grant preservation, schema rollback,
+and desktop/phone takeover, cancellation, restoration and stale-dialog dismissal.
+Next: Stage 6C, human consultation with a human making the final move.
