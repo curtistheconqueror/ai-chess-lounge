@@ -98,3 +98,14 @@ Confidence: moderate for 7D/7E and a substantial locally tested hardening candid
 low-to-moderate for a hosted multi-user Stage 8 beta within 48 hours, conditional on
 prompt decisions and no major findings; no credible commitment for all Stage 9
 candidates in that window. Revise ranges after the 8A review and first load results.
+
+## Checkpoint update — October 4, 18:15 UTC
+
+7D final docs head fa2e9a1 passed CI 37222067606. 7E draft PR22 source head
+64f7c2c passed CI 37223412652: 302 Python, 3 SDK, 34 browser tests plus all
+migration/lint/type/build gates; desktop/phone screenshots inspected. Its final
+pickup update is documentation-only and still receives a distinct current-head check.
+The first two implementation checkpoints are ahead of their target windows.
+Stage 8A read-only review has begun. Security/account/merge/deployment approvals and
+Stage 9 scope remain unresolved; this progress does not remove those critical-path
+dependencies or upgrade the hosted-beta confidence to a guarantee.

@@ -199,11 +199,12 @@ PR19 final pickup head ade6bb27523b9fc6709dee15d3837ebf148a853d also passed
 CI 37221621195 / job 111492949368 after the evidence-only follow-up. PR19 and
 PR20 current-head statuses are green at this checkpoint. All drafts remain unmerged.
 
-## Stage 7E reports and bundles in progress
+## Stage 7E draft PR22 verified; merge approval pending
 
 Contributor: feat/stage-7e-report-bundles, based on verified final 7D handoff
 fa2e9a106bb47a5a60c083b9048b2fdebd2ae581. That final docs head passed
-CI 37222067606; PR21 remains draft and unmerged. 7E must remain dependent/draft.
+CI 37222067606; PR21 remains draft and unmerged. Draft PR: https://github.com/curtistheconqueror/ai-chess-lounge/pull/22
+PR22 depends on PR21; all contributor branches remain retained.
 
 Implemented bounded terminal-run report ZIP, immutable manifest/hash verification,
 explicit public-data projection, exact initial-FEN PGN replay and honest no-results,
@@ -212,8 +213,24 @@ size/move caps. Frontend pool filters and download controls pass typecheck/build
 Final local warning-strict suite passed 301 Python tests (3 PostgreSQL environment
 skips); final focused export suite: 15 passed. Independent review added saved-match
 lifecycle/outcome agreement with the job result, reusing authoritative result logic.
-Ruff and 3 SDK tests pass. Browser/current-head CI remains pending.
-See ADR0027. The current code is not yet a verified phase checkpoint.
+Ruff, TypeScript/build and 3 SDK tests pass. CI 37223412652 / job 111498088879
+passed on published source head 64f7c2c08f7e09cdc33606ff6ca33168ca495c03:
+302 Python (2 engine skips), 3 SDK, 34 browser (76 intentional viewport skips),
+SQLite/PostgreSQL migrations, lint/types/build. Remote tree matches local 888f879.
+Artifact 11311585438 includes desktop/phone metrics screenshots, visually inspected;
+pool filters and full-run ZIP download controls remain contained and usable.
+Browser acceptance downloaded ZIPs on both viewports. No live paid providers used.
+This follow-up changes documentation only; verify its current-head checks separately.
+See ADR0027. No target-branch merge, deployment or completed pickup is claimed.
 After 7E acceptance, proceed to 8A read-only security assessment and approval-ready
 account/deployment design; do not implement security/access expansion without approval.
 DELIVERY_48H_PLAN.md remains the dated target with explicit Stage 9 scope decision.
+
+Stage 8A read-only assessment has started while final 7E documentation checks run.
+No credential files were read and no permissions/settings were changed. Current
+tracked-source pattern scan and 632 reachable local-ref blobs (7,640,628 bytes,
+up to 2 MiB/blob) had no key-pattern candidates. npm lockfile audits for web/SDK
+and pip-audit 2.10.1 for 54 pinned Python records reported zero known advisories.
+These are scoped, dated observations, not proof of security; trust-boundary review,
+abuse tests and account/deployment decisions remain. Preserve detailed findings
+privately per SECURITY.md. Parent continues to own monitoring and approvals.
