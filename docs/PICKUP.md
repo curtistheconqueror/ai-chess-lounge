@@ -282,3 +282,30 @@ Base is PR23 / docs/stage-8a-security-assessment. Source checkpoint f53c4922dbc6
 triggered CI 37225092974; status was pending at this documentation update. Verify
 this follow-up's final head independently. The dated plan includes remaining effort
 ranges and integration buffer; Stage 9 and release decisions are still unresolved.
+
+## Stage 8B local operations continuation in progress
+
+PR24 final head fc7ea99b77d6409bfe907bfa195073d788e946ab passed
+CI 37225178400; parent evidence was independently rechecked. Remote head matches
+that SHA and its complete tree was already stored locally. Current environment
+blocks direct GitHub network fetch; use GitHub connector reads and the previously
+authorized publication UI, not alternate network routes. Preserve all branches.
+
+Contributor: feat/stage-8b-local-operations, based exactly on PR24 final head.
+Added compatible liveness plus bounded shared-probe readiness, local capped request
+correlation/timing summaries and WebSocket counts. Privacy, slow-probe/single-flight,
+worker staleness, shutdown, concurrency and unchanged-match tests pass locally.
+Added explicit generated-only native PostgreSQL CI restore and event-accessor
+validation. CI service supplies native tools; no local PostgreSQL/Docker tools exist.
+Native recovery is NOT verified until published CI passes. ADR0028 records bounds
+and limits. Full 8B tracing/metrics/alerts/retention/production backup acceptance remains
+open; no access/security/account/deployment or paid-service action was performed.
+
+Next: complete current-head checks and native CI restore, review and publish a
+dependent draft with exact evidence. Continue bounded performance preparation and
+budget reservation design while owner account/release decisions remain pending.
+
+Local continuation verification: 309 Python tests passed with warnings as errors
+(4 PostgreSQL infrastructure skips), Ruff format/check, web type/production build
+and 3 SDK tests passed. Native PostgreSQL restore and final published browser checks
+remain CI gates. No dependency or external service was added.

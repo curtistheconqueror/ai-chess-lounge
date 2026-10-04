@@ -132,3 +132,12 @@ The original 8A–8E/account effort ranges total 21–37 hours before the reserv
 is already done, but remediation, native PostgreSQL recovery and first load results
 may change those estimates. This is not 21–37 hours to every Stage 9 candidate.
 No date or estimate removes the open owner decisions or release-quality gates.
+
+## Continuation checkpoint — October 4, 13:55 America/Chicago (18:55 UTC)
+
+PR24 final head fc7ea99 passed CI 37225178400. Safe 8B continuation now adds local
+readiness/instrumentation and native generated-fixture PostgreSQL recovery using
+the existing CI service; native restore still needs its published test outcome.
+Account/security/spending/merge/deployment decisions and Stage 9 scope remain open.
+The original dated checkpoints/ranges remain targets; full production acceptance
+and the final integration buffer are preserved. No unrelated gate stops local work.

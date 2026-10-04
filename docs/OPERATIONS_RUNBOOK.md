@@ -1,7 +1,8 @@
 # Operations and recovery runbook — Stage 8B candidate
 
 Status: **In progress. Offline SQLite fixture recovery is tested; production
-operations, PostgreSQL restore, tracing, alert delivery and retention are not accepted.**
+operations, native PostgreSQL CI restore, tracing, alert delivery and retention are
+not yet fully accepted.**
 No live database, account, setting, provider or deployment is changed by this document.
 
 ## Current evidence and remaining work
@@ -19,10 +20,10 @@ The helper exists only in tests. It is not a supported live backup CLI or schedu
 
 | Operational gate | Existing behavior / evidence | Remaining acceptance |
 | --- | --- | --- |
-| Process health | `/api/health` reports service version and local engine availability | Separate bounded database/worker readiness; define engine-optional versus engine-required readiness |
+| Process health | Compatible liveness plus bounded `/api/ready` database/worker checks; engine optional unless requested | Deployment probe policy and fault/recovery drill |
 | Backups | Offline SQLite snapshot/restore regression | Approved PostgreSQL backup destination, access and encryption; native backup plus isolated restore and measured RPO/RTO |
 | State recovery | Persistent moves/events, revision fencing and queue recovery tests | Production-topology crash/restart drill, runner reconnect and clock reconciliation |
-| Observability | Structured game/runner failure events | Request correlation, bounded-label latency/error/queue/DB metrics and trace sampling with privacy tests |
+| Observability | Opaque request IDs; capped process-local route timing/status summaries and WebSocket counts; privacy regressions | Full tracing, queue/provider/engine/DB operational metrics, approved collector and sampling |
 | Alerts | No delivery configured | Approved recipient/channel; synthetic fault and recovery delivery checks; alert ownership |
 | Retention | No deletion job applied | Owner-approved category durations, legal/operational holds, preview counts, recovery and deletion acceptance |
 | Rollback | Versioned migrations, CI upgrade/downgrade checks | Exact release/backup mapping and rehearsal with real populated schema; no automatic downgrade of live data |
@@ -91,3 +92,28 @@ mode; rehearse native PostgreSQL restore in an isolated fixture environment. The
 validate alerts/retention/backups in the chosen deployment. Keep 8B open until all
 roadmap deliverables are implemented and accepted. See DELIVERY_48H_PLAN.md and
 ACCOUNT_AND_RELEASE_DECISIONS.md for deadlines and external gates.
+
+## Local readiness and instrumentation candidate
+
+`GET /api/ready` returns a fresh database/worker readiness result without changing
+games or invoking providers. Its HTTP wait is bounded to 250 ms around one shared
+probe; timed-out callers return unavailable without cancelling connection creation.
+A successful DB result is cached for two seconds. Worker success must be within five
+seconds. Add `?require_engine=true` only for engine-required service readiness; an
+installed engine is not proof of a successful analysis. Existing `/api/health` remains
+liveness. Database failures expose no driver error or connection URL. Shutdown drains
+the shared probe before disposing the store; the driver shutdown itself can take longer.
+
+`application.state.operations.snapshot()` provides local aggregate route-template
+latency/status counts, a 100-entry timing ring and WebSocket active/opened counts.
+An opaque server-generated `X-Request-ID` accompanies ordinary HTTP responses.
+No request-supplied ID, path/query/body/header, match ID or provider text is retained.
+This is not a public telemetry endpoint or external collector; counts reset on restart.
+
+The native PostgreSQL fixture test is explicitly enabled in CI against its existing
+PostgreSQL 17 service. It creates separate disposable UUID databases, uses native
+custom-format dump/transactional restore, checks logical rows before app initialization
+and validates game/event/run/export state. Only secret-free counts/size/timing evidence
+may be uploaded. Local environments without this declared infrastructure skip that test.
+Record its actual published CI outcome before calling PostgreSQL recovery verified.
+See ADR0028; full Stage 8B and production recovery acceptance remain open.
