@@ -187,10 +187,10 @@ export function playConsultation(gameId: string, advice: Consultation, revision:
   });
 }
 
-export function previewExperiment(configuration: import("./ModelLab").ExperimentConfig) {
+export function previewExperiment(configuration: import("./ModelLab").ExperimentConfiguration) {
   return request<import("./ModelLab").ExperimentPlan>("/api/experiments/preview", { method: "POST", body: JSON.stringify(configuration) });
 }
-export function saveExperiment(id: string, configuration: import("./ModelLab").ExperimentConfig) {
+export function saveExperiment(id: string, configuration: import("./ModelLab").ExperimentConfiguration) {
   return request<import("./ModelLab").ExperimentPlan>("/api/experiments", { method: "POST", body: JSON.stringify({ id, configuration }) });
 }
 export function listExperiments(offset = 0) {
