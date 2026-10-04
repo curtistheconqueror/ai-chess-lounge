@@ -37,7 +37,7 @@ def test_postgres_fixture_refuses_non_ci_access(tmp_path, monkeypatch):
             pytest.fail("Guard permitted a non-CI database")
 
     with pytest.raises(ValueError, match="Disposable CI"):
-        asyncio.run(run())
+        asyncio.run(asyncio.wait_for(run(), timeout=20))
 
 
 def test_real_asgi_spectator_reconnect_and_queue_cleanup(tmp_path):
@@ -49,7 +49,7 @@ def test_real_asgi_spectator_reconnect_and_queue_cleanup(tmp_path):
         assert not [t for t in asyncio.all_tasks() - baseline if not t.done()]
         return sockets, queue
 
-    sockets, queue = asyncio.run(run())
+    sockets, queue = asyncio.run(asyncio.wait_for(run(), timeout=20))
     assert all(s["active_after_cleanup"] == 0 for s in sockets["spectators"])
     assert all(s["reconnect_verified"] for s in sockets["spectators"])
     assert queue["restart_read_verified"] and queue["pause_cancel_fencing"]
@@ -81,7 +81,7 @@ def test_sibling_failure_cancels_and_drains_pending_work():
             await together(pending(), fail())
         assert cleaned.is_set()
 
-    asyncio.run(run())
+    asyncio.run(asyncio.wait_for(run(), timeout=20))
 
 
 def test_spectator_validation_failure_still_closes_app_and_sockets(tmp_path, monkeypatch):
@@ -106,4 +106,34 @@ def test_spectator_validation_failure_still_closes_app_and_sockets(tmp_path, mon
         assert seen and all(item.task.done() for item in seen)
         assert not [t for t in asyncio.all_tasks() - baseline if not t.done()]
 
-    asyncio.run(run())
+    asyncio.run(asyncio.wait_for(run(), timeout=20))
+
+
+def test_partial_startup_failure_still_disposes_both_stores(tmp_path, monkeypatch):
+    from lounge_api.manager import GameManager
+    from lounge_api.persistence import DatabaseStore
+
+    start, close = GameManager.start, DatabaseStore.close
+    closed = []
+
+    async def fail_after_start(self):
+        await start(self)
+        raise RuntimeError("Injected generated startup failure")
+
+    async def observed_close(self):
+        try:
+            await close(self)
+        finally:
+            closed.append(self)
+
+    monkeypatch.setattr(GameManager, "start", fail_after_start)
+    monkeypatch.setattr(DatabaseStore, "close", observed_close)
+
+    async def run():
+        baseline = set(asyncio.all_tasks())
+        with pytest.raises(RuntimeError, match="startup failure"):
+            await queue_and_database(tmp_path, "sqlite")
+        assert len(closed) == 2
+        assert not [t for t in asyncio.all_tasks() - baseline if not t.done()]
+
+    asyncio.run(asyncio.wait_for(run(), timeout=20))
