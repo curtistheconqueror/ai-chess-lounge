@@ -2,18 +2,17 @@
 
 Updated: 2026-10-04. Read AGENTS.md, README.md, MASTER_PLAN.md and ADR 0021.
 
-## Verified baseline
+## Verified baseline — Stage 6B complete
 
-Stage 6A merged as PR #15 at `ac22b7b5fa7faa5ac6041b1c4a6ca7302597d5c8`.
-Immutable `pickup/stage-6a-complete` and retained `feat/stage-6a-human-controls`
-remain. Final PR CI 37176580915 and postmerge CI 37176717656 passed, including
-207 Python tests, 3 SDK tests and 20 browser tests (50 duplicate-viewport skips).
+PR #16: https://github.com/curtistheconqueror/ai-chess-lounge/pull/16
+Merged at `655ce42154d59e97dd2d8db9ee0b2e8f0d3f280d`.
+Immutable `pickup/stage-6b-complete` points to that exact verified merge.
+Retained contributor: `feat/stage-6b-seat-takeover`; this final handoff is a
+postmerge documentation commit on that branch. Start new work from the merge/main,
+not from the contributor's pre-squash history. Do not repoint the pickup branch.
+The prior Stage 6A merge was `ac22b7b5fa7faa5ac6041b1c4a6ca7302597d5c8`.
 
-## Current work — Stage 6B
-
-Contributor: `feat/stage-6b-seat-takeover`, created from the exact merge above.
-Implementation complete; publication and CI gates are in progress. Do not mark
-complete until merge and the immutable pickup checkpoint are verified.
+## Shipped
 
 - Revision-bound, confirmed paused replacement of either human/AI seat and explicit resume.
 - Persistent seat history, original/current PGN headers and at-ply annotations; migration 0008.
@@ -22,29 +21,37 @@ complete until merge and the immutable pickup checkpoint are verified.
 - Player cards reset strategy/usage attribution at takeover; desktop/phone acceptance added.
 - ADR 0021 and STAGE_6_HUMAN_PLAY.md describe contracts and scope.
 
-## Verification and remaining gates
+## Verification
 
-Local make test passes; final pytest -W error passes 215 Python tests, with 2
-environment/engine skips. Also passed: 3 SDK tests,
-Ruff format/lint and web typecheck. Targeted takeover tests cover stale requests,
-concurrent writes, old results/errors, restart/clock/PGN and runner grant retention.
-Migration upgrade/downgrade includes 0008. Production build passed. Independent
-review found a wrapped stale runner error escaping as a task exception; fixed the
-CAS recovery and added real delayed-reservation coverage. Exact-head CI (including
-PostgreSQL and desktop/phone browser smoke) is the remaining gate.
-Local Chromium is absent; browser execution is required in CI before merge.
+Published source `7efda78ae1647fc75f365ff44702c901f18942da` matches locally tested
+commit `a0e1d16` exactly by tree diff; the merge has that identical tree.
+Local make test/build and final pytest -W error passed: 215 Python tests,
+2 environment/engine skips, 3 SDK tests, Ruff format/lint and web typecheck.
+PR CI 37183260435 / job 111379904579 passed all gates, including SQLite and PostgreSQL
+migration upgrade/downgrade and 23 browser tests (57 intentional duplicate-viewport skips).
+Inspected the desktop and phone takeover screenshots: board, controls and history fit.
+Independent backend review found a wrapped stale runner error escaping as a task
+exception; CAS recovery was fixed and a real delayed-reservation regression added.
+Local Chromium is absent; browser acceptance executed in CI.
+Postmerge CI 37183451633 / job 111380466496 passed all gates as the final smoke run.
 
-## Next target
+## Exact next target — Stage 6C consultation
 
-Merge Stage 6B after green gates, create immutable pickup/stage-6b-complete at the
-verified merge, retain this contributor branch and update this handoff with evidence.
-Then Stage 6C: human consultation suggestions, with only the human submitting a move.
-Stage 6 has four phases (6A–6D); multiuser ownership/invitations in 6D remain final
-account/deployment work per owner direction.
+Build an explicit human consultation request and suggestion card. Only the human
+can submit the final move; a suggestion must never mutate the board automatically.
+Bind requests/results to match, human seat, position version and revision. Reuse
+adapter capability validation, public strategy summaries, provider limits and
+cancellation; fence stale results after moves, reset, takeover and terminal actions.
+Record disclosed assistance and usage without private reasoning or credentials.
+Add targeted backend and desktop/phone acceptance; preserve a contributor branch
+and create pickup/stage-6c-complete only after green CI and verified merge.
+
+Stage 6 has four phases (6A–6D). 6A and 6B are complete; 6C is next. Multiuser
+ownership/invitations in 6D remain final account/deployment work per owner direction.
 
 ## Boundaries
 
 Loopback operator only; no account identity or seat ownership yet. No live provider
-credits are needed for this phase. Handoffs are exhibitions and remain paused until
+credits were needed for this phase. Handoffs are exhibitions and remain paused until
 explicitly resumed. Runner grants do not transfer seats, reset, renew or expand.
 Distributed runner delivery routing and negotiated draw offers remain deferred.
