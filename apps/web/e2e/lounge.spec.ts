@@ -796,3 +796,53 @@ test("announced repetition claim is durable without playing the intended move", 
   expect(restored.moves).toHaveLength(7);
   expect(restored.result).toBe("1/2-1/2");
 });
+
+test("paused seat takeover preserves the board and restores the human", async ({ page }, testInfo) => {
+  test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Takeover smoke on desktop and phone.");
+  await page.getByLabel("Black seat").selectOption("human");
+  await page.getByRole("button", { name: "New match" }).click();
+  await page.getByRole("gridcell", { name: "e2 white pawn" }).click();
+  await page.getByRole("gridcell", { name: "e4 empty" }).click();
+  await expect(page.locator(".move-row").first()).toContainText("e4");
+  await page.getByRole("button", { name: "Pause match", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Resume match", exact: true })).toBeVisible();
+  await page.getByLabel("White seat").selectOption("scripted");
+  await page.getByRole("button", { name: "Apply White seat" }).click();
+  await expect(page.getByRole("dialog", { name: "Change white player?" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await page.getByRole("button", { name: "Apply White seat" }).click();
+  await page.getByRole("button", { name: "Confirm seat change" }).click();
+  await expect(page.locator(".player-card").filter({ hasText: "Deterministic White" })).toBeVisible();
+  await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Resume match", exact: true })).toBeVisible();
+  await page.getByText("Seat history · 1 changes · exhibition", { exact: true }).click();
+  await expect(page.locator(".seat-history ol")).toContainText("Deterministic White");
+  await page.getByRole("button", { name: "Restore previous white player" }).click();
+  await page.getByRole("button", { name: "Confirm seat change" }).click();
+  await expect(page.locator(".seat-history summary")).toContainText("2 changes");
+  const response = await page.request.get(`/api/games/${page.url().split("/").pop()}`);
+  const game = await response.json();
+  expect(game.moves).toHaveLength(1);
+  expect(game.seat_history).toHaveLength(2);
+  expect(game.pgn).toContain('[SeatChanges "2"]');
+  expect(game.lifecycle).toBe("paused");
+  await page.screenshot({ path: testInfo.outputPath(`takeover-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
+  await page.getByRole("button", { name: "Resume match", exact: true }).click();
+  await page.getByRole("gridcell", { name: "e7 black pawn" }).click();
+  await page.getByRole("gridcell", { name: "e5 empty" }).click();
+  await expect(page.locator(".move-row").first()).toContainText("e5");
+});
+
+test("a concurrent lifecycle change dismisses a stale takeover dialog", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Revision smoke runs once on desktop.");
+  await page.getByRole("button", { name: "Pause match", exact: true }).click();
+  await page.getByRole("button", { name: "Apply White seat" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  const url = `/api/games/${page.url().split("/").pop()}`;
+  const game = await (await page.request.get(url)).json();
+  expect((await page.request.post(url + "/resume", { data: { expected_revision: game.revision } })).ok()).toBeTruthy();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "Pause match", exact: true })).toBeVisible();
+});
