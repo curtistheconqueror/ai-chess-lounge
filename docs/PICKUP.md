@@ -276,3 +276,9 @@ and published browser checks must be recorded separately after publication.
 PR23 source head 786f8b7 passed CI 37224743392 / job 111501964970, including
 both migrations, Python, SDK, web build and responsive browser gates. This verifies
 the assessment branch's unchanged runtime, not completion of 8A remediation.
+
+Published 8B preparation draft: https://github.com/curtistheconqueror/ai-chess-lounge/pull/24
+Base is PR23 / docs/stage-8a-security-assessment. Source checkpoint f53c4922dbc672b068dc62e81bd073ab304d49ae
+triggered CI 37225092974; status was pending at this documentation update. Verify
+this follow-up's final head independently. The dated plan includes remaining effort
+ranges and integration buffer; Stage 9 and release decisions are still unresolved.

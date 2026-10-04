@@ -120,3 +120,15 @@ These results do not establish hosted security. The account/release decision pac
 and trust-boundary assessment are ready for review; 8A remains in progress pending
 reviewed remediation and authorization. Next safe work is 8B offline restore and
 operations preparation. The schedule and confidence ranges above remain conditional.
+
+## Checkpoint update — October 4, 18:40 UTC
+
+7D/7E source and final handoff checks are green; merge approval remains outstanding.
+8A assessment is draft PR23 at 786f8b7, green CI 37224743392. 8B preparation is
+draft PR24: generated-fixture SQLite restore/WAL checks and operations runbook;
+303 local Python tests pass (3 environment skips). Neither 8A nor 8B is complete.
+The original 8A–8E/account effort ranges total 21–37 hours before the reserved
+8–9-hour integration buffer, plus external waits. Some assessment/preparation work
+is already done, but remediation, native PostgreSQL recovery and first load results
+may change those estimates. This is not 21–37 hours to every Stage 9 candidate.
+No date or estimate removes the open owner decisions or release-quality gates.
