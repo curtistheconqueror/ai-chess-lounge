@@ -144,19 +144,31 @@ def test_native_postgres_restore_preserves_generated_game_events_and_reports(tmp
                 )
             )
         finally:
+            cleanup = []
             if manager is not None:
-                await manager.close()
+                cleanup.append(manager.close())
             if restored is not None:
-                await restored.close()
-            for engine in [source_engine, restore_engine]:
-                if engine is not None:
-                    await engine.dispose()
+                cleanup.append(restored.close())
+            cleanup += [
+                engine.dispose() for engine in [source_engine, restore_engine] if engine is not None
+            ]
+            failed_cleanup = False
             try:
-                async with admin.connect() as connection:
-                    for name in reversed(created):
-                        # Only databases whose CREATE succeeded in this test are dropped.
-                        await connection.execute(text(f'DROP DATABASE "{name}" WITH (FORCE)'))
+                results = await asyncio.gather(*cleanup, return_exceptions=True)
+                failed_cleanup = any(isinstance(result, BaseException) for result in results)
             finally:
-                await admin.dispose()
+                try:
+                    async with admin.connect() as connection:
+                        for name in reversed(created):
+                            try:
+                                # Only names whose CREATE succeeded here can be dropped.
+                                await connection.execute(
+                                    text(f'DROP DATABASE "{name}" WITH (FORCE)')
+                                )
+                            except Exception:
+                                failed_cleanup = True
+                finally:
+                    await admin.dispose()
+            assert not failed_cleanup, "Disposable recovery fixture cleanup failed."
 
     asyncio.run(run())
