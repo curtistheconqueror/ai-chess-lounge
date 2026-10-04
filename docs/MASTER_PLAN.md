@@ -615,6 +615,12 @@ resume after interruption, and produce a reproducible report with configuration 
 
 ### Stage 8 — Production hardening and public beta
 
+Current product direction: human/bot Lounge access is free for now. Players fund
+their own agents/accounts; the owner funds infrastructure without a default shared
+model key. Supabase is the selected backend direction, with project/access/setup
+and the Python/WebSocket/Stockfish runtime host still unresolved. See
+HOSTED_RELEASE_PATH.md for evidence, conditional estimates and setup timing.
+
 **Goal:** Operate safely for invited users and public spectators.
 
 | Sub-phase | Deliverables |

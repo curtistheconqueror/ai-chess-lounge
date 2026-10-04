@@ -533,13 +533,13 @@ Local loopback reviewed checkpoint b4dab469d808d3626900d303a7acd37b6b88313e:
 Ruff format/check passed; actual default SQLite/ASGI/queue/loopback/Stockfish
 scenarios all measured successfully. Source tree was clean. Retained loopback
 evidence is docs/verification/stage8c-loopback-local.json; no hosted capacity claim.
-PR28 final5f560ea independently passed CI37233840243. Native PostgreSQL
+PR28 final5f560ea independently passed CI 37233840243. Native PostgreSQL
 loopback and this contributor's published full/browser CI remain new gates.
 
 ## Stage 8C loopback published source verified
 
 Draft PR29: https://github.com/curtistheconqueror/ai-chess-lounge/pull/29
-Source e6c2e409189fcdd3f23f62aa9387d9231db58e16 passed CI37234869427 /
+Source e6c2e409189fcdd3f23f62aa9387d9231db58e16 passed CI 37234869427 /
 job111531856822:357 Python/3 absent-engine skips,3 SDK,34 browser/76 intentional
 viewport skips, SQLite/PostgreSQL migrations, native restore/performance and all
 format/lint/type/build gates. Artifact11314774765 was inspected: SQLite/PostgreSQL
@@ -548,11 +548,11 @@ four idempotent replays, persisted position/event continuity, reconnect, zero ac
 connections and closed owned listener. Desktop/phone metric screenshots inspected.
 These are bounded generated measurements, not hosted capacity or a sustained SLA.
 Installed Stockfish evidence remains the clean local artifact; CI explicitly skips it.
-PR28 final5f560ea passed CI37233840243 and PR27 finalc267056 passed CI37232631478.
+PR28 final5f560ea passed CI 37233840243 and PR27 finalc267056 passed CI 37232631478.
 This documentation follow-up receives its own distinct check; no merge/deployment.
 
 Next safe target: Stage8E preparation-only beta readiness packet, retaining all open
-production/account/budget/performance and Stage9 decisions. Main remains087c565;
+production/account/budget/performance and Stage 9 decisions. Main remains 087c565;
 all contributor branches/draft dependencies are preserved. Completed pickup branches
 remain gated on approved verified merges. Deadline Oct6 17:40UTC keeps final8–9h
 integration/review/CI/restore/visual buffer; external decisions can exceed this window.
@@ -562,7 +562,7 @@ integration/review/CI/restore/visual buffer; external decisions can exceed this 
 Contributor docs/stage-8e-beta-readiness starts from the verified PR29 source plus
 its documentation handoff. docs/BETA_READINESS.md separates the local no-credential
 reference exhibition, supported connection acceptance, hosted integration sequence,
-feedback/incident intake, deferred requirements and all eight unselected Stage9 areas.
+feedback/incident intake, deferred requirements and all eight unselected Stage 9 areas.
 This is preparation only: no hosted beta, new account/access/security/budget change,
 paid connection call, deployment or complete Stage8E claim. No runtime behavior changed.
 
@@ -574,10 +574,42 @@ replace them. Keep draft/contributor branches; do not merge or deploy without ap
 
 Published dependent draft PR30:
 https://github.com/curtistheconqueror/ai-chess-lounge/pull/30
-Preparation source5a920a46db63dea655a88d62388a3e565cef5e6c; runtime unchanged.
+Preparation source 5a920a46db63dea655a88d62388a3e565cef5e6c; runtime unchanged.
 Current-head CI is pending and must be checked independently; no beta completion.
 PR29 final documentation4ac5fc3d3862d36fac3e42f88bfdc411c630ed6e likewise has
 its separate run37235709129 pending; source run37234869427 remains verified green.
 The next genuine dependency is the owner release/account/budget/topology/deferred
 scope decision packet. Do not repeat fixture tests or create another monitor as a
 substitute for those decisions. Preserve all quality gates and draft pickup branches.
+
+## BYO agent economics clarification in progress
+
+Contributor docs/byo-agent-cost-ownership starts from PR30 final 00c96f4c51d6f9f444ea5ef91f3efeceb868efb8
+(local f38eb34 equivalent tree). Final PR30 CI 37235916209 / job 111534858353 passed;
+source 5a920a4 passed CI 37235866015. PR29 final 4ac5fc3 passed CI 37235709129.
+These supersede historical publication-time pending notes above. Main remains 087c565.
+
+Owner funds Lounge infrastructure; players fund their own agents/API/subscriptions.
+No owner-funded shared model key by default. Human/bot Lounge access is free for now.
+Supabase is the selected backend direction; account/project/plan/access remain
+unverified and no purchase/deployment authorization is inferred. Account/budget/beta/plan docs now distinguish
+external inference from Lounge-dispatched player-paid calls and owner compute.
+Inspected existing SDK/MCP/bridge and remote adapter: player credentials already stay
+local; pairing remains required and match/seat grants unchanged. No duplicate adapter,
+monetary prototype, new access control, provider call, merge or deployment.
+
+Removed blocker: funding responsibility ambiguity/owner inference-budget prerequisite
+for external BYO routes. Safe next work: verify existing BYO fixture contracts and
+publish this narrow documentation checkpoint. Remaining actual choices: hosted route
+scope, identity/admin/visibility/invites, Supabase account/project/plan/access,
+application runtime host and infrastructure limits/topology,
+abuse/request/compute quotas, player paid-call policy if Lounge dispatches, approved
+merge/release, purpose/distributed/deferred scope and Stage 9. No blanket stop on safe
+work, but no public BYO launch or all-stage completion claimed without these gates.
+
+Existing BYO capability verification: 73 warning-strict tests passed across remote
+runner/trust/cleanup, Python SDK, MCP and subscription bridge. No provider request
+or new credentials. Exposed tool metadata contains no Supabase capability or tool
+search; no account/session probing, login or setup occurred. Claude access is not
+evidence of this session access. HOSTED_RELEASE_PATH.md records what is playable,
+what is unmerged, real runtime requirements, setup timing and conditional estimates.
