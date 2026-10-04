@@ -571,3 +571,13 @@ ACCOUNT_AND_RELEASE_DECISIONS.md and approved integration. Actual 2E/6D ownershi
 production operations/remediation, global paid-call enforcement, representative hosted
 load and onboarding require those decisions. No independent fixture work is claimed to
 replace them. Keep draft/contributor branches; do not merge or deploy without approval.
+
+Published dependent draft PR30:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/30
+Preparation source5a920a46db63dea655a88d62388a3e565cef5e6c; runtime unchanged.
+Current-head CI is pending and must be checked independently; no beta completion.
+PR29 final documentation4ac5fc3d3862d36fac3e42f88bfdc411c630ed6e likewise has
+its separate run37235709129 pending; source run37234869427 remains verified green.
+The next genuine dependency is the owner release/account/budget/topology/deferred
+scope decision packet. Do not repeat fixture tests or create another monitor as a
+substitute for those decisions. Preserve all quality gates and draft pickup branches.
