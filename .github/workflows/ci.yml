@@ -61,7 +61,7 @@ jobs:
         run: |
           ruff format --check services/api packages/runner-sdk-python packages/mcp-server packages/subscription-bridge
           ruff check services/api packages/runner-sdk-python packages/mcp-server packages/subscription-bridge
-          pytest
+          pytest -W error
 
       - name: Set up Node
         uses: actions/setup-node@v5

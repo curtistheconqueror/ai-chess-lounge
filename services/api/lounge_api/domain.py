@@ -76,6 +76,7 @@ class GameSession:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     resigned_by: str | None = None
+    draw_reason: str | None = None
     adjudicated_result: str | None = None
     engine_summary: EngineSummary | None = None
     white_remaining_ms: int | None = None
@@ -121,6 +122,8 @@ class GameSession:
             return GameStatus.ABORTED
         if self.lifecycle is MatchState.ADJUDICATED:
             return GameStatus.ADJUDICATED
+        if self.draw_reason:
+            return GameStatus.DRAW
         if self.timed_out_by:
             return GameStatus.TIMEOUT
         if self.resigned_by:
@@ -139,6 +142,8 @@ class GameSession:
 
     @property
     def result(self) -> str:
+        if self.draw_reason:
+            return "1/2-1/2"
         if self.adjudicated_result:
             return self.adjudicated_result
         if self.timed_out_by == "white":
@@ -222,6 +227,7 @@ class GameSession:
             raise ClockExpired(f"{self.timed_out_by.title()} lost on time.")
         if color not in {"white", "black"}:
             raise MoveRejected("Color must be white or black.")
+        self._settle_active_clock(action_time, add_increment=False)
         self.resigned_by = color
         self.version += 1
         self.revision += 1
@@ -229,11 +235,57 @@ class GameSession:
         self.lifecycle = MatchState.COMPLETED
         self.turn_started_at = None
 
+    def draw_claim_options(self) -> tuple[bool, list[str]]:
+        if self.status is not GameStatus.ACTIVE or not self.active_player().is_human:
+            return False, []
+        current = self.board.is_fifty_moves() or self.board.is_repetition(3)
+        if current:
+            return True, []
+        # Never mutate the live board while building a snapshot.
+        candidate = self.board.copy()
+        moves = []
+        if candidate.can_claim_draw():
+            for move in list(candidate.legal_moves):
+                candidate.push(move)
+                if candidate.is_fifty_moves() or candidate.is_repetition(3):
+                    moves.append(move.uci())
+                candidate.pop()
+        return False, moves
+
+    def claim_draw(self, intended_move: str | None, *, now: datetime | None = None) -> None:
+        action_time = self._normalize_now(now)
+        if self.status is not GameStatus.ACTIVE or not self.active_player().is_human:
+            raise MoveRejected("Only the human whose turn it is may claim a draw.")
+        if self.expire_if_needed(action_time):
+            raise ClockExpired(f"{self.timed_out_by.title()} lost on time.")
+        candidate = self.board.copy()
+        if intended_move is not None:
+            try:
+                move = chess.Move.from_uci(intended_move)
+            except ValueError as exc:
+                raise MoveRejected("Invalid intended draw-claim move.") from exc
+            if move not in candidate.legal_moves:
+                raise MoveRejected("The intended draw-claim move is not legal.")
+            candidate.push(move)
+        if candidate.is_repetition(3):
+            reason = "threefold_repetition"
+        elif candidate.is_fifty_moves():
+            reason = "fifty_move_rule"
+        else:
+            raise MoveRejected("This position does not support the requested draw claim.")
+        self._settle_active_clock(action_time, add_increment=False)
+        self.draw_reason = reason
+        self.lifecycle = MatchState.COMPLETED
+        self.version += 1
+        self.revision += 1
+        self.updated_at = action_time
+
     def reset(self, *, now: datetime | None = None) -> None:
         action_time = self._normalize_now(now)
         self.board.reset()
         self.moves.clear()
         self.resigned_by = None
+        self.draw_reason = None
         self.adjudicated_result = None
         self.timed_out_by = None
         self.white_remaining_ms = self.initial_time_ms
@@ -434,6 +486,7 @@ class GameSession:
                 f"{active_player.provider}."
             )
 
+        can_claim_draw, draw_claim_moves = self.draw_claim_options()
         return GameSnapshot(
             id=self.id,
             lifecycle=self.lifecycle,
@@ -456,6 +509,9 @@ class GameSession:
                 and status is GameStatus.ACTIVE
                 and self.player_for_color(side).is_human
             ),
+            can_claim_draw=can_claim_draw,
+            draw_claim_moves=draw_claim_moves,
+            draw_reason=self.draw_reason,
             opponent=self.opponent,
             engine=self.engine_summary,
             white_player=self.player_for_color("white"),

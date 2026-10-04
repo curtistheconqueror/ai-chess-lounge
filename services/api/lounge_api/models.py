@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -66,6 +66,16 @@ class MoveRequest(BaseModel):
     @classmethod
     def normalize_move(cls, value: str) -> str:
         return value.strip().lower()
+
+
+class ResignRequest(BaseModel):
+    color: Literal["white", "black"] | None = None
+    position_version: int | None = Field(default=None, ge=0)
+
+
+class DrawClaimRequest(BaseModel):
+    position_version: int = Field(ge=0)
+    intended_move: str | None = Field(default=None, min_length=4, max_length=5)
 
 
 class AdjudicateRequest(BaseModel):
@@ -288,6 +298,9 @@ class GameSnapshot(BaseModel):
     last_move: str | None
     in_check: bool
     can_move: bool
+    can_claim_draw: bool = False
+    draw_claim_moves: list[str] = Field(default_factory=list)
+    draw_reason: str | None = None
     opponent: OpponentKind
     engine: EngineSummary | None
     white_player: PlayerConfiguration

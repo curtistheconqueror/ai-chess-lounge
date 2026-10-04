@@ -590,7 +590,7 @@ credential reaches the Lounge server from the subscription bridge.
 
 | Sub-phase | Deliverables |
 | --- | --- |
-| 6A Human seats | Legal drag/click moves, promotion, draw/resign, clocks, and reconnect |
+| 6A Human seats | Implemented: desktop drag/mobile tap, both-color promotion, versioned resign/draw claims, clocks and reconnect. Negotiated draw offers remain deferred; see STAGE_6_HUMAN_PLAY.md. |
 | 6B Takeover | Pause-safe AI-to-human and human-to-AI seat handoff recorded as match events |
 | 6C Consultation | AI suggestion card where only the human may submit the final move |
 | 6D Permissions | Owner, player, spectator, moderator roles and private invitations |

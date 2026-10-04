@@ -1,55 +1,54 @@
 # AI Chess Lounge contributor pickup
 
-Updated: 2026-10-03. Read AGENTS.md, README.md, MASTER_PLAN.md and ADR 0019.
+Updated: 2026-10-04. Read AGENTS.md, README.md, MASTER_PLAN.md and ADR 0020.
 
 ## Verified baseline
 
-Stage 5D merged as PR #13 at `12255ba8209162af8f78f2124f9d7a1ae23b81d7`.
-`pickup/stage-5d-complete` remains at that exact merge. Keep
-`feat/stage-5d-subscription-bridge` and all earlier pickup branches.
-Postmerge CI 37071772590 passed. The real Codex subscription acceptance game is
-recorded in `docs/verification/stage5d-live.md` and `.pgn`.
+Stage 5E merged as PR #14 at `59e9a7a360b55d251871a9f168bab62e277874e2`.
+Immutable `pickup/stage-5e-complete` and retained `feat/stage-5e-trust-controls`
+remain. PR CI 37152054950 and postmerge CI 37152192013 passed.
 
-## Current work — Stage 5E implementation ready for CI
+## Current work — Stage 6A
 
-Contributor: `feat/stage-5e-trust-controls`, based on the verified Stage 5D merge.
-No completed 5E pickup branch exists until merge and postmerge verification.
+Contributor: `feat/stage-6a-human-controls`, created from the exact merge above.
+PR #15: https://github.com/curtistheconqueror/ai-chess-lounge/pull/15
+Implementation is in final CI; do not mark complete until merge and checkpoint.
 
-Implemented:
-- Durable first-match, seat, reset-generation, expiry and turn-request grants.
-- Session-row serialization of binding, revocation and final move commits.
-- Credential-free append-only claim/authorization/dispatch/commit/revoke audit.
-- HTTP/socket reconnects preserve delivery identity/deadline; internal lifecycle
-  revision prevents old turns reviving after pause/resume.
-- UI authorization bounds, bound-seat filtering, and revoke access control.
-- Migration 0006, race/lifecycle/expiry/restart regression tests, browser revoke test.
-- Clock-awareness experiment captured in MASTER_PLAN: fixed vs adaptive effort,
-  clock snapshots, separate viewing delays, and measured behavior versus public claims.
+- Explicit human-color resignation, confirmation, stale-version rejection and clock settlement.
+- Durable threefold/fifty-move claims, including announced intended moves without a phantom ply.
+- Desktop drag, phone tap, both-color promotion, stale dialog/drag fencing and reconnect input guard.
+- Migration 0007, domain/API/store tests, desktop/phone browser acceptance.
+- Reproduced and fixed repeated native task cancellation leaking a checked-out database
+  connection in runner WebSocket cleanup. Regression uses an actual database session.
+- ADR 0020 and STAGE_6_HUMAN_PLAY.md describe API behavior and boundaries.
 
-Verification: local make test and make build passed, including the migration
-upgrade/downgrade regression. The optional PostgreSQL tests require CI. Browser
-acceptance is pending the five-viewport GitHub CI gate. Independent review identified
-reset/pause-resume dispatch fencing; both are now covered by regression tests.
+## Verification and remaining gates
 
-## Exact next actions
+Local `make test`: 207 Python passed, 2 PostgreSQL-environment skips; Ruff format/lint,
+3 TypeScript SDK tests and web typecheck passed. `make build` passed. Full pytest
+with all warnings treated as errors also passed (207/2). Independent backend review
+found no correctness issues; migration 0007 upgrade/downgrade is covered.
+Initial PR CI 37175733764 passed 20 browser tests (50 viewport-duplicate skips),
+but exposed a remaining cleanup warning. Follow-up CI 37176287095 passed all gates
+with `pytest -W error`, 206 Python tests and 20 browser tests, no database warning.
+Final source adds a real TestClient disconnect during a slow SQLite driver query;
+removing the DB shield reproduced a shutdown hang (20-second bounded subprocess),
+while the fix returns all pooled connections. Final CI is required on the latest head.
+Local browser smoke
+cannot launch because Chromium is absent; CI must run the full browser suite before
+merge. Independently review terminal action races and preserve the tested tree.
 
-1. Publish this contributor, open a PR, verify the full CI gate on the exact head.
-2. Merge only when green; verify postmerge CI and tree equality.
-3. Create immutable `pickup/stage-5e-complete` at the verified merge and update this
-   retained contributor handoff with final merge/CI evidence.
-4. Next implementation: Stage 6A human-seat polish and acceptance (promotion,
-   resign/draw, reconnect and clocks), then Stage 6B explicit seat takeover.
-   Keep multiuser accounts/remote invitations for the final deployment stage.
+## Next target
 
-## Known boundaries
+After Stage 6A merge, create immutable `pickup/stage-6a-complete` at the verified
+merge, retain this contributor branch and update this handoff with CI evidence.
+Then Stage 6B: explicit pause-safe AI/human takeover, persisted seat changes,
+immutable events and stale proposal fencing. Stage 6C adds human consultation.
+Multiuser ownership/invitations remain at the final deployment stage.
 
-Loopback-only: pairing, audit and revoke are operator actions, not account-level
-multiuser authorization. No provider credentials enter the runner protocol.
-Transport deliveries/receipts remain process-local; restart reconstructs a new
-leased request while retaining grants/counts. Distributed routing is deferred.
-First dispatch binds the session. Concurrent new games with the same pairing can
-both be created, but only one can receive runner moves; the other pauses. Pair
-separately for each game. A dispatch already in flight may arrive after revoke;
-revocation fences commits, not already-sent network bytes. Reset needs a new pairing.
-Request timeout pauses; chess-clock expiration uses arbiter timeout rules. Grant
-expiry does not automatically forfeit a game or replenish on pause/heartbeat.
+## Boundaries
+
+Loopback operator only. Draw claims are supported; negotiated draw offers and agent
+acceptance are deferred. Legacy bodyless resign infers a human seat; new UI always
+sends explicit color/version. Clocks continue in dialogs. Runner grants remain bound
+to one match/seat/generation and distributed delivery routing remains deferred.

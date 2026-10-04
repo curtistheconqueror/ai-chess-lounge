@@ -192,6 +192,9 @@ export interface GameSnapshot {
   last_move: string | null;
   in_check: boolean;
   can_move: boolean;
+  can_claim_draw: boolean;
+  draw_claim_moves: string[];
+  draw_reason: string | null;
   opponent: OpponentKind;
   engine: EngineSummary | null;
   white_player: PlayerConfiguration;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import {
+  claimDraw,
   createGame,
   createRunnerPairing,
   fetchAnalysis,
@@ -15,6 +16,7 @@ import {
   websocketUrl,
 } from "./api";
 import { pairMoves, parseFen } from "./chess";
+import { HumanActionDialog } from "./HumanActionDialog";
 import { ChessBoard } from "./ChessBoard";
 import { EvaluationChart } from "./EvaluationChart";
 import { PromotionPicker, type PromotionPiece } from "./PromotionPicker";
@@ -49,7 +51,7 @@ const wrappedCodeStyle: CSSProperties = {
   whiteSpace: "normal",
 };
 type ClockSync = { gameId: string; generation: number; revision: number; receivedAt: number };
-type PromotionRequest = { from: string; to: string; candidates: string[] };
+type PromotionRequest = { from: string; to: string; candidates: string[]; gameId: string; version: number; color: "white" | "black" };
 type Color = "white" | "black";
 interface PlayerCardProps {
   side: "white" | "black";
@@ -127,7 +129,9 @@ function App() {
   const [panelTab, setPanelTab] = useState<PanelTab>("moves");
   const [replayPly, setReplayPly] = useState<number | null>(null);
   const [replayRunning, setReplayRunning] = useState(false);
+  const [humanAction, setHumanAction] = useState<"white" | "black" | "draw" | null>(null);
   const [promotion, setPromotion] = useState<PromotionRequest | null>(null);
+  const cancelPromotion = useCallback(() => setPromotion(null), []);
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -257,6 +261,8 @@ function App() {
       current.can_move !== snapshot.can_move
     ) {
       setSelected(null);
+      setPromotion(null);
+      setHumanAction(null);
     }
     setReplayPly((currentPly) =>
       currentPly === null ? null : Math.min(currentPly, snapshot.moves.length),
@@ -393,7 +399,7 @@ function App() {
       socketRef.current = socket;
       socket.addEventListener("open", () => {
         retryCount = 0;
-        setConnection("live");
+        // Enable input only after the reconnect delivers an authoritative snapshot.
       });
       socket.addEventListener("close", () => {
         if (stopped) return;
@@ -406,7 +412,10 @@ function App() {
       socket.addEventListener("message", (event) => {
         try {
           const message = JSON.parse(event.data) as { type: string; payload: GameSnapshot };
-          if (message.type === "snapshot") acceptSnapshot(message.payload);
+          if (message.type === "snapshot") {
+            acceptSnapshot(message.payload);
+            setConnection("live");
+          }
         } catch {
           setNotice("A live update could not be read.");
         }
@@ -535,7 +544,7 @@ function App() {
     () => projectClocks(game, clockTick, clockSyncRef.current),
     [game, clockTick],
   );
-  const playerCanMove = Boolean(game?.can_move && followingLive && !busy);
+  const playerCanMove = Boolean(game?.can_move && followingLive && !busy && connection === "live");
   const currentAnalysis =
     analysis &&
     game &&
@@ -552,7 +561,7 @@ function App() {
   const evalShare = evaluationShare(selectedPoint);
 
   async function commitMove(move: string) {
-    if (!game) return;
+    if (!game || !playerCanMove) return;
     setSelected(null);
     setPromotion(null);
     setBusy(true);
@@ -582,22 +591,30 @@ function App() {
       setSelected(square);
       return;
     }
+    await onMoveDrop(selected, square);
+  }
+
+  async function onMoveDrop(from: string, to: string) {
+    if (!game || !playerCanMove) return;
     const candidates = game.legal_moves.filter(
-      (move) => move.startsWith(selected) && move.slice(2, 4) === square,
+      (move) => move.startsWith(from) && move.slice(2, 4) === to,
     );
     if (!candidates.length) {
       setSelected(null);
       return;
     }
     if (candidates.some((candidate) => candidate.length === 5)) {
-      setPromotion({ from: selected, to: square, candidates });
+      setPromotion({ from, to, candidates, gameId: game.id, version: game.version, color: game.turn });
       return;
     }
     await commitMove(candidates[0]);
   }
 
   function choosePromotion(piece: PromotionPiece) {
-    if (!promotion) return;
+    if (!promotion || !game || promotion.gameId !== game.id || promotion.version !== game.version || !playerCanMove) {
+      setPromotion(null);
+      return;
+    }
     const move = `${promotion.from}${promotion.to}${promotionCodes[piece]}`;
     if (promotion.candidates.includes(move)) void commitMove(move);
   }
@@ -663,13 +680,18 @@ function App() {
     }
   }
 
-  async function onResign() {
-    if (!game || game.status !== "active") return;
+  async function onHumanAction(intendedMove: string | null) {
+    if (!game || !humanAction || game.status !== "active" || !followingLive || connection !== "live") return;
     setBusy(true);
     try {
-      acceptSnapshot(await resignGame(game.id));
+      acceptSnapshot(humanAction === "draw"
+        ? await claimDraw(game.id, game.version, intendedMove)
+        : await resignGame(game.id, humanAction, game.version));
+      setHumanAction(null);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Resign failed.");
+      setHumanAction(null);
+      setNotice(error instanceof Error ? error.message : "Action failed.");
+      try { acceptSnapshot(await fetchGame(game.id)); } catch { /* Keep the action error. */ }
     } finally {
       setBusy(false);
     }
@@ -689,6 +711,9 @@ function App() {
   }
 
   function selectPly(ply: number) {
+    setPromotion(null);
+    setHumanAction(null);
+    setSelected(null);
     setReplayRunning(false);
     setReplayPly(Math.max(0, Math.min(game?.moves.length ?? 0, ply)));
   }
@@ -831,6 +856,7 @@ function App() {
             </div>
             <ChessBoard
               fen={displayFen || "8/8/8/8/8/8/8/8 w - - 0 1"}
+              positionKey={`${game?.id}:${game?.version}:${game?.revision}`}
               flipped={flipped}
               legalMoves={followingLive ? game?.legal_moves ?? [] : []}
               selected={selected}
@@ -838,6 +864,7 @@ function App() {
               inCheck={Boolean(followingLive && game?.in_check)}
               disabled={!playerCanMove}
               onSquareClick={(square) => void onSquareClick(square)}
+              onMoveDrop={(from, to) => void onMoveDrop(from, to)}
             />
           </div>
 
@@ -1106,7 +1133,14 @@ function App() {
               </button>
             )}
             <button onClick={() => void onReset()} disabled={!game || busy}>Reset</button>
-            <button onClick={() => void onResign()} disabled={!game || busy || game.status !== "active"}>Resign</button>
+            {(["white", "black"] as const).filter((color) => game?.[`${color}_player`].connection_mode === "human").map((color) => (
+              <button key={color} onClick={() => setHumanAction(color)} disabled={!game || busy || game.status !== "active" || !followingLive || connection !== "live"}>
+                Resign {color === "white" ? "White" : "Black"}
+              </button>
+            ))}
+            <button onClick={() => setHumanAction("draw")} disabled={!playerCanMove || (!game?.can_claim_draw && !game?.draw_claim_moves?.length)} title="Available for threefold repetition or the fifty-move rule">
+              Claim draw
+            </button>
             <button onClick={() => game && void copyText(permalink(game.id), "Match link")}>Copy link</button>
             <button onClick={() => downloadGame("pgn")} disabled={!game}>Export PGN</button>
           </div>
@@ -1119,7 +1153,8 @@ function App() {
       </section>
 
       <footer className="lounge-footer"><span>AI Chess Lounge</span><span>Provider-neutral broadcast shell</span><span>PGN · FEN · JSON · Replay</span></footer>
-      {promotion && <PromotionPicker onChoose={choosePromotion} onCancel={() => setPromotion(null)} />}
+      {promotion && <PromotionPicker color={promotion.color} onChoose={choosePromotion} onCancel={cancelPromotion} />}
+      {humanAction && game && <HumanActionDialog action={humanAction} claimMoves={game.draw_claim_moves ?? []} busy={busy} onCancel={() => setHumanAction(null)} onConfirm={(move) => void onHumanAction(move)} />}
       {notice && <div className="toast" role="alert">{notice}</div>}
       <div className="sr-only" aria-live="polite">Position {displayPly}. {selectedPoint ? formatEvaluation(selectedPoint) : "Evaluation pending"}.</div>
     </main>

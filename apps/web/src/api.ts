@@ -124,8 +124,16 @@ export function resetGame(gameId: string): Promise<GameSnapshot> {
   return request<GameSnapshot>(`/api/games/${gameId}/reset`, { method: "POST" });
 }
 
-export function resignGame(gameId: string): Promise<GameSnapshot> {
-  return request<GameSnapshot>(`/api/games/${gameId}/resign`, { method: "POST" });
+export function resignGame(gameId: string, color: "white" | "black", positionVersion: number): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/resign`, {
+    method: "POST", body: JSON.stringify({ color, position_version: positionVersion }),
+  });
+}
+
+export function claimDraw(gameId: string, positionVersion: number, intendedMove: string | null): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/claim-draw`, {
+    method: "POST", body: JSON.stringify({ position_version: positionVersion, intended_move: intendedMove }),
+  });
 }
 
 export function retryAgentTurn(gameId: string): Promise<GameSnapshot> {

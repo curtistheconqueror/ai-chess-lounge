@@ -56,6 +56,13 @@ class RunnerSubmissionError(RuntimeError):
     """A remote runner proposal is stale, invalid, or unauthorized."""
 
 
+async def _shield_store_call(awaitable):
+    """Finish short runner DB operations before propagating ASGI cancellation."""
+
+    with anyio.CancelScope(shield=True):
+        return await awaitable
+
+
 @dataclass
 class _PendingTurn:
     delivery: RunnerTurnDelivery
@@ -203,7 +210,7 @@ class RemoteRunnerBroker:
 
     async def authenticate(self, runner_token: str) -> RunnerSessionRecord:
         session_id = self._session_id_from_token(runner_token)
-        session = await self.store.load_runner_session(session_id)
+        session = await _shield_store_call(self.store.load_runner_session(session_id))
         if (
             session is None
             or not hmac.compare_digest(session.issuer_digest, self._issuer_digest())
@@ -223,7 +230,9 @@ class RemoteRunnerBroker:
     async def heartbeat(self, runner_token: str) -> RunnerSessionStatus:
         session = await self.authenticate(runner_token)
         now = self._clock()
-        if not await self.store.touch_runner_session(session.session_id, now=now):
+        if not await _shield_store_call(
+            self.store.touch_runner_session(session.session_id, now=now)
+        ):
             raise RunnerAuthenticationError("The runner session is no longer active.")
         session = session.model_copy(update={"last_heartbeat_at": now.isoformat()})
         return self._status(session, now=now)
@@ -249,13 +258,15 @@ class RemoteRunnerBroker:
         if delivery.delivery_id not in self._pending:
             raise RunnerAuthenticationError("The turn delivery is no longer active.")
         try:
-            await self.store.check_runner_grant(
-                session_id,
-                delivery.request.match_id,
-                delivery.request.color,
-                now=self._clock(),
-                position_version=delivery.request.position_version,
-                match_revision=self._pending[delivery.delivery_id].match_revision,
+            await _shield_store_call(
+                self.store.check_runner_grant(
+                    session_id,
+                    delivery.request.match_id,
+                    delivery.request.color,
+                    now=self._clock(),
+                    position_version=delivery.request.position_version,
+                    match_revision=self._pending[delivery.delivery_id].match_revision,
+                )
             )
         except RunnerTrustError as exc:
             raise RunnerAuthenticationError(str(exc)) from exc
@@ -346,7 +357,9 @@ class RemoteRunnerBroker:
         wait_ms: int,
     ) -> RunnerTurnDelivery | None:
         session = await self.authenticate(runner_token)
-        await self.store.touch_runner_session(session.session_id, now=self._clock())
+        await _shield_store_call(
+            self.store.touch_runner_session(session.session_id, now=self._clock())
+        )
         # Pending is the source of truth, not a consumed transport queue. A lost
         # response/reconnect gets the identical delivery with its original deadline.
         end = asyncio.get_running_loop().time() + wait_ms / 1_000
@@ -377,7 +390,7 @@ class RemoteRunnerBroker:
     ) -> RunnerProposalReceipt:
         session = await self.authenticate(runner_token)
         now = self._clock()
-        await self.store.touch_runner_session(session.session_id, now=now)
+        await _shield_store_call(self.store.touch_runner_session(session.session_id, now=now))
         canonical = self._proposal_payload(
             delivery_id,
             submission.idempotency_key,
@@ -446,7 +459,9 @@ class RemoteRunnerBroker:
         self._connected.add(session.session_id)
         last_delivery_id = None
         try:
-            await self.store.touch_runner_session(session.session_id, now=self._clock())
+            await _shield_store_call(
+                self.store.touch_runner_session(session.session_id, now=self._clock())
+            )
             while True:
                 await self.authenticate(runner_token)
                 receive_task = asyncio.create_task(websocket.receive_json())
@@ -455,14 +470,12 @@ class RemoteRunnerBroker:
                 try:
                     done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                 finally:
-                    # ASGI cancellation can interrupt the wait itself. Drain both
-                    # children even then, without a second cancellation interrupting
-                    # cleanup or losing the original cancellation scope identity.
+                    # ASGI servers can cancel an asyncio task more than once while
+                    # shutdown is unwinding. An AnyIO shield does not mask direct
+                    # Task.cancel() calls, so keep the gather shielded and drain it
+                    # even if another cancellation arrives during cleanup.
                     with anyio.CancelScope(shield=True):
-                        for task in tasks:
-                            if not task.done():
-                                task.cancel()
-                        await asyncio.gather(*tasks, return_exceptions=True)
+                        await self._cancel_and_drain(tasks)
                 if receive_task in done:
                     message = receive_task.result()
                     await self._handle_socket_message(websocket, runner_token, message)
@@ -483,6 +496,23 @@ class RemoteRunnerBroker:
             return
         finally:
             self._connected.discard(session.session_id)
+
+    @staticmethod
+    async def _cancel_and_drain(tasks: set[asyncio.Task]) -> None:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        cleanup = asyncio.gather(*tasks, return_exceptions=True)
+        cancelled_during_cleanup = False
+        while not cleanup.done():
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                cancelled_during_cleanup = True
+        # Consume gather's result so exceptions raised by either child are observed.
+        cleanup.result()
+        if cancelled_during_cleanup:
+            raise asyncio.CancelledError
 
     async def _handle_socket_message(
         self,
