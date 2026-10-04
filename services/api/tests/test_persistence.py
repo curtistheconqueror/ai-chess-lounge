@@ -78,6 +78,10 @@ def test_player_and_runner_migrations_upgrade_and_downgrade(
     assert {"generation", "color", "max_turns", "turns_dispatched"}.issubset(
         columns("runner_match_grants")
     )
+    command.upgrade(config, "0007_human_draws")
+    assert "draw_reason" in columns("matches")
+    command.downgrade(config, "0006_runner_trust")
+    assert "draw_reason" not in columns("matches")
     command.downgrade(config, "0005_remote_runners")
     assert "runner_match_grants" not in tables()
     assert "runner_audit_events" not in tables()
