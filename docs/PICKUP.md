@@ -70,10 +70,28 @@ Artifact 11309053916 includes batch-desktop.png and batch-phone.png; both visual
 inspected with no blocking layout issue. PR18 description refreshed with verified
 7A evidence. This final handoff is docs-only; no merge or deployment is claimed.
 
+## Stage 7C continuation in progress
+
+Contributor: feat/stage-7c-tournaments, based on final verified 7B handoff
+62ea9f012fc79cd474df574ff5672dff8a5ec91d (identical tree to local 13c234a).
+Existing contributor branches remain intact. PR19 depends on PR18; new 7C PR must
+be a dependent draft against the 7B branch. No merges are authorized.
+
+Implemented separate schema 2.0 tournament plans without changing v1 hashes;
+round robin and gauntlet pairing; bounded knockout templates with winner-dependent
+claims; blocked unresolved descendants; natural-results-only standings and local
+provisional ratings separated by division/clock/protocol. UI adds format/anchor selection, bracket previews, and standings with unrated/no-result
+disclosures. Thirteen tournament regressions pass, including a real three-game
+knockout with the correct semifinal winners in its final and simultaneous final claims.
+Final warning-strict Python gate passed 274 tests (3 PostgreSQL environment skips).
+The earlier full make test also passed 3 SDK tests, Ruff and TypeScript.
+Publication, CI and desktop/phone visual checks remain pending.
+
 ## Next target and limits
 
-Stage 7C adds tournament formats, standings and division-specific provisional ratings.
-Branch from this verified 7B contributor handoff; new PR must remain a dependent draft.
+Finish Stage 7C verification and dependent draft publication; record remote tree,
+CI and desktop/phone visual evidence before claiming completion. Then Stage 7D
+adds reliability/efficiency metrics and honest comparison uncertainty.
 Preserve legacy plan hashes, cap bracket jobs, never count failed/limited games as
 chess losses, and leave tied knockout series unresolved without inventing winners.
 Keep draft dependencies explicit. Merge and deployment need separate approval.

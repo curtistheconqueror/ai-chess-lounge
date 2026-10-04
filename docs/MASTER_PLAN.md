@@ -606,7 +606,7 @@ work on desktop and mobile with full audit history.
 | --- | --- |
 | 7A Experiment builder | Draft implementation: persisted entrants, effort sweeps, legal opening suites, clocks, bounded deterministic game schedule, color swaps, stop-rule configuration and SHA-256 manifest |
 | 7B Scheduler | Dependent draft: durable runs/jobs, shared batch concurrency, existing provider retry/rate policy, restart/resume, stop rules and cancellation; global monetary/request-rate quotas remain Stage 8 work |
-| 7C Tournaments | Round robin, knockout, gauntlet, standings, and division-specific ratings |
+| 7C Tournaments | Dependent draft: versioned round robin/gauntlet/knockout plans, winner-dependent dispatch, honest no-result standings and division/clock/protocol-specific provisional local ratings |
 | 7D Metrics | Chess strength, reliability, efficiency, effort response, confidence intervals |
 | 7E Reports | Interactive comparisons and CSV/JSON/PGN experiment bundles |
 

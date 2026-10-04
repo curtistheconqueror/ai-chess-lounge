@@ -63,3 +63,24 @@ Migration 0011 adds runs, jobs, and the shared dispatch lock. The queue limits b
 concurrency to four games globally. Existing provider retry/rate policy still applies,
 but cross-process monetary and request-rate quotas remain Stage 8 work. No live paid
 provider batches are run as part of the deterministic acceptance gate. See ADR 0024.
+
+## 7C — Tournament formats and standings (dependent draft)
+
+Choose **Round robin**, **Gauntlet**, or **Knockout** for a schema 2.0 tournament.
+The original comparison format remains schema 1.0 and keeps its original hashes.
+Each selected effort variant is a competitor. A gauntlet requires an anchor variant;
+a knockout requires 2, 4, 8, 16 or 32 competitors, seeded in entrant/effort order.
+All configured openings, repetitions and color swaps form a series. At most 512
+slots may be planned, including later knockout rounds.
+
+Run preparation and authorization work exactly as before. Later knockout games wait
+for known winners. Tied or incomplete series do not advance anyone: dependent slots
+are blocked, and the report explicitly has no champion. There are no automatic
+extra paid tiebreak games and no score awarded for provider failure or a ply cap.
+
+Run snapshots include a tournament report: series, resolved opponents, champion (if
+any), scoreboard and provisional ratings. Completed wins/draws/losses alone earn
+points; no-results are shown separately. Ratings start at 1500 with K=24 and are
+recomputed in schedule order within each assistance/clock/protocol pool. These are
+local experimental ratings, not calibrated human Elo or an established strength claim.
+See ADR 0025. Stage 7D adds metrics/uncertainty; 7E adds comparison exports.
