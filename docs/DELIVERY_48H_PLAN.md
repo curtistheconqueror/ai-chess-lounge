@@ -141,3 +141,15 @@ the existing CI service; native restore still needs its published test outcome.
 Account/security/spending/merge/deployment decisions and Stage 9 scope remain open.
 The original dated checkpoints/ranges remain targets; full production acceptance
 and the final integration buffer are preserved. No unrelated gate stops local work.
+
+## Verified checkpoint — October 4, 14:10 America/Chicago (19:10 UTC)
+
+8B local operations draft PR25 source 2e3c150 passed CI 37226798676: 311 Python,
+3 SDK, 34 browser plus all migration/lint/type/build gates. Generated PostgreSQL17
+fixture recovery executed and verified all public-table rows and game/event/run/report
+state; 13 tables/14 rows do not establish production RPO/RTO or load capacity.
+Current local readiness/capped telemetry and fixture recovery are verified; the full
+8B operational deliverables remain open. Bounded 8C acceptance preparation is saved.
+The final documentation follow-up receives a separate current-head CI check.
+No new owner decision has arrived; continue independent fixture performance work
+and budget design. The production/account/Stage 9 confidence and gates remain as above.

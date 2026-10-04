@@ -309,3 +309,37 @@ Local continuation verification: 309 Python tests passed with warnings as errors
 (4 PostgreSQL infrastructure skips), Ruff format/check, web type/production build
 and 3 SDK tests passed. Native PostgreSQL restore and final published browser checks
 remain CI gates. No dependency or external service was added.
+
+Independent read-only review found no route from the native fixture to a configured
+application DB/provider. It prompted clearer quiescent-fixture versus production
+recovery wording and nested cleanup so a close/dispose failure cannot skip attempted
+disposal of the other resources, generated DB cleanup or admin-engine disposal.
+Native tools run in the ephemeral CI service; Docker-client timeout is not a claim
+of generic remote process termination. Native recovery verification still requires CI.
+
+## Stage 8B local operations verified source checkpoint; phase still in progress
+
+Dependent draft PR25: https://github.com/curtistheconqueror/ai-chess-lounge/pull/25
+Contributor feat/stage-8b-local-operations is based on PR24's final fc7ea99.
+Reviewed source head 2e3c150ac0d094486130b8f6e42dc197a0b4115e passed
+CI 37226798676 / job 111507996632: 311 Python (2 engine skips), 3 SDK,
+34 browser (76 intentional viewport skips), SQLite/PostgreSQL migrations and all
+lint/type/build gates. Initial source 3d65fed also passed CI 37226694209.
+Native PostgreSQL restore executed successfully, not skipped. Artifact 11312098665
+contains secret-free fixture evidence: 13 tables, 14 rows, 31,864-byte custom archive,
+0.3104 seconds including restore/validation; no production RPO/RTO claim.
+The artifact's desktop/phone metrics/board screenshots were visually inspected; no
+layout blocker found. No live provider call, production restore or deployment used.
+
+This follow-up updates docs only; verify its final head separately. Retain every
+contributor branch and draft. Main still 087c565; no target-branch merge or completed
+pickup is claimed. OPERATIONS_RUNBOOK.md/ADR0028 specify implemented limits and
+remaining 8B production tracing/metrics/alerts/retention/backups. PERFORMANCE_ACCEPTANCE.md
+is bounded 8C preparation only, not measured capacity or 8C completion.
+
+Exact next safe target: implement and measure the generated-fixture 8C harness
+across HTTP/readiness, spectators/WebSockets, queue/database and real engine when
+available, preserving correctness and cleanup gates. Continue 8D budget reservation
+contract design; account/security/budget-owner/release policies remain decisions.
+Keep the October 6 12:40 PM America/Chicago target and final integration buffer
+visible; Stage 9 scope is still unresolved and 2E/6D requirements remain deferred.

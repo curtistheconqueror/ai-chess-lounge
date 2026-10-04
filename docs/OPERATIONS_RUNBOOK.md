@@ -1,8 +1,8 @@
 # Operations and recovery runbook — Stage 8B candidate
 
-Status: **In progress. Offline SQLite fixture recovery is tested; production
-operations, native PostgreSQL CI restore, tracing, alert delivery and retention are
-not yet fully accepted.**
+Status: **In progress. Local readiness/instrumentation and SQLite/PostgreSQL
+fixture recovery are verified; production operations, full tracing/metrics, alert
+delivery and retention remain unaccepted.**
 No live database, account, setting, provider or deployment is changed by this document.
 
 ## Current evidence and remaining work
@@ -13,7 +13,11 @@ complete SQL dump, and verifies game FEN/version/result, run/job state and repro
 manifest/game/move/PGN exports. A separate WAL test confirms that committed journal
 content is included and an uncommitted write is excluded. All connections close.
 This is a correctness rehearsal at fixture scale, not a production RPO/RTO result.
-It does not establish multi-host durability, encrypted storage or PostgreSQL recovery.
+It does not establish multi-host durability or encrypted storage. Separately, native
+PostgreSQL 17 generated-fixture recovery passed CI 37226798676 on source 2e3c150.
+Artifact 11312098665 records 13 tables, 14 rows and a 31,864-byte archive restored and
+verified in 0.3104 seconds on the CI runner. This small quiescent-fixture measurement
+is not production RPO/RTO or concurrent-write, cross-version or topology acceptance.
 
 Run with `.venv/bin/pytest -W error services/api/tests/test_restore_rehearsal.py`.
 The helper exists only in tests. It is not a supported live backup CLI or scheduled job.
@@ -21,7 +25,7 @@ The helper exists only in tests. It is not a supported live backup CLI or schedu
 | Operational gate | Existing behavior / evidence | Remaining acceptance |
 | --- | --- | --- |
 | Process health | Compatible liveness plus bounded `/api/ready` database/worker checks; engine optional unless requested | Deployment probe policy and fault/recovery drill |
-| Backups | Offline SQLite snapshot/restore regression | Approved PostgreSQL backup destination, access and encryption; native backup plus isolated restore and measured RPO/RTO |
+| Backups | Verified offline SQLite snapshot/restore and generated, quiescent PostgreSQL native restore in CI 37226798676 | Approved production backup/PITR, concurrent-write and topology/cross-version drills, encryption, access and measured RPO/RTO |
 | State recovery | Persistent moves/events, revision fencing and queue recovery tests | Production-topology crash/restart drill, runner reconnect and clock reconciliation |
 | Observability | Opaque request IDs; capped process-local route timing/status summaries and WebSocket counts; privacy regressions | Full tracing, queue/provider/engine/DB operational metrics, approved collector and sampling |
 | Alerts | No delivery configured | Approved recipient/channel; synthetic fault and recovery delivery checks; alert ownership |
@@ -115,5 +119,8 @@ PostgreSQL 17 service. It creates separate disposable UUID databases, uses nativ
 custom-format dump/transactional restore, checks logical rows before app initialization
 and validates game/event/run/export state. Only secret-free counts/size/timing evidence
 may be uploaded. Local environments without this declared infrastructure skip that test.
-Record its actual published CI outcome before calling PostgreSQL recovery verified.
+Published source 2e3c150 passed CI 37226798676: 311 Python tests (2 engine skips),
+3 SDK and 34 browser tests (76 intentional viewport skips), migrations/lint/types/build.
+Artifact 11312098665 includes secret-free native fixture evidence and responsive
+screenshots inspected at desktop/phone. Production PostgreSQL recovery remains open.
 See ADR0028; full Stage 8B and production recovery acceptance remain open.
