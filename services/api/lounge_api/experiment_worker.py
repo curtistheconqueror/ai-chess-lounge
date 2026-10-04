@@ -32,8 +32,8 @@ class ExperimentWorker:
     async def close(self):
         self.closed = True
         tasks = ([self.task] if self.task else []) + list(self.jobs.values())
-        for task in tasks:
-            task.cancel()
+        # Let current database transactions finish before disposing the store.
+        # Cancelling aiosqlite during connection creation can leak its connection.
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self.jobs.clear()
@@ -99,7 +99,7 @@ class ExperimentWorker:
                 continue
             while not self.closed:
                 claim = await self.queue.claim(run_id, now=datetime.now(UTC))
-                if claim is None:
+                if claim is None or self.closed:
                     break
                 prior = self.jobs.get(claim["id"])
                 if prior is not None and not prior.done():

@@ -78,9 +78,11 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     async def lifespan(_: FastAPI):
         await active_manager.start()
         batch_worker.start()
-        yield
-        await batch_worker.close()
-        await active_manager.close()
+        try:
+            yield
+        finally:
+            await batch_worker.close()
+            await active_manager.close()
 
     application = FastAPI(
         title="AI Chess Lounge API",
