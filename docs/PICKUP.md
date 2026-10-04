@@ -370,3 +370,18 @@ Local source checkpoint 79aac08: 321 Python tests passed with warnings as errors
 4 PostgreSQL infrastructure skips; Ruff format/check passed. Default SQLite/ASGI/
 queue plus actual Stockfish16 benchmark succeeded with explicit limits.
 Remote publication history differs; record its head and full CI separately.
+
+Published dependent draft PR26:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/26
+Source head 3c84e1fe06bf3bb7a3c00ff9111da670eecae261 passed
+CI 37230951795 / job 111520263552: 323 Python (2 missing-engine skips),
+3 SDK, 34 browser (76 intentional viewport skips), both migrations/lint/types/build.
+Native benchmark measured SQLite and PostgreSQL17.11; installed engine absent in CI
+and explicitly skipped, while local Stockfish16 measurement succeeded. Artifact
+11313727043 records tested synthetic merge SHA a4996b50aa1926408bfacea6404964db055707cd
+(the PR source SHA above is distinct), runner EPYC7763/four CPUs/~16GiB memory,
+100-spectator post-commit drain p95 386.6ms SQLite/615.6ms PG, eight-game queue
+1/4-lease times 4.562/1.743s SQLite and 4.572/1.501s PG. All fixture correctness and
+cleanup checks passed; no hosted capacity claim. Native restore evidence remains
+in the artifact. Desktop/phone screenshots inspected with no layout blocker found.
+This documentation follow-up receives a separate current-head CI verification.

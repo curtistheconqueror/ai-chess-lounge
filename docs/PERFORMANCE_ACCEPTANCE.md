@@ -100,3 +100,11 @@ hardware, both databases, workload, limits and skips in its aggregate JSON artif
 Full 8C remains in progress. Hosted/representative measurements depend on approved
 account/security/topology choices. Preserve final CI/browser/restore gates and the
 October 6 17:40 UTC target's integration buffer.
+
+Published draft PR26 source 3c84e1f passed CI 37230951795. Artifact 11313727043
+contains measured SQLite 3.45.1/PostgreSQL17.11 fixtures on EPYC 7763, four CPUs,
+~16GiB reported memory. At 100 spectators post-commit drain p95 was 386.6ms/615.6ms;
+eight-game 1/4-lease times were 4.562/1.743s SQLite and 4.572/1.501s PG. Both
+backends passed correctness/cleanup. CI explicitly skipped absent Stockfish; local
+Stockfish16 is separate evidence. Artifact source SHA is the tested synthetic merge
+a4996b5; PR source 3c84e1f is distinct. No production SLA/capacity is inferred.
