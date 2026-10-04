@@ -101,6 +101,9 @@ version 2 under a five-second deadline, retaining exact attempt/move assertions.
 A 200 ms engine-response case reliably covers the old timing assumption.
 No runtime retry behavior changed. Local warning-strict suite: 260 passed,
 5 environment-dependent skips; manager tests: 15 passed; Ruff/checks passed.
-Published correction CI and browser acceptance are pending; do not call current
-PR19 green until its final head is verified. Propagate the test fix to 7C/7D.
+Correction CI 37220994565 / job 111491128151 passed on head
+f5992ec8930f2ed0625969ef33c02f1820996e4f: 263 Python tests (2 engine skips),
+3 SDK tests, 30 browser tests (70 intentional duplicate-viewport skips), both
+migrations, lint, types and build. The identical test fix is propagated to 7C/7D.
+This evidence names the tested head; the present follow-up only updates these notes.
 No merge or deployment performed.
