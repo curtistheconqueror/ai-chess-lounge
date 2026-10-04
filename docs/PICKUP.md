@@ -40,10 +40,11 @@ CI run 37215467880 / job 111474957890 passed on published code head
 migrations, lint, types and build. Source tree matched local 50579a6 exactly.
 This final handoff is docs-only. No merge or completed pickup is claimed.
 
-## Current continuation: Stage 7B dependent draft in progress
+## Current continuation: Stage 7B draft PR19 verified; merge approval pending
 
 Contributor: feat/stage-7b-durable-scheduler, based on the verified Stage 7A handoff
 023f928dfa4b94dbd15a191912ee9bb8005eec0a. Stage 7A remains draft PR18; main is unchanged.
+Draft PR: https://github.com/curtistheconqueror/ai-chess-lounge/pull/19
 The remote contributor branch is retained. No completed pickup is claimed.
 
 Implemented migration 0011, durable run/job reservations, UUID-stable match identity,
@@ -54,18 +55,27 @@ fence late move commits. Uncertain in-flight requests after a crash fail without
 redispatch; only explicit batch pauses resume. Provider failures never auto-retry
 through batch recovery. No live provider spending was used for acceptance.
 
-Final local gate: make test passed 260 Python tests (3 PostgreSQL environment skips),
-3 SDK tests, Ruff and TypeScript. pytest -W error separately passed 260/3; production
-build passed. Fifteen queue regressions include two-worker claims/cancellation,
-lease replacement, explicit pause/restart, uncertain dispatch and failed-provider
-recovery, authorization, deadlines and exact ply caps. Independent review found and
-fixed restart redispatch and stale-claim move acceptance. Browser CI remains pending.
+Verification: initial local make test / pytest -W error passed 260 Python tests
+(3 PostgreSQL environment skips), 3 SDK tests, Ruff/types and build. Independent
+review added exact-claim fencing and conservative crash recovery. First CI caught
+an unclosed aiosqlite connection during cancellation. Worker shutdown now drains
+current database work; a sixteenth queue regression verifies cleanup. Full warning-
+strict local suite passed again, with the new cleanup test passing separately.
+
+Final CI run 37218094548 / job 111482645121 passed on remote code head
+9767a4e0ee69d3c28e97b5c35f0cdbd4ff72e78d: 262 Python tests (2 engine skips),
+3 SDK tests, 30 browser tests (70 intentional duplicate-viewport skips), SQLite and
+PostgreSQL migrations, format/lint/types/build. Source tree matches local 14b0ca4.
+Artifact 11309053916 includes batch-desktop.png and batch-phone.png; both visually
+inspected with no blocking layout issue. PR18 description refreshed with verified
+7A evidence. This final handoff is docs-only; no merge or deployment is claimed.
 
 ## Next target and limits
 
-Finish Stage 7B final regressions and desktop/phone CI, publish a dependent draft PR
-against feat/stage-7a-experiment-builder, verify the remote tree and record evidence.
-Then Stage 7C adds tournament formats, standings and division-specific ratings.
+Stage 7C adds tournament formats, standings and division-specific provisional ratings.
+Branch from this verified 7B contributor handoff; new PR must remain a dependent draft.
+Preserve legacy plan hashes, cap bracket jobs, never count failed/limited games as
+chess losses, and leave tied knockout series unresolved without inventing winners.
 Keep draft dependencies explicit. Merge and deployment need separate approval.
 
 6D/2E account roles and invitations remain for the final hosted multiplayer rollout.
