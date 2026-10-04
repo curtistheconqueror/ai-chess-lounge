@@ -1,3 +1,4 @@
+import type { Consultation } from "./types";
 import type {
   ApiError,
   AssistanceDivision,
@@ -164,4 +165,21 @@ export function websocketUrl(gameId: string): string {
 
 export function revokeRunnerSession(sessionId: string): Promise<void> {
   return request<void>(`/api/runner-sessions/${encodeURIComponent(sessionId)}/revoke`, { method: "POST" });
+}
+
+export function requestConsultation(gameId: string, advisor: PlayerConfigurationInput, expectedRevision: number): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/consultations`, {
+    method: "POST", body: JSON.stringify({ advisor, expected_revision: expectedRevision }),
+  });
+}
+export function cancelConsultation(gameId: string, adviceId: string, expectedRevision: number): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/consultations/${adviceId}/cancel`, {
+    method: "POST", body: JSON.stringify({ expected_revision: expectedRevision }),
+  });
+}
+export function playConsultation(gameId: string, advice: Consultation, revision: number): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/moves`, {
+    method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({ move: advice.move, position_version: advice.position_version, consultation_id: advice.id, consultation_revision: revision }),
+  });
 }
