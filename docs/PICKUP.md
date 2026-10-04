@@ -613,3 +613,14 @@ or new credentials. Exposed tool metadata contains no Supabase capability or too
 search; no account/session probing, login or setup occurred. Claude access is not
 evidence of this session access. HOSTED_RELEASE_PATH.md records what is playable,
 what is unmerged, real runtime requirements, setup timing and conditional estimates.
+
+Published dependent draft PR31:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/31
+Source 678dc6511246bc4ac71d03bed88322a5fa0e8c38; full current-head CI pending.
+This pickup follow-up is documentation only and has its own check. Main unchanged;
+all contributor branches retained. No completed pickup until approved verified merge.
+After this head's check, the next real target is approved Supabase/account/runtime
+integration under HOSTED_RELEASE_PATH.md. Safe existing BYO acceptance is verified;
+no duplicate adapters or owner inference-budget decision is required. No payment
+subsystem is needed for free access. Quota/access/paid-dispatch policies remain open.
+Stage9 selection and the Oct6 17:40UTC target with final integration buffer remain.
