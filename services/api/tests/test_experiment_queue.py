@@ -682,3 +682,41 @@ def test_move_commit_requires_exact_current_experiment_claim(tmp_path):
             await stores[1].close()
 
     asyncio.run(run())
+
+
+def test_worker_shutdown_drains_database_work_before_store_close(tmp_path):
+    from lounge_api.experiment_worker import ExperimentWorker
+    from lounge_api.manager import GameManager
+    from test_manager import FakeEngine
+
+    async def run():
+        manager = GameManager(
+            engine=FakeEngine(),
+            store=DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'shutdown.db'}"),
+            schedule_agents=False,
+            schedule_timeouts=False,
+        )
+        await manager.start()
+        worker = ExperimentWorker(manager)
+        entered, release, finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        original = worker.queue.active_runs
+
+        async def held_database_read():
+            entered.set()
+            await release.wait()
+            result = await original()
+            finished.set()
+            return result
+
+        worker.queue.active_runs = held_database_read
+        worker.start()
+        await asyncio.wait_for(entered.wait(), 2)
+        closing = asyncio.create_task(worker.close())
+        await asyncio.sleep(0)
+        assert not closing.done()
+        release.set()
+        await asyncio.wait_for(closing, 2)
+        assert finished.is_set()
+        await manager.close()
+
+    asyncio.run(run())
