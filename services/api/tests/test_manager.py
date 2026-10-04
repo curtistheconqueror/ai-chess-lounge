@@ -86,9 +86,10 @@ class FakeClock:
 
 
 class FlakyEngine(FakeEngine):
-    def __init__(self) -> None:
+    def __init__(self, response_delay: float = 0) -> None:
         super().__init__()
         self.calls = 0
+        self.response_delay = response_delay
 
     async def choose_move(
         self, board: chess.Board, *, target_elo: int, move_time_ms: int
@@ -96,6 +97,7 @@ class FlakyEngine(FakeEngine):
         self.calls += 1
         if self.calls == 1:
             raise EngineFailure("transient test failure")
+        await asyncio.sleep(self.response_delay)
         return await super().choose_move(
             board,
             target_elo=target_elo,
@@ -616,9 +618,10 @@ def test_spectator_analysis_restarts_when_position_advances() -> None:
     asyncio.run(run())
 
 
-def test_transient_engine_failure_retries_the_pending_turn() -> None:
+@pytest.mark.parametrize("response_delay", [0, 0.2])
+def test_transient_engine_failure_retries_the_pending_turn(response_delay: float) -> None:
     async def run() -> None:
-        engine = FlakyEngine()
+        engine = FlakyEngine(response_delay)
         manager = GameManager(
             engine=engine,
             store=DatabaseStore("sqlite+aiosqlite:///:memory:"),
@@ -632,8 +635,14 @@ def test_transient_engine_failure_retries_the_pending_turn() -> None:
             assert pending.version == 1
             assert pending.turn == "black"
 
-            await asyncio.sleep(0.6)
-            recovered = await manager.snapshot(game.id)
+            # Retry starts after 500 ms; engine response and commit can take longer.
+            # Observe the committed position rather than assuming a runner speed.
+            async with asyncio.timeout(5):
+                while True:
+                    recovered = await manager.snapshot(game.id)
+                    if recovered.version >= 2:
+                        break
+                    await asyncio.sleep(0.02)
 
             assert engine.calls == 2
             assert recovered.version == 2
@@ -673,8 +682,14 @@ def test_transient_lease_claim_failure_retries_the_pending_turn(
             assert pending.version == 1
             assert pending.turn == "black"
 
-            await asyncio.sleep(0.6)
-            recovered = await manager.snapshot(game.id)
+            # Retry starts after 500 ms; engine response and commit can take longer.
+            # Observe the committed position rather than assuming a runner speed.
+            async with asyncio.timeout(5):
+                while True:
+                    recovered = await manager.snapshot(game.id)
+                    if recovered.version >= 2:
+                        break
+                    await asyncio.sleep(0.02)
 
             assert attempts == 2
             assert recovered.version == 2
