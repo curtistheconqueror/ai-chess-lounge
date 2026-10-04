@@ -201,10 +201,14 @@ def test_reset_generation_cannot_reuse_grant(tmp_path):
     async def run():
         store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'reset.db'}")
         broker, creds = await paired(store)
-        manager = GameManager(store=store, remote_runners=broker, schedule_timeouts=False)
+        manager = GameManager(
+            store=store, remote_runners=broker, schedule_timeouts=False, schedule_agents=False
+        )
         await manager.start()
         try:
-            game = await manager.create(CreateGameRequest(opponent=OpponentKind.HUMAN))
+            game = await manager.create(
+                CreateGameRequest(opponent=OpponentKind.HUMAN, white_player=creds.player)
+            )
             await store.reserve_runner_turn(
                 creds.session_id, game.id, "white", now=datetime.now(UTC)
             )
@@ -225,13 +229,19 @@ def test_other_worker_lifecycle_change_blocks_delivery_and_submission(tmp_path, 
         url = f"sqlite+aiosqlite:///{tmp_path / 'lifecycle.db'}"
         store = DatabaseStore(url)
         broker, creds = await paired(store)
-        manager = GameManager(store=store, remote_runners=broker, schedule_timeouts=False)
-        other = GameManager(store=DatabaseStore(url), schedule_timeouts=False)
+        manager = GameManager(
+            store=store, remote_runners=broker, schedule_timeouts=False, schedule_agents=False
+        )
+        other = GameManager(
+            store=DatabaseStore(url), schedule_timeouts=False, schedule_agents=False
+        )
         await manager.start()
         await other.start()
         task = None
         try:
-            game = await manager.create(CreateGameRequest(opponent=OpponentKind.HUMAN))
+            game = await manager.create(
+                CreateGameRequest(opponent=OpponentKind.HUMAN, white_player=creds.player)
+            )
             task = asyncio.create_task(broker.request_turn(request(game.id), creds.player))
             delivery = await broker.next_turn(creds.runner_token, wait_ms=1000)
             assert delivery is not None
