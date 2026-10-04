@@ -38,7 +38,10 @@ class ExperimentOpening(StrictModel):
         board = chess.Board()
         for move in self.moves:
             try:
-                board.push_uci(move)
+                parsed = chess.Move.from_uci(move)
+                if parsed not in board.legal_moves:
+                    raise ValueError("Illegal opening move.")
+                board.push(parsed)
             except ValueError as exc:
                 raise ValueError(
                     "Opening must contain a legal UCI sequence from start position."
