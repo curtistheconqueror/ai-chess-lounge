@@ -535,3 +535,24 @@ scenarios all measured successfully. Source tree was clean. Retained loopback
 evidence is docs/verification/stage8c-loopback-local.json; no hosted capacity claim.
 PR28 final5f560ea independently passed CI37233840243. Native PostgreSQL
 loopback and this contributor's published full/browser CI remain new gates.
+
+## Stage 8C loopback published source verified
+
+Draft PR29: https://github.com/curtistheconqueror/ai-chess-lounge/pull/29
+Source e6c2e409189fcdd3f23f62aa9387d9231db58e16 passed CI37234869427 /
+job111531856822:357 Python/3 absent-engine skips,3 SDK,34 browser/76 intentional
+viewport skips, SQLite/PostgreSQL migrations, native restore/performance and all
+format/lint/type/build gates. Artifact11314774765 was inspected: SQLite/PostgreSQL
+loopback scenarios reached32 concurrent HTTP requests and100 spectators, verified
+four idempotent replays, persisted position/event continuity, reconnect, zero active
+connections and closed owned listener. Desktop/phone metric screenshots inspected.
+These are bounded generated measurements, not hosted capacity or a sustained SLA.
+Installed Stockfish evidence remains the clean local artifact; CI explicitly skips it.
+PR28 final5f560ea passed CI37233840243 and PR27 finalc267056 passed CI37232631478.
+This documentation follow-up receives its own distinct check; no merge/deployment.
+
+Next safe target: Stage8E preparation-only beta readiness packet, retaining all open
+production/account/budget/performance and Stage9 decisions. Main remains087c565;
+all contributor branches/draft dependencies are preserved. Completed pickup branches
+remain gated on approved verified merges. Deadline Oct6 17:40UTC keeps final8–9h
+integration/review/CI/restore/visual buffer; external decisions can exceed this window.
