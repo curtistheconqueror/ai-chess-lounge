@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from . import __version__
 from .adapters import AdapterRegistry, ScriptedPlayerAdapter
-from .engine import StockfishService
+from .engine import EngineFailure, StockfishService
 from .experiment_queue import QueueConflict
 from .experiment_reports import ExperimentReports
 from .experiment_worker import ExperimentWorker
@@ -479,6 +479,21 @@ async def engine_workload():
 
         await together(*[play() for _ in range(4)], *[analyse() for _ in range(4)])
         assert board.fen() == original and playing._lock is not analysis._lock
+        stopped = playing._engine
+        stopped.close()
+        await asyncio.to_thread(stopped.returncode.result, 5)
+        try:
+            await playing.choose_move(board, target_elo=1600, move_time_ms=30)
+        except EngineFailure:
+            pass
+        else:
+            raise AssertionError("Terminated engine did not surface failure")
+        assert playing._engine is None
+        await playing._ensure_started()
+        playing._engine.configure({"Threads": 1, "Hash": 16})
+        recovered = await playing.choose_move(board, target_elo=1600, move_time_ms=30)
+        assert chess.Move.from_uci(recovered.uci) in board.legal_moves
+        assert playing._engine is not stopped and board.fen() == original
         return {
             "status": "measured",
             "engine_version": playing._version,
@@ -491,6 +506,8 @@ async def engine_workload():
             "player_latency": distribution(elapsed),
             "startup_ms": startup_ms,
             "position_unchanged": True,
+            "terminated_process_reaped": True,
+            "failure_surfaced_then_explicit_service_restart_verified": True,
             "isolation": "separate_serialized_engine_services_not_a_capacity_SLA",
         }
     finally:
