@@ -72,7 +72,7 @@ inspected with no blocking layout issue. PR18 description refreshed with verifie
 
 ## Stage 7C draft PR20 verified; merge approval pending
 
-Contributor: feat/stage-7c-tournaments, based on final verified 7B handoff
+Contributor: feat/stage-7c-tournaments, based on the 7B handoff
 62ea9f012fc79cd474df574ff5672dff8a5ec91d (identical tree to local 13c234a).
 Draft PR: https://github.com/curtistheconqueror/ai-chess-lounge/pull/20
 Existing contributor branches remain intact. PR20 depends on PR19, which depends on
@@ -113,3 +113,15 @@ Global monetary and cross-process request-rate budgets remain Stage 8; batch con
 is bounded, and existing provider retry/rate controls remain process-local.
 Hash identity does not guarantee provider determinism or pin changing model aliases.
 Local operator deployment only. No merge, deployment or security changes performed.
+
+## Retry-test follow-up (2026-10-04)
+
+PR19 docs head 62ea9f0 failed CI 37218427567 after its earlier code-head success:
+a fixed 600 ms wait read version 1 while the second retry move was still saving.
+The correction waits for committed version 2 with a five-second deadline and adds
+a slow-response regression. PR19 correction head f5992ec has CI 37220994565 pending.
+This dependent branch carries the identical test correction (code head 161379f1).
+Local warning-strict 7C suite: 273 passed, 5 environment-dependent skips.
+Prior final 7C docs head 1e5b1ac passed CI 37219857364, but current corrected-head
+CI and browser acceptance must be verified separately. No runtime code changed.
+No merge, deployment or completed pickup is claimed.
