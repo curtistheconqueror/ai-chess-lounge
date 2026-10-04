@@ -40,7 +40,7 @@ CI run 37215467880 / job 111474957890 passed on published code head
 migrations, lint, types and build. Source tree matched local 50579a6 exactly.
 This final handoff is docs-only. No merge or completed pickup is claimed.
 
-## Current continuation: Stage 7B draft PR19 verified; merge approval pending
+## Current continuation: Stage 7B draft PR19 retry-test correction; current CI pending
 
 Contributor: feat/stage-7b-durable-scheduler, based on the verified Stage 7A handoff
 023f928dfa4b94dbd15a191912ee9bb8005eec0a. Stage 7A remains draft PR18; main is unchanged.
@@ -85,3 +85,22 @@ Global monetary and cross-process request-rate budgets remain Stage 8; batch con
 is bounded, and existing provider retry/rate controls remain process-local.
 Hash identity does not guarantee provider determinism or pin changing model aliases.
 Local operator deployment only. No merge, deployment or security changes performed.
+
+## PR19 current-head verification correction (2026-10-04)
+
+Docs-only head 62ea9f012fc79cd474df574ff5672dff8a5ec91d failed CI
+37218427567 / job 111483628735: 261 passed, 2 skipped, one retry-test failure.
+The earlier code-head success above remains historical evidence, not a green
+check for that later head. Both migrations passed; browser/SDK/build were skipped.
+
+The retry test observed engine.calls == 2 but read version 1 before the second
+move committed. Its fixed 600 ms sleep allowed only 100 ms beyond the 500 ms
+retry delay. Snapshot intentionally returns the last committed position while a
+writer owns the lock. Both engine and lease-retry tests now wait for committed
+version 2 under a five-second deadline, retaining exact attempt/move assertions.
+A 200 ms engine-response case reliably covers the old timing assumption.
+No runtime retry behavior changed. Local warning-strict suite: 260 passed,
+5 environment-dependent skips; manager tests: 15 passed; Ruff/checks passed.
+Published correction CI and browser acceptance are pending; do not call current
+PR19 green until its final head is verified. Propagate the test fix to 7C/7D.
+No merge or deployment performed.
