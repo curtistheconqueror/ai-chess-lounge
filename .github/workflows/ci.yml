@@ -58,6 +58,9 @@ jobs:
       - name: Test API and chess domain
         env:
           TEST_POSTGRES_URL: postgresql+asyncpg://lounge:lounge@127.0.0.1:5432/lounge_test
+          TEST_POSTGRES_RESTORE: "1"
+          POSTGRES_TEST_CONTAINER: ${{ job.services.postgres.id }}
+          TEST_RESTORE_EVIDENCE_DIR: ${{ runner.temp }}/lounge-recovery
         run: |
           ruff format --check services/api packages/runner-sdk-python packages/mcp-server packages/subscription-bridge
           ruff check services/api packages/runner-sdk-python packages/mcp-server packages/subscription-bridge
@@ -103,4 +106,5 @@ jobs:
           path: |
             apps/web/playwright-report
             apps/web/test-results
+            ${{ runner.temp }}/lounge-recovery/restore-evidence.json
           if-no-files-found: ignore
