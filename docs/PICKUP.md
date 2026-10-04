@@ -4,16 +4,17 @@ Updated: 2026-10-04. Read AGENTS.md, README.md, MASTER_PLAN.md and ADR 0022.
 
 ## Verified baseline
 
-Stage 6B merged in PR #16 at `655ce42154d59e97dd2d8db9ee0b2e8f0d3f280d`.
-Immutable pickup/stage-6b-complete and retained feat/stage-6b-seat-takeover remain.
-PR CI 37183260435 and postmerge CI 37183451633 passed: 215 Python, 3 SDK,
-23 browser tests (57 intentional duplicate-viewport skips).
+Stage 6C merged in PR #17: https://github.com/curtistheconqueror/ai-chess-lounge/pull/17
+Merge commit: `087c565bbba7e88473e36d17584d08ba6db230d4`.
+Immutable `pickup/stage-6c-complete` is verified at that exact commit.
+Retain `feat/stage-6c-consultation`; its final docs-only handoff is newer than the merge.
+The published PR head `b73cdbf4719868b7f369b781dcb9ad455442e2db` and merge tree
+were both verified identical to local tested implementation `ce6ceb7`.
+Stage 6B remains available at pickup/stage-6b-complete (655ce42).
 
-## Current work — Stage 6C
+## Completed work — Stage 6C
 
-Contributor feat/stage-6c-consultation was created from that exact verified merge.
-Implementation complete; final CI/publication gates are in progress. Do not label
-complete until merged and the immutable pickup branch is verified.
+Human AI consultation shipped. No active implementation remains for tonight.
 
 - Human-turn-only adviser requests; never apply a move automatically.
 - Background advice uses bounded existing adapter policy, deadline and lease; CAS
@@ -32,15 +33,22 @@ idempotency, saved history/PGN, restart, cross-worker supersession/cancellation,
 duplicate requests, time expiry, provider retries and sanitized failures.
 Local make test/build and pytest -W error passed: 231 Python tests, 2 environment/engine
 skips, 3 SDK tests, Ruff lint/format and web typecheck. Independent backend review
-found no remaining blocker after graceful shutdown recovery was tightened. Exact-head
-CI is required before merge. Desktop/phone browser
-acceptance covers reload, review/cancel/confirm, Black advice and stale confirmation.
-Local Chromium is absent; CI supplies browser execution and visual artifacts.
+found no remaining blocker after graceful shutdown recovery was tightened.
+PR CI 37185382233 / job 111386097146 passed on the exact published head:
+231 Python tests (2 environment/engine skips), 3 SDK tests, 26 browser tests
+(64 intentional duplicate-viewport skips), SQLite/PostgreSQL upgrade/downgrade,
+lint, typecheck and production build. Desktop and phone screenshot artifacts were
+visually inspected with no blocking layout defect. Browser acceptance covers reload,
+review/cancel/confirm, Black advice and stale confirmation.
+Postmerge CI 37185612478 / job 111386767719 passed all the same gates on main.
+The phase is complete; the next stage has NOT been started.
 
 ## Stop and next target
 
 The owner explicitly requested Stage 6C be the LAST phase tonight. Stop after its
 verified merge, postmerge smoke and contributor/pickup handoff. Do not start more work.
+Resume by fetching main and this retained contributor branch, reading this handoff,
+and branching from the verified merge above; do not repoint any pickup branch.
 When the owner resumes, Stage 7A Model Lab experiment configuration is the proposed
 next target. Stage 6D account roles/invitations remain reserved for the final multiplayer
 rollout, alongside Stage 2E accounts. Stage 6 has four phases; 6A–6C are implemented.
