@@ -48,6 +48,9 @@ The server remains authoritative for legality, time and terminal results.
 The same phase fixes repeated WebSocket cancellation interrupting database cleanup.
 A regression test holds an actual SQLAlchemy session through two cancellations and
 asserts both child tasks finish and the pool has zero checked-out connections.
+A second regression disconnects a real ASGI TestClient during an in-flight SQLite
+driver query. Short runner database calls are shielded against AnyIO level cancellation;
+model thinking and turn waits stay cancellable. CI treats Python warnings as errors.
 
 Next: **Stage 6B**, explicit pause-safe human/AI seat takeover with immutable events
 and stale agent-result fencing. Consultation follows in 6C; authenticated remote

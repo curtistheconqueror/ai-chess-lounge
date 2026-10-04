@@ -11,7 +11,8 @@ remain. PR CI 37152054950 and postmerge CI 37152192013 passed.
 ## Current work — Stage 6A
 
 Contributor: `feat/stage-6a-human-controls`, created from the exact merge above.
-Implementation is ready for PR/CI; do not mark complete until merge and checkpoint.
+PR #15: https://github.com/curtistheconqueror/ai-chess-lounge/pull/15
+Implementation is in final CI; do not mark complete until merge and checkpoint.
 
 - Explicit human-color resignation, confirmation, stale-version rejection and clock settlement.
 - Durable threefold/fifty-move claims, including announced intended moves without a phantom ply.
@@ -23,11 +24,17 @@ Implementation is ready for PR/CI; do not mark complete until merge and checkpoi
 
 ## Verification and remaining gates
 
-Local `make test`: 205 Python passed, 2 PostgreSQL-environment skips; Ruff format/lint,
+Local `make test`: 207 Python passed, 2 PostgreSQL-environment skips; Ruff format/lint,
 3 TypeScript SDK tests and web typecheck passed. `make build` passed. Full pytest
-with all warnings treated as errors also passed (205/2). Independent backend review
+with all warnings treated as errors also passed (207/2). Independent backend review
 found no correctness issues; migration 0007 upgrade/downgrade is covered.
-CI evidence will be filled in after publication. Local browser smoke
+Initial PR CI 37175733764 passed 20 browser tests (50 viewport-duplicate skips),
+but exposed a remaining cleanup warning. Follow-up CI 37176287095 passed all gates
+with `pytest -W error`, 206 Python tests and 20 browser tests, no database warning.
+Final source adds a real TestClient disconnect during a slow SQLite driver query;
+removing the DB shield reproduced a shutdown hang (20-second bounded subprocess),
+while the fix returns all pooled connections. Final CI is required on the latest head.
+Local browser smoke
 cannot launch because Chromium is absent; CI must run the full browser suite before
 merge. Independently review terminal action races and preserve the tested tree.
 
