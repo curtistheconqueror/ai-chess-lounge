@@ -141,3 +141,27 @@ def test_draw_claim_api_records_announced_move_and_rejects_stale(client: TestCli
     assert events[-2]["type"] == "match.draw_claimed"
     assert events[-2]["payload"]["intended_move"] == "f6g8"
     assert events[-1]["type"] == "match.completed"
+
+
+def test_legacy_resign_selects_black_against_automated_white(client: TestClient) -> None:
+    game = client.post(
+        "/api/games",
+        json={
+            "opponent": "human",
+            "white_player": {
+                "adapter_id": "scripted",
+                "display_name": "Scripted White",
+                "provider": "Lounge Test Harness",
+                "model": "deterministic-v1",
+                "connection_mode": "local",
+                "division": "legal_assist",
+                "settings": {"moves": ["e2e4"]},
+            },
+        },
+    ).json()
+    result = client.post(f"/api/games/{game['id']}/resign")
+    assert result.status_code == 200
+    assert result.json()["result"] == "1-0"
+    assert result.json()["status"] == "resigned"
+    events = client.get(f"/api/games/{game['id']}/events").json()
+    assert events[-2]["payload"]["color"] == "black"
