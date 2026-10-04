@@ -208,9 +208,10 @@ CI 37222067606; PR21 remains draft and unmerged. 7E must remain dependent/draft.
 Implemented bounded terminal-run report ZIP, immutable manifest/hash verification,
 explicit public-data projection, exact initial-FEN PGN replay and honest no-results,
 CSV formula neutralization, per-file checksums, optimistic revision validation and
-size/move caps. Frontend comparison filters and download controls are being verified.
-Local full warning-strict suite passed 298 Python tests (3 PostgreSQL environment
-skips) before the final malformed-UCI case; final focused export suite: 13 passed.
+size/move caps. Frontend pool filters and download controls pass typecheck/build and e2e test discovery.
+Final local warning-strict suite passed 301 Python tests (3 PostgreSQL environment
+skips); final focused export suite: 15 passed. Independent review added saved-match
+lifecycle/outcome agreement with the job result, reusing authoritative result logic.
 Ruff and 3 SDK tests pass. Browser/current-head CI remains pending.
 See ADR0027. The current code is not yet a verified phase checkpoint.
 After 7E acceptance, proceed to 8A read-only security assessment and approval-ready

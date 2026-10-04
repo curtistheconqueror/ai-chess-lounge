@@ -105,7 +105,7 @@ intelligence or calibrated human strength. See ADR 0026 for the formula and limi
 
 ## 7E — Comparison reports and export bundles (dependent draft)
 
-Use the metrics panel to select a rating pool/competitors and compare recorded results.
+Use the metrics panel to select a rating pool and compare its competitors.
 A terminal batch offers **Download report bundle**. The ZIP includes manifest.json,
 report.json, competitors.csv, games.csv, moves.csv, games.pgn, README.txt and
 checksums.json. The bundle covers the complete run, independently of UI filters.
