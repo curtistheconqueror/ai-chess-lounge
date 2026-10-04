@@ -910,6 +910,8 @@ test("Model Lab previews and saves a color-swapped plan without launching games"
   await lab.getByRole("button", { name: "Preview experiment", exact: true }).click();
   const preview = lab.getByRole("article", { name: "Experiment preview", exact: true });
   await expect(preview).toContainText("6 planned games");
+  await expect(preview).toContainText("Saving this draft starts no games and makes no provider calls.");
+  await expect(preview).not.toContainText("Plan only: no games have started.");
   await expect(preview.getByRole("row")).toHaveCount(7);
   await expect(preview).toContainText("Unsaved preview");
   const savedResponse = page.waitForResponse(r => r.url().endsWith("/api/experiments") && r.request().method() === "POST");
@@ -958,4 +960,78 @@ test("Model Lab prepares confirms and watches a bounded local batch", async ({ p
   await execution.getByRole("button", { name: "Prepare batch", exact: true }).click();
   await execution.getByRole("button", { name: "Cancel batch", exact: true }).click();
   await expect(execution.getByRole("status")).toContainText("Batch cancelled");
+});
+
+test("Model Lab previews round-robin, gauntlet, and knockout formats on desktop and phone", async ({ page }, testInfo) => {
+  test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Tournament preview smoke runs on desktop and phone.");
+  await page.getByRole("button", { name: "Model Lab", exact: true }).click();
+  const lab = page.getByRole("region", { name: "Model Lab", exact: true });
+  await lab.getByRole("textbox", { name: "Experiment name", exact: true }).fill(`Tournament preview ${testInfo.project.name}`);
+  await lab.getByRole("button", { name: "Add entrant", exact: true }).click();
+  await lab.getByRole("button", { name: "Add entrant", exact: true }).click();
+  await lab.getByRole("textbox", { name: "Opening suite" }).fill("Start |");
+  const previewButton = lab.getByRole("button", { name: "Preview experiment", exact: true });
+  const preview = lab.getByRole("article", { name: "Experiment preview", exact: true });
+
+  await lab.getByLabel("Experiment format").selectOption("round_robin");
+  const roundRobinRequest = page.waitForRequest(request => request.url().endsWith("/api/experiments/preview") && request.method() === "POST");
+  await previewButton.click();
+  const roundRobinBody = (await roundRobinRequest).postDataJSON() as Record<string, unknown>;
+  expect(roundRobinBody).toMatchObject({ schema_version: "2.0", format: "round_robin", anchor: null });
+  await expect(preview).toContainText("12 planned games");
+  await expect(preview).toContainText("Round robin");
+
+  await lab.getByLabel("Experiment format").selectOption("gauntlet");
+  await expect(lab.getByLabel("Gauntlet anchor")).toHaveValue("A:default");
+  const gauntletRequest = page.waitForRequest(request => request.url().endsWith("/api/experiments/preview") && request.method() === "POST");
+  await previewButton.click();
+  const gauntletBody = (await gauntletRequest).postDataJSON() as Record<string, unknown>;
+  expect(gauntletBody).toMatchObject({ schema_version: "2.0", format: "gauntlet", anchor: "A:default" });
+  await expect(preview).toContainText("Gauntlet");
+  await expect(preview.locator(".lab-schedule-table tbody tr")).toHaveCount(6);
+
+  await lab.getByLabel("Experiment format").selectOption("knockout");
+  const knockoutRequest = page.waitForRequest(request => request.url().endsWith("/api/experiments/preview") && request.method() === "POST");
+  await previewButton.click();
+  const knockoutBody = (await knockoutRequest).postDataJSON() as Record<string, unknown>;
+  expect(knockoutBody).toMatchObject({ schema_version: "2.0", format: "knockout", anchor: null });
+  await expect(preview).toContainText("Knockout");
+  await expect(preview.getByText("Bracket series")).toBeVisible();
+  const dimensions = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+  expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width + 1);
+  await page.screenshot({ path: testInfo.outputPath(`tournament-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
+});
+
+test("limited tournament games are no-results and do not earn provisional ratings", async ({ page }, testInfo) => {
+  test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Tournament execution smoke runs on desktop and phone.");
+  await page.getByRole("button", { name: "Model Lab", exact: true }).click();
+  const lab = page.getByRole("region", { name: "Model Lab", exact: true });
+  await lab.getByRole("textbox", { name: "Experiment name", exact: true }).fill("No-result tournament smoke");
+  await lab.getByRole("button", { name: "Add entrant", exact: true }).click();
+  await lab.getByRole("button", { name: "Add entrant", exact: true }).click();
+  await lab.getByLabel("Experiment format").selectOption("round_robin");
+  await lab.getByRole("textbox", { name: "Opening suite" }).fill("Start |");
+  await lab.getByLabel("Swap colors for every pairing").uncheck();
+  await lab.getByRole("spinbutton", { name: "Maximum plies", exact: true }).fill("2");
+  await lab.getByRole("button", { name: "Preview experiment", exact: true }).click();
+  const preview = lab.getByRole("article", { name: "Experiment preview", exact: true });
+  await expect(preview).toContainText("6 planned games");
+  await preview.getByRole("button", { name: "Save draft plan", exact: true }).click();
+  const execution = lab.getByRole("region", { name: "Experiment execution", exact: true });
+  await execution.getByRole("button", { name: "Prepare batch", exact: true }).click();
+  await execution.getByRole("button", { name: "Start batch", exact: true }).click();
+  await execution.getByRole("button", { name: "Confirm start batch", exact: true }).click();
+  await expect(execution.getByRole("status")).toContainText("Batch completed", { timeout: 20_000 });
+  const report = execution.getByRole("region", { name: "Tournament report", exact: true });
+  await expect(report).toContainText("No-results");
+  await expect(report).toContainText("completed chess results");
+  const firstStanding = report.locator("tbody tr").first();
+  await expect(firstStanding.locator("td").nth(3)).toHaveText("0");
+  await expect(firstStanding.locator("td").nth(6)).toHaveText("3");
+  await expect(firstStanding.locator("td").nth(7)).toHaveText("Unrated");
+  await expect(firstStanding.locator("td").nth(8)).toHaveText("0");
+  await expect(execution.getByRole("cell", { name: "limited", exact: true })).toHaveCount(6);
+  const dimensions = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+  expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width + 1);
+  await page.screenshot({ path: testInfo.outputPath(`tournament-report-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
 });
