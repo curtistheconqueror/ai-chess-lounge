@@ -234,3 +234,19 @@ and pip-audit 2.10.1 for 54 pinned Python records reported zero known advisories
 These are scoped, dated observations, not proof of security; trust-boundary review,
 abuse tests and account/deployment decisions remain. Preserve detailed findings
 privately per SECURITY.md. Parent continues to own monitoring and approvals.
+
+## Stage 8A read-only assessment in progress
+
+Contributor: docs/stage-8a-security-assessment, based on final 7E handoff
+5baac32a098d21bf046d2c201daea25be7812097. Preserve all earlier branches.
+Main was rechecked and remains 087c565. See STAGE_8_HARDENING.md for scoped
+audit evidence and remaining validation; ACCOUNT_AND_RELEASE_DECISIONS.md is an
+owner-review proposal, not approval to implement or enable security/account access.
+No confidential exploit details or credential material belong in this public handoff.
+Next safe independent work: 8B operational runbooks and offline fixture backup/restore
+rehearsal, 8C bounded local load design, and 8D budget semantics. Do not mark 8A
+complete until reviewed findings and authorized remediation are dispositioned.
+
+PR22 final documentation head 5baac32a098d21bf046d2c201daea25be7812097
+passed CI 37223844056. Its description now records source and final-head evidence.
+Stage 7E implementation and browser acceptance are verified; merge remains gated.

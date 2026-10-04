@@ -1,17 +1,19 @@
 # 48-hour delivery target and scope decisions
 
-Updated October 4, 2026, 17:45 UTC. Requested target: October 6, 2026,
+Updated October 4, 2026, 18:30 UTC. Requested target: October 6, 2026,
 17:40 UTC (12:40 PM America/Chicago). This is a target, not a guarantee or
 permission to merge, deploy, purchase services, create credentials or expand access.
 
 ## Verified position
 
-Main remains Stage 6C at 087c565. Stage 7A–7C are stacked drafts PR18–PR20;
-7D is draft PR21. PR19 retry timing correction passed current-head CI at
-f5992ec (run 37220994565): 263 Python, 3 SDK, 30 browser tests, migrations,
-lint/types/build. PR20's dependent correction f2b4bc3 passed CI 37221279231 (276 Python, 34 browser). Stage 7D local
-warning-strict suite passed 286 tests with 3 environment skips; published CI and
-responsive visual acceptance remain required. No partial phase is called complete.
+Main remains Stage 6C at 087c565. Stage 7A–7E are stacked drafts PR18–PR22.
+PR19 corrected final head ade6bb2 passed CI 37221621195; PR20 f2b4bc3 passed
+CI 37221279231. PR21 final head fa2e9a1 passed CI 37222067606. PR22 source
+64f7c2c passed CI 37223412652 (302 Python, 3 SDK, 34 browser tests, both
+migrations, lint/types/build); desktop/phone report downloads and screenshots passed.
+PR22 final documentation head 5baac32a passed CI 37223844056. Stage 8A read-only
+assessment and decision packet are in progress. No draft has been merged and no
+production acceptance or partially implemented phase is described as complete.
 
 ## Phased target checkpoints
 
@@ -109,3 +111,12 @@ The first two implementation checkpoints are ahead of their target windows.
 Stage 8A read-only review has begun. Security/account/merge/deployment approvals and
 Stage 9 scope remain unresolved; this progress does not remove those critical-path
 dependencies or upgrade the hosted-beta confidence to a guarantee.
+
+## Checkpoint update — October 4, 18:30 UTC
+
+7E final documentation CI is green. Scoped dependency audits found no known
+advisories; selected current-source/history key patterns found no candidates.
+These results do not establish hosted security. The account/release decision packet
+and trust-boundary assessment are ready for review; 8A remains in progress pending
+reviewed remediation and authorization. Next safe work is 8B offline restore and
+operations preparation. The schedule and confidence ranges above remain conditional.

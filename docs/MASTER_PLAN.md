@@ -619,7 +619,7 @@ resume after interruption, and produce a reproducible report with configuration 
 
 | Sub-phase | Deliverables |
 | --- | --- |
-| 8A Security review | Threat model, secret audit, dependency scan, abuse cases, SSRF and injection tests |
+| 8A Security review | Read-only assessment in progress: threat boundaries, scoped secret/dependency scans and hosted abuse matrix; remediation/account decisions remain gated. See STAGE_8_HARDENING.md |
 | 8B Operations | Health checks, tracing, metrics, alerts, backups, retention, and incident runbook |
 | 8C Performance | Load tests for spectators, WebSockets, engine pool, tournament queue, and database |
 | 8D Cost controls | Quotas, budget ceilings, per-match estimates, rate limits, and kill switches |
