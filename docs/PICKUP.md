@@ -386,7 +386,41 @@ cleanup checks passed; no hosted capacity claim. Native restore evidence remains
 in the artifact. Desktop/phone screenshots inspected with no layout blocker found.
 This documentation follow-up receives a separate current-head CI verification.
 
+## Stage 8D reservation design and offline oracle in progress
+
+Contributor docs/stage-8d-reservation-contract follows the Stage8C final docs tree
+(local88745f9; published7b8f35b356a26cf7f129c37c98ae3488af5b0daf).
+PR26 source3c84e1f passed CI37230951795; final docs CI37231366411 is running.
+Do not describe a pending final head as green. Preserve all branches and drafts.
+
+Added BUDGET_RESERVATION_CONTRACT.md/ADR0030 and a strictly test-only generated
+SQLite oracle with symbolic units. Five local tests pass, including four spawned
+processes competing for eight reservations, replay/recovery/uncertainty/evidence and
+unknown-versus-zero/overage behavior. The application imports none of this fixture;
+no schema/dispatch/permission/paid-call change. Rates, multiple scopes, PG locking,
+rollover/adjustments and live integration remain open, as do owner policy decisions.
+
+Next: independent review, full current-head CI, dependent draft publication and exact
+pickup. Continue safe local recovery/acceptance work where approvals do not apply.
+No merge/deployment/account/security/spending authorization is inferred. October6
+17:40 UTC remains conditional with final integration buffer; Stage9 selection and
+deferred2E/6D are unchanged outstanding decisions.
 Read-only review prompted an 8C correction: move startup under its cleanup guard,
 bound fixture regression runs to20 seconds, and label persisted move/event agreement
 as an invariant rather than a measured duplicate-submission rate. Declare Linux
 resource units explicitly. These changes require a new source-head full CI check.
+
+8D review corrections now reject invalid/null attempt IDs and changed fixture policy;
+billing identity is source plus line-item ID, with multiple lines per source supported.
+Tests explicitly cover symbolic reopen/recovery, not real process death or chess
+commit fencing. Disposable proof tokens state release/recovery preconditions without
+implementing actual authorization. Twelve focused tests pass, including both unique
+and duplicate attempt races across four spawned processes. No production policy is
+selected. Reviewed 8C head105eb2a CI37231626012 is pending at this update; verify
+before stating current-head green. Full 8D CI remains a separate publication gate.
+
+8D local reviewed source8f3383f: 334 Python tests passed with warnings as errors,
+4 PostgreSQL infrastructure skips; complete Ruff format/check passed. Reviewed
+8C correction is incorporated locally without discarding either contributor branch.
+Publication base is PR26 reviewed105eb2a7db08b0bdfe15e96e4adaaf673b591904;
+its full current-head CI is still running at this documentation update.
