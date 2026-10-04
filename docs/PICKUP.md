@@ -471,7 +471,7 @@ finish source review, publish dependent draft and verify exact CI/browser artifa
 8C sustained/hosted load and operator targets remain open. 8D production money/rate
 integration requires owner policy; 8B production operations/8A reviewed remediation,
 8E hosted onboarding and2E/6D identity/release choices remain outstanding. Stage 9
-scope is still unselected; October6 17:40UTC target preserves integration buffer.
+scope is still unselected; October 6 17:40 UTC target preserves integration buffer.
 
 Engine reviewed candidate 2e1996f: 353 Python passed with warnings as errors,
 4 local PG-infrastructure skips; complete Ruff format/check passed. Real Stockfish 16
@@ -480,3 +480,25 @@ not hosted capacity. Independent review found no remaining material defect in th
 corrected lifecycle scope. Publication base is PR27 final docs c2670561a685dc93151ef86ded4269b51cff8b74
 (local 70df473 equivalent doc tree); CI 37232631478 is still pending at this update.
 New engine source needs its own complete published CI/browser check.
+
+## Stage 8C engine lifecycle verified source checkpoint
+
+Dependent draft PR28:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/28
+Source 603c21652e2fa1982a4c2f11c97a31ff831bae45 passed
+CI 37233085222 / job 111526705162: 354 Python (3 absent-Stockfish skips),
+3 SDK, 34 browser (76 intentional viewport skips), native fixtures/restore,
+both migrations and all lint/type/build gates. Artifact 11314985275 retained.
+Local 353 Python/4 PG infrastructure skips and 21 focused engine tests passed;
+real local Stockfish 16 termination/reap/explicit restart evidence is committed
+in docs/verification/stage8c-engine-local.json at source fd0ee8a. CI has no engine;
+its skips are not substituted with fake engine performance evidence.
+PR27 final docs c267056 passed CI 37232631478. No merge or deployment.
+
+This documentation-only follow-up has a distinct current-head check; verify it
+independently before claiming final-head green. Retain all contributor branches;
+full 8C hosted/sustained performance and hard process supervision remain open.
+The next safe target is the generated loopback transport rehearsal, separate from
+in-process overhead and hosted/TLS/proxy/browser measurements. Preserve cleanup
+and native/browser/restore gates. Owner account/budget/release decisions and Stage 9
+selection remain unanswered; October 6 17:40 UTC target keeps final 8–9-hour buffer.
