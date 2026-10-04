@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import threading
+import time
 
 import pytest
 from fastapi import WebSocketDisconnect
 from lounge_api.models import RunnerPairingCreate
 from lounge_api.persistence import DatabaseStore, RunnerSessionRow
 from lounge_api.remote_runner import RemoteRunnerBroker
+from sqlalchemy import event, text
 
 SECRET = b"runner-cleanup-test-secret-is-32-bytes!"
 
@@ -93,3 +96,64 @@ def test_socket_cancellation_drains_database_poll_cleanup(tmp_path) -> None:
             await store.close()
 
     asyncio.run(run())
+
+
+def test_testclient_disconnect_during_heartbeat_returns_database_connection(client) -> None:
+    manager = client.app.state.game_manager
+    store = manager.store
+    broker = manager.remote_runners
+    pairing = client.post(
+        "/api/runner-pairings",
+        json={"display_name": "Cleanup test", "provider": "Independent", "model": "test"},
+    ).json()
+    credentials = client.post(
+        f"/api/runner-pairings/{pairing['pairing_id']}/claim",
+        json={"pairing_code": pairing["pairing_code"]},
+    ).json()
+    heartbeat_task = None
+    db_call_entered = threading.Event()
+    original_touch = store.touch_runner_session
+    original_heartbeat = broker.heartbeat
+
+    async def tracked_heartbeat(token):
+        nonlocal heartbeat_task
+        heartbeat_task = asyncio.current_task()
+        return await original_heartbeat(token)
+
+    def pause_in_database():
+        db_call_entered.set()
+        time.sleep(0.3)
+        return 1
+
+    def register_function(dbapi_connection, _record):
+        dbapi_connection.run_async(
+            lambda connection: connection.create_function("pause_for_test", 0, pause_in_database)
+        )
+
+    # Ensure new pooled connections get the test-only SQLite function. The delay
+    # happens in the driver thread, so ASGI can cancel the in-flight query.
+    client.portal.call(store.engine.dispose)
+    event.listen(store.engine.sync_engine, "connect", register_function)
+
+    async def hold_heartbeat_transaction(session_id: str, *, now):
+        if asyncio.current_task() is not heartbeat_task:
+            return await original_touch(session_id, now=now)
+        async with store.sessions.begin() as session:
+            await session.execute(text("SELECT pause_for_test()"))
+            return True
+
+    store.touch_runner_session = hold_heartbeat_transaction
+    broker.heartbeat = tracked_heartbeat
+    try:
+        with client.websocket_connect(
+            "/ws/runners", headers={"Authorization": f"Bearer {credentials['runner_token']}"}
+        ) as websocket:
+            websocket.send_json({"type": "heartbeat"})
+            assert db_call_entered.wait(timeout=2)
+            assert store.engine.sync_engine.pool.checkedout() >= 1
+        assert store.engine.sync_engine.pool.checkedout() == 0
+        assert credentials["session_id"] not in broker._connected
+    finally:
+        store.touch_runner_session = original_touch
+        broker.heartbeat = original_heartbeat
+        event.remove(store.engine.sync_engine, "connect", register_function)
