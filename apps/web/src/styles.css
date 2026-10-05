@@ -2109,3 +2109,12 @@ select {
 .leaderboard-table-scroll pre, .leaderboard-matchups pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 360px; font-size: 0.75rem; }
 .leaderboard-matchups { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
 .leaderboard-matchups article { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; }
+
+.leaderboard-mobile-label { display: none; }
+@media (max-width: 640px) {
+  .leaderboard-table-scroll table { min-width: 0; }
+  .leaderboard-table-scroll thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .leaderboard-table-scroll tbody, .leaderboard-table-scroll tr, .leaderboard-table-scroll td { display: block; width: 100%; max-width: none; }
+  .leaderboard-table-scroll tr { border-bottom: 1px solid #30463b; padding-block: 0.5rem; }
+  .leaderboard-mobile-label { display: block; margin-bottom: 0.5rem; }
+}
