@@ -1061,3 +1061,41 @@ test("limited tournament games are no-results and do not earn provisional rating
   expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width + 1);
   await page.screenshot({ path: testInfo.outputPath(`tournament-report-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
 });
+
+test("identity snapshots and leaderboard counts remain clear on desktop and phone", async ({ page }, testInfo) => {
+  test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Identity acceptance covers desktop and phone.");
+  const version = `fixture-${testInfo.project.name}`;
+  const player = (color: string) => ({
+    protocol_version: "1.0", adapter_id: "scripted", display_name: "Private fixture operator",
+    provider: "Reference", model: "deterministic-v1", connection_mode: "local",
+    effort: null, division: "legal_assist", settings: { moves: color === "white" ? ["f2f3", "g2g4"] : ["e7e5", "d8h4"] },
+    comparison: { model_version: `${version}-${color}`, harness: "Generated fixture", effort_raw: "fixture-default" },
+  });
+  const response = await page.request.post("/api/games", { data: { opponent: "human", initial_time_ms: 300000, increment_ms: 0, white_player: player("white"), black_player: player("black") } });
+  expect(response.status()).toBe(201);
+  const game = await response.json();
+  await expect.poll(async () => (await (await page.request.get(`/api/games/${game.id}`)).json()).result).toBe("0-1");
+  await page.getByRole("button", { name: "AI leaderboards", exact: true }).click();
+  await page.getByText("White next match · optional identity declarations", {exact: true}).click();
+  const optIn = page.getByLabel("White next match Opt in to alias listing");
+  await expect(optIn).not.toBeChecked();
+  await optIn.check();
+  await page.getByLabel("White next match Listing alias").fill("Optional alias");
+  await optIn.uncheck();
+  await expect(page.getByLabel("White next match Listing alias")).toHaveCount(0);
+  await page.getByText("Filter games involving a matching seat", {exact: true}).click();
+  await page.getByLabel("Leaderboard version filter").fill(`${version}-white`);
+  const panel = page.getByRole("region", {name: "AI leaderboards", exact: true});
+  await expect(panel).toContainText("1 selected games");
+  await expect(panel.getByRole("region", {name: "Leaderboard results table"})).toContainText("Eligible n=1; total=1");
+  await expect(panel).toContainText(`${version}-black`);
+  await expect(panel).not.toContainText("Private fixture operator");
+  await page.getByLabel("Leaderboard grouping").selectOption("model");
+  await expect(panel).toContainText("Excluded same_comparison_group: 1");
+  await expect(panel).toContainText("denominator=0");
+  await page.getByLabel("Leaderboard grouping").selectOption("exact");
+  await expect(panel).toContainText("denominator=1");
+  const widths = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+  expect(widths.scroll).toBeLessThanOrEqual(widths.client + 1);
+  await page.screenshot({path: testInfo.outputPath(`leaderboards-${testInfo.project.name}.png`), fullPage: true, animations: "disabled"});
+});
