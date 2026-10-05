@@ -88,10 +88,48 @@ def test_player_and_runner_migrations_upgrade_and_downgrade(
     assert {"id", "request_hash", "document"}.issubset(columns("experiments"))
     command.upgrade(config, "0011_experiment_queue")
     assert {"experiment_jobs", "experiment_runs", "experiment_dispatch_lock"}.issubset(tables())
+    # A real pre-comparison match survives upgrade/downgrade without invented identity.
+    old_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "INSERT INTO matches (id,lifecycle,opponent,stockfish_elo,engine_move_time_ms,"
+            "initial_fen,current_fen,position_version,revision,generation,event_sequence,"
+            "created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                "legacy-upgrade",
+                "running",
+                "human",
+                1600,
+                450,
+                old_fen,
+                old_fen,
+                0,
+                0,
+                0,
+                0,
+                "2026-10-01T00:00:00+00:00",
+                "2026-10-01T00:00:00+00:00",
+            ),
+        )
     command.upgrade(config, "0012_comparison_games")
     assert {"match_id", "generation", "identity", "outcome"}.issubset(columns("comparison_games"))
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM comparison_games").fetchone()[0] == 0
+        assert (
+            connection.execute(
+                "SELECT current_fen FROM matches WHERE id='legacy-upgrade'"
+            ).fetchone()[0]
+            == old_fen
+        )
     command.downgrade(config, "0011_experiment_queue")
     assert "comparison_games" not in tables()
+    with sqlite3.connect(database_path) as connection:
+        assert (
+            connection.execute(
+                "SELECT current_fen FROM matches WHERE id='legacy-upgrade'"
+            ).fetchone()[0]
+            == old_fen
+        )
     command.downgrade(config, "0010_experiments")
     assert "experiment_jobs" not in tables()
     command.downgrade(config, "0009_consultations")
