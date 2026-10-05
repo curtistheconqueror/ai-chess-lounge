@@ -120,7 +120,7 @@ class OllamaChatAdapter:
             threat=output.threat,
             confidence=output.confidence,
             usage=self.normalize_usage(body),
-        )
+        ).with_provider_observation(body.get("model"))
 
     @staticmethod
     def _request_payload(
