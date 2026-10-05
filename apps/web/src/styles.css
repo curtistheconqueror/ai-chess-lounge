@@ -2099,3 +2099,13 @@ select {
 .comparison-metrics td small { display: block; max-width: 220px; margin-top: .25rem; color: #9caaa1; overflow-wrap: anywhere; }
 .metrics-disclosure, .metrics-stale { padding: .75rem; border-left: 3px solid #a88646; background: #171f1c; border-radius: 0 8px 8px 0; }
 .metrics-stale { border-left-color: #d6a55a; }
+
+.identity-editor { margin-block: 1rem; min-width: 0; }
+.identity-editor summary { cursor: pointer; overflow-wrap: anywhere; }
+.leaderboard-table-scroll { max-width: 100%; overflow-x: auto; }
+.leaderboard-table-scroll table { width: 100%; min-width: 680px; border-collapse: collapse; }
+.leaderboard-table-scroll td, .leaderboard-table-scroll th { padding: 0.8rem; text-align: left; vertical-align: top; }
+.leaderboard-table-scroll small, .leaderboard-matchups small { display: block; margin-block: 0.4rem; overflow-wrap: anywhere; }
+.leaderboard-table-scroll pre, .leaderboard-matchups pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 360px; font-size: 0.75rem; }
+.leaderboard-matchups { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+.leaderboard-matchups article { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; }

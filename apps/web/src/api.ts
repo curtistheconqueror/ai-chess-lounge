@@ -1,3 +1,4 @@
+import type { IdentityDeclaration, LeaderboardReport } from "./types";
 import type { Consultation } from "./types";
 import type {
   ApiError,
@@ -81,6 +82,7 @@ export function fetchPlayerAdapters(): Promise<PlayerAdapterCatalog> {
 }
 
 export function createRunnerPairing(input: {
+  comparison?: IdentityDeclaration;
   displayName: string;
   provider: string;
   model: string;
@@ -94,6 +96,7 @@ export function createRunnerPairing(input: {
   return request<RunnerPairingResponse>("/api/runner-pairings", {
     method: "POST",
     body: JSON.stringify({
+      ...(input.comparison ? { comparison: input.comparison } : {}),
       max_turns: input.maxTurns ?? 500,
       match_ttl_ms: input.matchTtlMs ?? 14_400_000,
       display_name: input.displayName,
@@ -233,4 +236,9 @@ export function listExperimentRuns(experimentId: string) {
 }
 export function controlExperimentRun(id: string, target: "running" | "paused" | "cancelled", expected_revision: number, allow_provider_calls = false) {
   return request<import("./ExperimentRunPanel").ExperimentRun>(`/api/experiment-runs/${encodeURIComponent(id)}/control`, { method: "POST", body: JSON.stringify({ target, expected_revision, allow_provider_calls }) });
+}
+
+export function fetchLeaderboards(parameters: Record<string,string>): Promise<LeaderboardReport> {
+  const query = new URLSearchParams(Object.entries(parameters).filter(([,value]) => value !== ""));
+  return request<LeaderboardReport>(`/api/leaderboards?${query}`);
 }

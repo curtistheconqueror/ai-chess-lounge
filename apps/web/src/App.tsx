@@ -1,3 +1,6 @@
+import { Leaderboards } from "./Leaderboards";
+import { IdentityEditor } from "./IdentityEditor";
+import type { IdentityDeclaration } from "./types";
 import { ModelLab } from "./ModelLab";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
@@ -106,6 +109,10 @@ const providerDetails: Record<AgentProviderChoice, { label: string; provider: st
 
 function App() {
   const [showLab, setShowLab] = useState(false);
+  const [showLeaderboards, setShowLeaderboards] = useState(false);
+  const [whiteIdentity, setWhiteIdentity] = useState<IdentityDeclaration>({});
+  const [blackIdentity, setBlackIdentity] = useState<IdentityDeclaration>({});
+  const [runnerIdentity, setRunnerIdentity] = useState<IdentityDeclaration>({});
   const [game, setGame] = useState<GameSnapshot | null>(null);
   const [analysis, setAnalysis] = useState<GameAnalysis | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -302,6 +309,7 @@ function App() {
             playerAdapters,
             whiteRunnerId,
             activeRunnerSessions,
+            whiteIdentity,
           ),
           blackPlayer: createSelectedPlayerConfiguration(
             blackSeat,
@@ -312,6 +320,7 @@ function App() {
             playerAdapters,
             blackRunnerId,
             activeRunnerSessions,
+            blackIdentity,
           ),
         }),
       );
@@ -323,6 +332,8 @@ function App() {
     }
   }, [
     acceptSnapshot,
+    whiteIdentity,
+    blackIdentity,
     blackEffort,
     blackProviderModel,
     blackRunnerId,
@@ -656,6 +667,7 @@ function App() {
     setNotice(null);
     try {
       const pairing = await createRunnerPairing({
+        comparison: Object.keys(runnerIdentity).length ? runnerIdentity : undefined,
         maxTurns: runnerMaxTurns,
         matchTtlMs: runnerMatchMinutes * 60_000,
         displayName: runnerName.trim(),
@@ -871,6 +883,7 @@ function App() {
           </div>
         </div>
         <div className="topbar-actions">
+          <button className="ghost-button" aria-expanded={showLeaderboards} onClick={() => setShowLeaderboards(v => !v)}>{showLeaderboards ? "Close AI leaderboards" : "AI leaderboards"}</button>
           <button className="ghost-button" aria-expanded={showLab} onClick={() => setShowLab(v => !v)}>{showLab ? "Close Model Lab" : "Model Lab"}</button>
           <span className={`connection ${connection}`} aria-label={`Connection ${connection}`}>
             <span className="connection-dot" /> {connection}
@@ -881,6 +894,7 @@ function App() {
       </header>
 
       {showLab && <ModelLab catalog={playerAdapters} />}
+      {showLeaderboards && <><section className="model-lab" aria-label="Next match identity"><h2>Next match identity</h2><p>Optional declarations are saved when a new match starts. Existing game identities remain unchanged. Remote seats use the declarations saved during pairing.</p>{whiteSeat !== "remote_runner" && <IdentityEditor label="White next match" value={whiteIdentity} onChange={setWhiteIdentity} />}{blackSeat !== "remote_runner" && <IdentityEditor label="Black next match" value={blackIdentity} onChange={setBlackIdentity} />}</section><Leaderboards /></>}
 
       <section className="broadcast-ribbon" aria-label="Match broadcast status">
         <span className={game?.status === "active" ? "live-pulse" : "result-pulse"} />
@@ -1113,6 +1127,7 @@ function App() {
               <label>Maximum turn requests<input aria-label="Runner turn limit" type="number" min={1} max={2000} value={runnerMaxTurns} onChange={(event) => setRunnerMaxTurns(Number(event.target.value))} /></label>
               <label>Authorization minutes<input aria-label="Runner authorization minutes" type="number" min={1} max={1440} value={runnerMatchMinutes} onChange={(event) => setRunnerMatchMinutes(Number(event.target.value))} /></label>
             </div>
+            <IdentityEditor label="Runner pairing" value={runnerIdentity} onChange={setRunnerIdentity} />
             <button className="runner-pairing-create" onClick={() => void generateRunnerPairing()} disabled={busy || !Number.isInteger(runnerMaxTurns) || runnerMaxTurns < 1 || runnerMaxTurns > 2000 || !Number.isInteger(runnerMatchMinutes) || runnerMatchMinutes < 1 || runnerMatchMinutes > 1440 || !runnerName.trim() || (runnerConnectionMode === "subscription_bridge" ? !subscriptionModel.trim() : !runnerProvider.trim() || !runnerModel.trim())}>
               Generate one-time pairing
             </button>
@@ -1481,6 +1496,7 @@ function createSelectedPlayerConfiguration(
   catalog: PlayerAdapterCatalog | null,
   requestedRunnerId: string,
   runners: RunnerSessionStatus[],
+  comparison?: IdentityDeclaration,
 ): PlayerConfiguration {
   if (choice === "remote_runner") {
     const runner = runners.find((candidate) => candidate.player_id === requestedRunnerId)
@@ -1501,7 +1517,7 @@ function createSelectedPlayerConfiguration(
     };
   }
   if (!isAgentProvider(choice)) {
-    return createPlayerConfiguration(choice, color, stockfishElo);
+    return { ...createPlayerConfiguration(choice, color, stockfishElo), ...(comparison && Object.keys(comparison).length ? { comparison } : {}) };
   }
 
   const provider = providerDetails[choice];
@@ -1527,6 +1543,7 @@ function createSelectedPlayerConfiguration(
     effort,
     division: "legal_assist",
     settings: { ...providerPublicSettings },
+    ...(comparison && Object.keys(comparison).length ? { comparison } : {}),
   };
 }
 
