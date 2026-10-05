@@ -323,10 +323,16 @@ def test_strength_and_request_bounds_never_collapse():
     b = PlayerConfiguration.stockfish("black", target_elo=2500)
     game = GameSession(white_player=a, black_player=b)
     doc = snapshot(game)
-    report = aggregate([(doc, fixture()[1])], grouping="model")
+    swapped = snapshot(GameSession(white_player=b, black_player=a))
+    report = aggregate([(doc, fixture()[1]), (swapped, fixture()[1])], grouping="model")
     assert len(report["rows"]) == 2
     assert len(report["head_to_head"]) == 1
-    assert all(r["counts"]["rate_denominator"] == 1 for r in report["rows"])
+    assert all(r["counts"]["rate_denominator"] == 2 for r in report["rows"])
+
+    assert all(
+        r["colors"]["white"]["eligible_games"] == r["colors"]["black"]["eligible_games"] == 1
+        for r in report["rows"]
+    )
 
 
 def test_known_adapter_mapping_preserves_declared_raw_effort():
@@ -414,3 +420,22 @@ def test_reset_refreshes_engine_evidence_without_rewriting_history(tmp_path):
             await manager.close()
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("connector", ["ollama", "vllm"])
+def test_local_serving_connector_does_not_invent_underlying_provider(connector):
+    p = PlayerConfiguration(
+        adapter_id=connector,
+        display_name="Private bot",
+        provider=connector,
+        model="installed-alias",
+        connection_mode="local",
+        settings={},
+    )
+    game = GameSession(white_player=p)
+    seat = snapshot(game)["seats"]["white"]
+    assert seat["provider"] == {"value": None, "evidence": "unknown"}
+    assert seat["provider_label"]["value"] == connector
+    assert seat["connector"] == connector
+    p.comparison = IdentityDeclaration(underlying_provider="Fixture declared provider")
+    assert snapshot(game)["seats"]["white"]["provider"]["evidence"] == "declared"
