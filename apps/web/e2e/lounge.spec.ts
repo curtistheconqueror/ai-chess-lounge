@@ -1064,7 +1064,7 @@ test("limited tournament games are no-results and do not earn provisional rating
 
 test("identity snapshots and leaderboard counts remain clear on desktop and phone", async ({ page }, testInfo) => {
   test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Identity acceptance covers desktop and phone.");
-  const version = `fixture-${testInfo.project.name}`;
+  const version = `fixture-${testInfo.project.name}-${Date.now()}`;
   const player = (color: string) => ({
     protocol_version: "1.0", adapter_id: "scripted", display_name: "Private fixture operator",
     provider: "Reference", model: "deterministic-v1", connection_mode: "local",
@@ -1095,6 +1095,11 @@ test("identity snapshots and leaderboard counts remain clear on desktop and phon
   await expect(panel).toContainText("denominator=0");
   await page.getByLabel("Leaderboard grouping").selectOption("exact");
   await expect(panel).toContainText("denominator=1");
+  if (testInfo.project.name === "phone") {
+    await expect(panel.locator(".leaderboard-mobile-label").first()).toBeVisible();
+    const table = await panel.locator(".leaderboard-table-scroll").evaluate(el => ({client: el.clientWidth, scroll: el.scrollWidth}));
+    expect(table.scroll).toBeLessThanOrEqual(table.client + 1);
+  }
   const widths = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
   expect(widths.scroll).toBeLessThanOrEqual(widths.client + 1);
   await page.screenshot({path: testInfo.outputPath(`leaderboards-${testInfo.project.name}.png`), fullPage: true, animations: "disabled"});
