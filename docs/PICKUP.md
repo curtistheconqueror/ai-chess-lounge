@@ -624,3 +624,21 @@ integration under HOSTED_RELEASE_PATH.md. Safe existing BYO acceptance is verifi
 no duplicate adapters or owner inference-budget decision is required. No payment
 subsystem is needed for free access. Quota/access/paid-dispatch policies remain open.
 Stage9 selection and the Oct6 17:40UTC target with final integration buffer remain.
+
+
+## Stage 7F AI leaderboards — implementation in progress (2026-10-05 UTC)
+
+Contributor `feat/stage-7f-ai-leaderboards` starts from local PR31-equivalent a4ecd92;
+remote PR31 final 293b97664ba5e061d215538a4a1cef9d973a45dc passed CI37240469753.
+Main remains 087c565. No merge/deploy/account/credential/paid-call/security approval.
+Read STAGE_7F_LEADERBOARDS.md and ADR0033. Preserve this branch and the earlier draft
+stack. Parent owns notifications; the hourly monitor remains paused.
+
+Implemented optional identity declarations, additive migration0012, transactional
+per-generation snapshots/outcomes and bounded conditions-aware leaderboards. New UI
+and tests are in progress. Publication/final acceptance is not yet claimed. Next:
+full warning-strict tests, migration/data compatibility, SDK/build, draft publication,
+source/final-head PostgreSQL and desktop/phone browser CI, visual inspection and
+precise handoff. Routine fixture failures must be fixed before completion claims.
+Free human/bot access and BYO inference funding unchanged; no owner directory.
+Supabase account/runtime/deferred rollout and Stage9 remain explicit external gates.

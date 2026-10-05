@@ -62,3 +62,13 @@ paired agent, and proves its game request excludes runner secrets. Check, timeou
 promotion, and
 post-game visual baselines remain required additions as deterministic fixture matches
 are introduced.
+
+
+## Stage 7F identity and leaderboards
+
+Desktop and phone acceptance must create a generated scripted checkmate, filter an
+exact declared version while retaining its opponent, verify eligible/total/rate
+sample sizes, distinguish collapsed self-group exclusions and null rates, keep opt-in
+alias unchecked by default, clear alias input on opt-out, omit private default names
+and avoid document overflow. Capture leaderboard screenshots for visual review.
+This is fixture/local acceptance; no hosted account, provider call or publication.
