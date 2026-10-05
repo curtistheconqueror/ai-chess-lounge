@@ -64,6 +64,7 @@ def identity_group(identity, grouping):
         "kind": identity["kind"],
         "division": identity["division"],
         "protocol": identity["protocol"],
+        "connector": identity.get("connector", "unknown"),
         "connection_mode": identity["connection_mode"],
         "execution": identity["execution"],
     }

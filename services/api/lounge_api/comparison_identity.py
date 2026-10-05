@@ -42,7 +42,7 @@ def snapshot(game, adapters=None):
             evidence(declared.underlying_provider, "declared")
             if declared.underlying_provider
             else evidence(player.provider, "recorded_configuration")
-            if player.adapter_id not in {"remote_runner", "openrouter"}
+            if player.adapter_id not in {"remote_runner", "openrouter", "ollama", "vllm"}
             else evidence(None)
         )
         raw = evidence(declared.effort_raw, "declared")
@@ -98,6 +98,7 @@ def snapshot(game, adapters=None):
                 ),
                 "recorded_configuration",
             ),
+            "connector": player.adapter_id,
             "connection_mode": player.connection_mode.value,
             "broker": evidence("OpenRouter", "recorded_configuration")
             if player.adapter_id == "openrouter"
@@ -130,7 +131,7 @@ def snapshot(game, adapters=None):
             "divisions": sorted(s["division"] for s in seats.values()),
             "protocols": sorted(s["protocol"] for s in seats.values()),
             "opponent_kinds": sorted(s["kind"] for s in seats.values()),
-            "engines": engines,
+            "engines": sorted(engines, key=lambda item: json.dumps(item, sort_keys=True)),
             "clock_information": "supplied",
             "effort_control": "fixed_configuration",
             "request_bounds": sorted(
