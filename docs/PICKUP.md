@@ -642,3 +642,35 @@ source/final-head PostgreSQL and desktop/phone browser CI, visual inspection and
 precise handoff. Routine fixture failures must be fixed before completion claims.
 Free human/bot access and BYO inference funding unchanged; no owner directory.
 Supabase account/runtime/deferred rollout and Stage9 remain explicit external gates.
+
+
+### Stage 7F draft PR32 source verified; final follow-up gate
+
+PR32 https://github.com/curtistheconqueror/ai-chess-lounge/pull/32 is Draft, based on
+PR31 branch `docs/byo-agent-cost-ownership`. Source remote6ebff8d151d3418701c7a8b2d9ebb134e457543e
+passed CI37248389001 / job111570790115: 374 Python tests (3 engine skips), SQLite/PG
+migrations, native comparison history/CAS/reset, PG restore14tables/15rows, performance,
+3 SDK tests, production build and36 browser passes/79 intentional skips. All33 changed
+source files matched local31e8bd0 tree hashes; screenshots reviewed desktop/phone.
+This supersedes source-publication pending notes above. Original main remains087c565.
+
+Local follow-up3715269 refreshes UCI engine evidence at reset without rewriting older
+identity; 32 targeted tests pass/1PG skip. A bounded real localStockfish16 check confirms
+separate1600/2500 rows with null unfinished rates. Mobile cards/readable evidence labels
+and retry-independent generated browser fixture IDs are included in the final follow-up.
+Engine color-swap cohorts preserve both colors while keeping strength separate;
+local serving connectors do not imply underlying providers. Final19 identity tests
+pass/1PG skip. Final published-head acceptance must cover these changes: inspect PR32's latest head
+and checks; final PR description carries exact final SHA/run/evidence. Publication-time
+pending is not a final green claim. Preserve contributor branch; no completed pickup
+branch until an approved, verified merge. No credentials/accounts/paid calls/merges,
+public deployment or access-policy changes. Monitor remains paused; parent notifies.
+
+Exact next target: finish final-head CI, inspect desktop/phone artifacts and report
+verified local7F checkpoint. If acceptance fails, repair within scope and rerun affected
+full gates. After verification, remain at hosted decisions in HOSTED_RELEASE_PATH.md:
+Supabase account/project/plan/access plus runtime host, identity/visibility/quota policies,
+merge/release approval, deferred2E/6D/etc and Stage9 choice. Free human/bot access;
+player-funded BYO inference and owner-funded infrastructure unchanged. Added7F work
+uses the Oct6 17:40UTC delivery window; do not convert conditional hosted estimates
+or integration buffer into an all-stage completion promise.

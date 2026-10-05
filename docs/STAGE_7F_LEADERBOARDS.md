@@ -36,14 +36,29 @@ Current legacy matches are counted separately and retained; reset creates a new 
 snapshot while earlier recorded generations remain queryable. Downgrade drops only
 the added comparison table. No credentials, policies or access grants are changed.
 
-## Acceptance status
+## Acceptance evidence and final check
 
-Local warning-strict suite passed 370 tests (5 native PostgreSQL skips), plus added
-identity/boundary regressions. Ruff, production web/SDK builds and 3 SDK tests pass.
-PostgreSQL migration/recovery and desktop/phone browser checks remain pending.
-Do not describe this phase as complete until source and final-head CI and screenshot
-review are recorded in PICKUP. Native PostgreSQL is available in CI, not this workspace.
-Local Chromium is unavailable; use existing CI acceptance, not a new account/deploy.
+Published dependent draft PR32, contributor `feat/stage-7f-ai-leaderboards`:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/32
+Source 6ebff8d151d3418701c7a8b2d9ebb134e457543e passed CI37248389001 /
+job111570790115: 374 warning-strict Python tests, 3 engine skips, both migration
+chains, native snapshot transaction tests, PostgreSQL recovery, bounded performance,
+3 SDK tests, production build and 36 browser passes (79 intentional viewport skips).
+All 33 source files matched local git blob hashes. Desktop/phone screenshots inspected.
+Generated PG recovery matched 14 tables / 15 rows; this is not production RPO/RTO.
+
+Follow-up: reset captures current UCI runtime evidence while keeping old generations
+immutable (32 targeted tests, 1 native-PG skip). Local Stockfish16 observation confirmed
+separate 1600/2500 strength rows and unavailable rates for unfinished games. Phone
+rows now show results/conditions without horizontal scrolling; provenance labels are
+readable, with full evidence in details. Build passes and phone acceptance is extended.
+Engine color swaps retain both samples without pooling different strengths. Ollama/
+vLLM serving connectors do not imply an underlying model provider; that stays unknown
+unless declared. Connector labels are recorded separately. The final 19 local identity
+tests pass (1 native-PG skip).
+These follow-ups require the final published-head CI/browser check; consult PR32's
+current head/checks and final evidence. Do not merge or call hosted release complete.
+Native PostgreSQL/browser execution remains CI-only in this workspace.
 
 ## Limits and next decisions
 
