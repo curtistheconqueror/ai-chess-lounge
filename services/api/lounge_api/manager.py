@@ -399,6 +399,11 @@ class GameManager:
         async with self._game_locks[game_id]:
             game = deepcopy(await self._reload(game_id))
             expected_revision = game.revision
+            if any(p.adapter_id == "stockfish" for p in (game.white_player, game.black_player)):
+                # A new generation records the current UCI runtime, not a pre-restart label.
+                game.engine_summary = await self.engine.summary(
+                    game.stockfish_elo, game.engine_move_time_ms
+                )
             now = self._clock()
             game.reset(now=now)
             game.comparison_snapshot = comparison_snapshot(game, self.adapters)
