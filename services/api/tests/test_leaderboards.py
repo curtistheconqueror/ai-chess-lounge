@@ -373,3 +373,44 @@ def test_bounded_report_exposes_incomplete_coverage(tmp_path, monkeypatch):
             await store.close()
 
     asyncio.run(run())
+
+
+def test_reset_refreshes_engine_evidence_without_rewriting_history(tmp_path):
+    from lounge_api.manager import GameManager
+    from lounge_api.models import EngineSummary
+    from test_manager import FakeEngine
+
+    class ChangingEngine(FakeEngine):
+        reported_version = "fixture-runtime-1"
+
+        async def summary(self, target_elo, move_time_ms):
+            return EngineSummary(
+                name="Stockfish",
+                available=True,
+                target_elo=target_elo,
+                move_time_ms=move_time_ms,
+                version=self.reported_version,
+            )
+
+    async def run():
+        engine = ChangingEngine()
+        manager = GameManager(
+            engine=engine,
+            store=DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'runtime.db'}"),
+            schedule_agents=False,
+            schedule_timeouts=False,
+        )
+        try:
+            game = await manager.create(CreateGameRequest(opponent=OpponentKind.STOCKFISH))
+            engine.reported_version = "fixture-runtime-2"
+            new = await manager.reset(game.id)
+            assert (
+                new.comparison_snapshot["seats"]["black"]["version"]["value"] == "fixture-runtime-2"
+            )
+            async with manager.store.sessions() as session:
+                old = await session.get(ComparisonGameRow, (game.id, 0))
+                assert old.identity["seats"]["black"]["version"]["value"] == "fixture-runtime-1"
+        finally:
+            await manager.close()
+
+    asyncio.run(run())
