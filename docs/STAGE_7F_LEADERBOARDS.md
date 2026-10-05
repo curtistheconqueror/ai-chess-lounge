@@ -56,8 +56,13 @@ Engine color swaps retain both samples without pooling different strengths. Olla
 vLLM serving connectors do not imply an underlying model provider; that stays unknown
 unless declared. Connector labels are recorded separately. The final 19 local identity
 tests pass (1 native-PG skip).
-These follow-ups require the final published-head CI/browser check; consult PR32's
-current head/checks and final evidence. Do not merge or call hosted release complete.
+All implementation follow-ups passed at b95b51f81d50917084d159ddadaa17238f7a13fd:
+CI37249535756 / job111574151986, 377 warning-strict Python passes/3 engine skips,
+36 browser passes/79 intentional viewport skips, migrations, recovery, SDK and build.
+All 33 files matched local80d4892 blob hashes. Latest desktop/phone evidence reviewed;
+phone identity/results/conditions stack without horizontal scrolling. This final
+handoff is documentation only and requires its own head's check (see PR32).
+Local implementation acceptance is verified; merge and hosted release remain gated.
 Native PostgreSQL/browser execution remains CI-only in this workspace.
 
 ## Limits and next decisions

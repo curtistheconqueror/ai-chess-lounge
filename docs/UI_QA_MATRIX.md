@@ -72,3 +72,8 @@ sample sizes, distinguish collapsed self-group exclusions and null rates, keep o
 alias unchecked by default, clear alias input on opt-out, omit private default names
 and avoid document overflow. Capture leaderboard screenshots for visual review.
 This is fixture/local acceptance; no hosted account, provider call or publication.
+
+Verified Stage7F implementation b95b51f CI37249535756: desktop and390px phone checks
+passed, including stacked phone results/conditions with no table/document overflow.
+Latest screenshots inspected. Original source6ebff8d also passed responsive CI37248389001.
+Final documentation-only head retains its own required CI gate.

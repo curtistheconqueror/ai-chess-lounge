@@ -674,3 +674,33 @@ merge/release approval, deferred2E/6D/etc and Stage9 choice. Free human/bot acce
 player-funded BYO inference and owner-funded infrastructure unchanged. Added7F work
 uses the Oct6 17:40UTC delivery window; do not convert conditional hosted estimates
 or integration buffer into an all-stage completion promise.
+
+
+### Latest checkpoint — Stage 7F local acceptance verified; Draft PR32 retained
+
+Implementation head b95b51f81d50917084d159ddadaa17238f7a13fd passed
+CI37249535756 / job111574151986: 377 warning-strict Python tests, 3 unavailable-engine
+skips; SQLite/PG upgrades/downgrades; native snapshot/reset/CAS; generated PG restore;
+performance fixtures; 3 SDK tests; production web/SDK builds; 36 browser passes and
+79 intentional viewport skips. All33 changed files matched local80d4892 blob hashes.
+Latest desktop/phone artifacts reviewed; stacked phone cards have no horizontal/page
+overflow. The final doc-only checkpoint has its own current-head CI check; fetch PR32's
+actual latest SHA/checks and final PR evidence before any integration. Earlier pending
+entries above are chronological publication-time notes superseded by these passes.
+
+Local7F candidate is ready in `feat/stage-7f-ai-leaderboards` (Draft PR32, dependent
+on PR31). No merge/deployment is claimed and no completed-pickup branch is created
+before an approved, verified merge. Schema0012 preserves legacy match/settings data,
+adds no fabricated backfill, and keeps history immutable. Unknown/declarations/observed
+response labels remain distinct; no invented catalog or universal effort equivalence.
+Record cap5000 explicitly exposes truncation; rates are descriptive, not calibrated
+Elo/intelligence. Default names/owners/IDs are absent; aliases are opt-in. No owner
+directory or public profile is implemented. Free/BYO economics remain unchanged.
+
+Next target after final doc-head verification: wait for authorized hosted/account/
+runtime, policy and merge/release decisions under HOSTED_RELEASE_PATH.md, or a new
+explicit local feature task. Stage9 selection and deferred2E/6D/etc remain unresolved;
+do not resume blocked public setup, spend, fetch credentials, expand permissions or
+merge. Parent owns notifications; hourly monitor remains paused. Preserve all drafts
+and this contributor branch for pickup. Oct6 17:40UTC remains a conditional delivery
+target, not a guaranteed all-stage release; keep integration/test buffer explicit.
