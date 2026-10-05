@@ -327,3 +327,49 @@ def test_strength_and_request_bounds_never_collapse():
     assert len(report["rows"]) == 2
     assert len(report["head_to_head"]) == 1
     assert all(r["counts"]["rate_denominator"] == 1 for r in report["rows"])
+
+
+def test_known_adapter_mapping_preserves_declared_raw_effort():
+    from lounge_api.player_protocol import EffortLevel
+
+    class Adapter:
+        def capabilities(self, model):
+            return {"provider_effort_map": {EffortLevel.DEEP: "fixture-native-budget"}}
+
+    class Registry:
+        def get(self, adapter):
+            return Adapter()
+
+    p = player("fixture-v1", effort_raw="declared-external-setting").model_copy(
+        update={"effort": EffortLevel.DEEP}
+    )
+    seat = snapshot(GameSession(white_player=p), Registry())["seats"]["white"]
+    assert seat["effort_raw"] == {
+        "value": "fixture-native-budget",
+        "evidence": "recorded_adapter_mapping",
+    }
+    assert seat["effort_declared"] == {"value": "declared-external-setting", "evidence": "declared"}
+    assert seat["effort_normalized"] == {"value": "deep", "evidence": "recorded_adapter_mapping"}
+
+
+def test_bounded_report_exposes_incomplete_coverage(tmp_path, monkeypatch):
+    monkeypatch.setattr("lounge_api.leaderboards.MAX_RECORDS", 2)
+
+    async def run():
+        store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'bounded.db'}")
+        try:
+            for _ in range(3):
+                game = GameSession(
+                    white_player=player("fixture-v1"), black_player=player("fixture-v2")
+                )
+                game.comparison_snapshot = snapshot(game)
+                await store.create_game(game, [])
+            report = await Leaderboards(store).get()
+            assert report["truncated"] is True
+            assert report["record_limit"] == report["selected_games"] == 2
+            assert all(r["counts"]["total_games"] == 2 for r in report["rows"])
+            assert report["legacy_games_without_snapshot"] == 0
+        finally:
+            await store.close()
+
+    asyncio.run(run())
