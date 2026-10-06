@@ -171,8 +171,8 @@ class ScriptedPlayerAdapter:
         if not legal_moves:
             raise AdapterError("The scripted adapter requires a non-empty legal move list.")
         script = player.settings.get("moves", [])
-        offset = 0 if request.color == "white" else 1
-        completed = sum(1 for index in range(len(request.moves_uci)) if index % 2 == offset)
+        # The initial FEN may start with either color (experiment opening suites).
+        completed = len(request.moves_uci) // 2
         move = script[completed] if completed < len(script) else sorted(legal_moves)[0]
         return MoveProposal(
             request_id=request.request_id,

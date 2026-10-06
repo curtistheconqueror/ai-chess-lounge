@@ -5,7 +5,16 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
+
+from .comparison_identity import IdentityDeclaration
 
 PROTOCOL_VERSION = "1.0"
 
@@ -123,6 +132,14 @@ class PlayerConfiguration(BaseModel):
     effort: EffortLevel | None = None
     division: AssistanceDivision = AssistanceDivision.LEGAL_ASSIST
     settings: dict[str, Any] = Field(default_factory=dict)
+    comparison: IdentityDeclaration | None = None
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_serialization(self, handler):
+        result = handler(self)
+        if self.comparison is None:
+            result.pop("comparison", None)
+        return result
 
     @model_validator(mode="after")
     def validate_public_settings(self) -> PlayerConfiguration:
@@ -308,6 +325,13 @@ class MoveRequest(BaseModel):
 
 
 class MoveProposal(BaseModel):
+    _provider_model: str | None = PrivateAttr(default=None)
+
+    def with_provider_observation(self, value):
+        if isinstance(value, str) and value.strip() and len(value) <= 160:
+            self._provider_model = value
+        return self
+
     schema_version: str = PROTOCOL_VERSION
     request_id: str
     match_id: str
@@ -331,6 +355,15 @@ class MoveProposal(BaseModel):
 
 
 class PlayerMoveMetadata(BaseModel):
+    provider_model: str | None = Field(default=None, max_length=160)
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_serialization(self, handler):
+        result = handler(self)
+        if self.provider_model is None:
+            result.pop("provider_model", None)
+        return result
+
     protocol_version: str = PROTOCOL_VERSION
     player_id: str
     adapter_id: str

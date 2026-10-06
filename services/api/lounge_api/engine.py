@@ -31,6 +31,31 @@ class EngineFailure(RuntimeError):
     """Raised when Stockfish cannot complete a requested turn."""
 
 
+async def _engine_thread(operation, *args, discard_cancelled_result=None, on_cancelled_error=None):
+    """Keep the service lock until threaded UCI work really ends on cancellation."""
+    task = asyncio.create_task(asyncio.to_thread(operation, *args))
+    interrupted = False
+    while True:
+        try:
+            result = await asyncio.shield(task)
+            break
+        except asyncio.CancelledError:
+            if task.cancelled():
+                raise
+            interrupted = True
+        except Exception:
+            if interrupted:
+                if on_cancelled_error is not None:
+                    on_cancelled_error()
+                raise asyncio.CancelledError from None
+            raise
+    if interrupted:
+        if discard_cancelled_result is not None:
+            discard_cancelled_result(result)
+        raise asyncio.CancelledError
+    return result
+
+
 class StockfishService:
     """A serialized Stockfish UCI process shared by Stage 1 games."""
 
@@ -66,8 +91,13 @@ class StockfishService:
         return self.path is not None
 
     async def summary(self, target_elo: int, move_time_ms: int) -> EngineSummary:
-        if self.available and self._version is None:
-            await self._ensure_started()
+        async with self._lock:
+            if self.available and self._version is None:
+                try:
+                    await self._ensure_started()
+                except (chess.engine.EngineError, OSError, TimeoutError) as exc:
+                    self._discard_failed_engine()
+                    raise EngineFailure("Stockfish startup could not be completed.") from exc
         return EngineSummary(
             name="Stockfish" if self.available else "Stockfish unavailable",
             available=self.available,
@@ -90,12 +120,14 @@ class StockfishService:
             try:
                 await self._ensure_started()
                 assert self._engine is not None
-                return await asyncio.to_thread(
+                return await _engine_thread(
                     self._analyse_sync,
                     board.copy(stack=True),
                     analysis_time_ms,
+                    on_cancelled_error=self._discard_failed_engine,
                 )
             except (chess.engine.EngineError, OSError, TimeoutError) as exc:
+                self._discard_failed_engine()
                 raise EngineFailure("Stockfish analysis could not be completed.") from exc
 
     async def choose_move(
@@ -110,13 +142,15 @@ class StockfishService:
                 await self._ensure_started()
                 assert self._engine is not None
                 started = asyncio.get_running_loop().time()
-                move = await asyncio.to_thread(
+                move = await _engine_thread(
                     self._play_sync,
                     board.copy(stack=True),
                     target_elo,
                     move_time_ms,
+                    on_cancelled_error=self._discard_failed_engine,
                 )
             except (chess.engine.EngineError, OSError, TimeoutError) as exc:
+                self._discard_failed_engine()
                 raise EngineFailure("Stockfish could not complete the turn.") from exc
             elapsed_ms = round((asyncio.get_running_loop().time() - started) * 1000)
             return EngineMove(uci=move.uci(), elapsed_ms=elapsed_ms)
@@ -177,11 +211,26 @@ class StockfishService:
             return
         if not self.path:
             return
-        self._engine = await asyncio.to_thread(chess.engine.SimpleEngine.popen_uci, self.path)
+        self._engine = await _engine_thread(
+            chess.engine.SimpleEngine.popen_uci,
+            self.path,
+            discard_cancelled_result=lambda engine: engine.close(),
+        )
         name = self._engine.id.get("name", "Stockfish")
         self._version = name
 
+    def _discard_failed_engine(self) -> None:
+        engine, self._engine = self._engine, None
+        self._version = None
+        if engine is not None:
+            engine.close()
+
     async def close(self) -> None:
-        if self._engine is not None:
-            engine, self._engine = self._engine, None
-            await asyncio.to_thread(engine.quit)
+        async with self._lock:
+            if self._engine is not None:
+                engine, self._engine = self._engine, None
+                self._version = None
+                try:
+                    await _engine_thread(engine.quit, on_cancelled_error=engine.close)
+                except (chess.engine.EngineError, OSError, TimeoutError):
+                    engine.close()
