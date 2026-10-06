@@ -1,0 +1,116 @@
+{
+  "schema_version": "1.0",
+  "scope": "generated_fixture_not_production_capacity",
+  "timestamp_utc": "2026-10-04T20:56:12.581847+00:00",
+  "version": "0.1.0",
+  "source_sha": "b4dab469d808d3626900d303a7acd37b6b88313e",
+  "source_tree_state": "clean",
+  "hardware": {
+    "os": "Linux",
+    "architecture": "x86_64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "logical_cpus": 9,
+    "host_memory": "10206508 kB",
+    "cgroup_cpu_max": "800000 100000",
+    "cgroup_memory_max": "8589934592",
+    "python": "3.12.14",
+    "node": "v24.19.0",
+    "sqlite": "3.53.1"
+  },
+  "limits": {
+    "scenario_seconds": 60,
+    "http_concurrency": 32,
+    "spectators": 100,
+    "global_leases": 4
+  },
+  "interpretation": "In-process/fixture results; network, hosted topology, RPO/RTO and SLA unestablished.",
+  "scenarios": [
+    {
+      "name": "loopback",
+      "status": "measured",
+      "backend": "sqlite",
+      "transport": "loopback_TCP_no_TLS_proxy_browser",
+      "http": [
+        {
+          "concurrency": 1,
+          "samples": 4,
+          "p50_ms": 43.66169200511649,
+          "p95_ms": 45.61908399773529,
+          "max_ms": 45.61908399773529
+        },
+        {
+          "concurrency": 8,
+          "samples": 32,
+          "p50_ms": 11.831882999103982,
+          "p95_ms": 51.59442599688191,
+          "max_ms": 54.31362300441833
+        },
+        {
+          "concurrency": 32,
+          "samples": 128,
+          "p50_ms": 66.55090500134975,
+          "p95_ms": 131.8239390020608,
+          "max_ms": 151.2777099997038
+        }
+      ],
+      "spectators": [
+        {
+          "connections": 1,
+          "accepted_moves": 4,
+          "idempotent_replays": 4,
+          "last_request_start_to_final_snapshot_read_including_replay": {
+            "samples": 1,
+            "p50_ms": 193.80539099802263,
+            "p95_ms": 193.80539099802263,
+            "max_ms": 193.80539099802263
+          },
+          "active_after_cleanup": 0,
+          "reconnect_verified": true
+        },
+        {
+          "connections": 10,
+          "accepted_moves": 4,
+          "idempotent_replays": 4,
+          "last_request_start_to_final_snapshot_read_including_replay": {
+            "samples": 10,
+            "p50_ms": 203.6666720014182,
+            "p95_ms": 215.9561360022053,
+            "max_ms": 215.9561360022053
+          },
+          "active_after_cleanup": 0,
+          "reconnect_verified": true
+        },
+        {
+          "connections": 50,
+          "accepted_moves": 4,
+          "idempotent_replays": 4,
+          "last_request_start_to_final_snapshot_read_including_replay": {
+            "samples": 50,
+            "p50_ms": 175.96473700541537,
+            "p95_ms": 228.1405040048412,
+            "max_ms": 231.99414199916646
+          },
+          "active_after_cleanup": 0,
+          "reconnect_verified": true
+        },
+        {
+          "connections": 100,
+          "accepted_moves": 4,
+          "idempotent_replays": 4,
+          "last_request_start_to_final_snapshot_read_including_replay": {
+            "samples": 100,
+            "p50_ms": 296.0886880027829,
+            "p95_ms": 320.65436500124633,
+            "max_ms": 343.82988000288606
+          },
+          "active_after_cleanup": 0,
+          "reconnect_verified": true
+        }
+      ],
+      "max_message_bytes": 1048576,
+      "client_receive_queue_high_watermark_frames": 4,
+      "client_application_messages_sent": 0,
+      "listener_closed": true
+    }
+  ]
+}

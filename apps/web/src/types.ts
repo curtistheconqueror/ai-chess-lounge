@@ -46,6 +46,32 @@ export interface UsageMetrics {
   estimated_cost_usd: number | null;
 }
 
+export interface IdentityDeclaration {
+  underlying_model?: string; underlying_provider?: string; model_family?: string;
+  model_version?: string; access_route?: string; broker?: string; harness?: string;
+  harness_version?: string; effort_raw?: string; listing_opt_in?: boolean; listing_alias?: string;
+}
+export interface EvidenceValue { value: string | string[] | null; evidence: string }
+export interface ComparisonIdentity { [field: string]: EvidenceValue | string }
+export interface ComparisonCounts {
+  total_games: number; eligible_games: number; wins: number; losses: number; draws: number;
+  forfeits: number; rate_denominator: number; excluded: Record<string,number>;
+  win_rate: number | null; loss_rate: number | null; draw_rate: number | null; score_rate: number | null;
+}
+export interface ComparisonConditions {
+  initial_time_ms: number; increment_ms: number; divisions: string[];
+  engines: { target_elo: number; move_time_ms: number; version: EvidenceValue }[];
+}
+export interface LeaderboardReport {
+  selected_games: number; legacy_games_without_snapshot: number; coverage: string;
+  truncated: boolean; record_limit: number; notices: string[];
+  rows: { key: string; identity: ComparisonIdentity; counts: ComparisonCounts;
+    conditions: ComparisonConditions; colors: {white: ComparisonCounts; black: ComparisonCounts};
+    variants: ComparisonIdentity[]; opt_in_aliases: string[] }[];
+  head_to_head: { left: string; right: string; left_identity: ComparisonIdentity;
+    right_identity: ComparisonIdentity; counts: ComparisonCounts; conditions: ComparisonConditions }[];
+}
+
 export interface PlayerConfiguration {
   protocol_version: string;
   player_id: string;
@@ -57,6 +83,7 @@ export interface PlayerConfiguration {
   effort: EffortLevel | null;
   division: AssistanceDivision;
   settings: Record<string, unknown>;
+  comparison?: IdentityDeclaration | null;
 }
 
 export interface RunnerPairingResponse {
@@ -87,6 +114,7 @@ export interface RunnerSessionStatus {
 export type PlayerConfigurationInput = Omit<PlayerConfiguration, "player_id">;
 
 export interface PlayerMoveMetadata {
+  provider_model?: string | null;
   protocol_version: string;
   player_id: string;
   adapter_id: string;

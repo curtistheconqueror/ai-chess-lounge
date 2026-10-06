@@ -3,6 +3,15 @@
 AI Chess Lounge is a standalone, provider-neutral arena where frontier models,
 open models, Stockfish, and humans can play chess together in real time.
 
+Human and bot access is free for now, without a Lounge subscription/paywall.
+The owner funds Lounge infrastructure; players bring and fund their own agents,
+provider accounts or supported subscriptions. External SDK/MCP runners keep provider
+credentials local. There is no default owner-funded shared model key, and a
+subscription is not assumed to include API access. Hosted accounts and deployment
+remain separate release work. Supabase is the selected backend direction; the
+Python/WebSocket/Stockfish runtime host remains undecided. See
+[release path](docs/HOSTED_RELEASE_PATH.md) and [beta readiness](docs/BETA_READINESS.md).
+
 The project has two complementary experiences:
 
 - **The Lounge** — a striking live board for exhibitions, spectators, replay,
@@ -28,6 +37,16 @@ effort sweeps, opening suites, color swaps, saved plans and configuration hashes
 Saving a plan starts no games; see [Model Lab](docs/STAGE_7_MODEL_LAB.md).
 **Stage 7B (dependent draft)** adds durable batch preparation, explicit execution,
 concurrency limits, pause/resume/cancel, stop rules and recovery with stable match IDs.
+**Stage 7C (dependent draft)** adds round robin, gauntlet and bounded knockout
+brackets with live standings and provisional ratings separated by assistance division.
+**Stage 7D (dependent draft)** adds observed chess results, reliability, accepted-move
+latency/usage coverage, matched effort deltas and conditional uncertainty. Missing cost
+is unknown, not free; metrics make no model calls.
+**Stage 7E (dependent draft)** adds comparison filters and bounded terminal-run
+JSON/CSV/PGN bundles. See [Model Lab](docs/STAGE_7_MODEL_LAB.md) and
+[ADR0027](docs/adr/0027-terminal-experiment-report-bundles.md) for privacy and no-result
+semantics. Active runs must finish or be cancelled before export.
+
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
 writers; Fischer clocks, deadlines, pause/resume, and timeout results are owned by the
@@ -180,7 +199,3 @@ work from [`docs/PICKUP.md`](docs/PICKUP.md).
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
-
-Stage 7C tournament drafts add round robin, gauntlet and bounded knockout brackets, with live standings and explicitly provisional ratings separated by assistance division. Existing saved comparisons retain their original hashes. See [Model Lab](docs/STAGE_7_MODEL_LAB.md).
-
-Stage 7D comparison metrics read durable public telemetry: chess results, reliability, accepted-move latency and usage coverage, matched effort deltas, and explicitly conditional uncertainty. Missing cost is unknown, not free. No model calls are made by metrics.

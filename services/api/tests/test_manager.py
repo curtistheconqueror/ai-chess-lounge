@@ -750,7 +750,9 @@ def test_background_deadline_task_broadcasts_timeout() -> None:
                     increment_ms=0,
                 )
             )
-            await asyncio.sleep(0.14)
+            # Await the background commit, not a scheduler-dependent fixed sleep.
+            timeout_task = manager._timeout_tasks[game.id]
+            await asyncio.wait_for(asyncio.shield(timeout_task), timeout=2)
             snapshot = await manager.snapshot(game.id)
             assert snapshot.status is GameStatus.TIMEOUT
         finally:
