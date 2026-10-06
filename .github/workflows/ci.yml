@@ -72,7 +72,7 @@ jobs:
           TEST_POSTGRES_URL: postgresql+asyncpg://lounge:lounge@127.0.0.1:5432/lounge_test
           TEST_POSTGRES_RESTORE: "1"
         run: >-
-          python -W error -m lounge_api.performance --postgres-ci --engine
+          python -W error -m lounge_api.performance --postgres-ci --engine --loopback
           --out ${{ runner.temp }}/lounge-performance/baseline.json
 
       - name: Set up Node
