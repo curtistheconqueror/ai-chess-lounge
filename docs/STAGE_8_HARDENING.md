@@ -70,10 +70,10 @@ No production attack or infrastructure scan is part of this initial assessment.
 ## Decisions needed before security or account changes
 
 See ACCOUNT_AND_RELEASE_DECISIONS.md for a concrete proposed identity/role model,
-acceptance criteria and approval boundaries. Identity/database/hosting providers,
+acceptance criteria and approval boundaries. Supabase is the selected backend direction; project/auth configuration, runtime host,
 initial administrator, visibility defaults, invitation policy and paid-call limits
-must be decided explicitly. Supabase is a user-mentioned option, not an assumed
-account or purchase. Do not enable public binding until those controls are tested.
+must be decided explicitly. No Supabase account/project/access or purchase is
+verified or authorized. Do not enable public binding until those controls are tested.
 
 8A remains open until findings are reviewed, authorized remediation is verified,
 and release risks have an explicit disposition. A clean dependency scan alone does

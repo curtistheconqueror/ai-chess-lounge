@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "scope": "local_generated_fixture_not_hosted_capacity",
+  "timestamp_utc": "2026-10-04T20:37:58.027923+00:00",
+  "source_sha": "fd0ee8a8462dae9982fdd621db41023245ade28f",
+  "hardware": {
+    "os": "Linux",
+    "architecture": "x86_64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "logical_cpus": 9,
+    "host_memory": "10206508 kB",
+    "cgroup_cpu_max": "800000 100000",
+    "cgroup_memory_max": "8589934592",
+    "python": "3.12.14",
+    "node": "v24.19.0",
+    "sqlite": "3.53.1"
+  },
+  "scenario_seconds_cap": 60,
+  "engine": {
+    "status": "measured",
+    "engine_version": "Stockfish 16",
+    "processes": 2,
+    "threads_per_process": 1,
+    "hash_mib_per_process": 16,
+    "move_time_ms": 30,
+    "target_elo_requested": 1600,
+    "analysis_samples": 4,
+    "player_latency": {
+      "samples": 4,
+      "p50_ms": 67.83743699634215,
+      "p95_ms": 132.26325400319183,
+      "max_ms": 132.26325400319183
+    },
+    "startup_ms": 254.3760589978774,
+    "position_unchanged": true,
+    "terminated_process_reaped": true,
+    "failure_surfaced_then_explicit_service_restart_verified": true,
+    "isolation": "separate_serialized_engine_services_not_a_capacity_SLA"
+  },
+  "interpretation": "Explicit service restart after surfaced failure; no automatic turn replay or hard process-supervisor guarantee."
+}

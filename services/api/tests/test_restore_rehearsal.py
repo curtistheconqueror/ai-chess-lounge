@@ -46,6 +46,7 @@ def test_restore_retains_terminal_games_events_queue_and_reproducible_exports(tm
             game = await manager.store.load_game(game_id)
             assert game is not None
             expected = (game.board.fen(), game.version, game.revision, game.result)
+            events = await manager.store.list_events(game_id)
         finally:
             await manager.close()
 
@@ -69,6 +70,7 @@ def test_restore_retains_terminal_games_events_queue_and_reproducible_exports(tm
                 recovered.result,
             ) == expected
             assert await ExperimentQueue(store).snapshot(rid) == before
+            assert await store.list_events(game_id) == events
             actual = stable_bundle_files(await ExperimentReports(store).bundle(rid))
             assert actual == exported
             assert plan["configuration_hash"].encode() in actual["manifest.json"]

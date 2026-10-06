@@ -27,13 +27,13 @@ from test_experiments import configuration
 from test_manager import FakeEngine
 
 
-async def terminal_run(tmp_path, result="0-1", schema="1.0"):
+async def terminal_run(tmp_path, result="0-1", schema="1.0", *, database_url=None):
     config = configuration()
     config.update(repetitions=1, color_swap=False)
     config["openings"] = [{"name": "Black starts", "moves": ["f2f3"]}]
     if schema == "2.0":
         config.update(schema_version="2.0", format="round_robin", anchor=None)
-    store, plan, queue, rid = await make_run(tmp_path, config)
+    store, plan, queue, rid = await make_run(tmp_path, config, database_url=database_url)
     manager = GameManager(
         engine=FakeEngine(), store=store, schedule_agents=False, schedule_timeouts=False
     )
