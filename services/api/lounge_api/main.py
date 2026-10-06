@@ -15,6 +15,7 @@ from . import __version__
 from .adapters import AdapterConfigurationError
 from .domain import ClockExpired, MatchTransitionRejected, MoveRejected, StalePosition
 from .engine import EngineFailure
+from .experiments import ExperimentConfiguration, ExperimentService, SaveExperiment
 from .manager import AnalysisSuperseded, GameManager, GameNotFound
 from .models import (
     AdjudicateRequest,
@@ -75,6 +76,35 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    experiments = ExperimentService(active_manager.store, active_manager.adapters)
+
+    @application.post("/api/experiments/preview")
+    async def preview_experiment(request: ExperimentConfiguration):
+        try:
+            return experiments.preview(request)
+        except (ValueError, AdapterConfigurationError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @application.post("/api/experiments", status_code=201)
+    async def save_experiment(request: SaveExperiment):
+        try:
+            return await experiments.save(request)
+        except FileExistsError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (ValueError, AdapterConfigurationError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @application.get("/api/experiments")
+    async def list_experiments(offset: Annotated[int, Query(ge=0)] = 0):
+        return await experiments.list(offset)
+
+    @application.get("/api/experiments/{experiment_id}")
+    async def get_experiment(experiment_id: str):
+        result = await experiments.get(experiment_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Experiment not found.")
+        return result["document"]
 
     @application.get("/api/health", response_model=HealthResponse)
     async def health() -> HealthResponse:

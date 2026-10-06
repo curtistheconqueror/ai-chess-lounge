@@ -46,7 +46,7 @@ from .models import (
 from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0009_consultations"
+SCHEMA_REVISION = "0010_experiments"
 
 
 class ConcurrentGameUpdate(RuntimeError):
@@ -63,6 +63,14 @@ class TurnLeaseUnavailable(RuntimeError):
 
 class Base(DeclarativeBase):
     pass
+
+
+class ExperimentRow(Base):
+    __tablename__ = "experiments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    document: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
 
 
 class MatchRow(Base):

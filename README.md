@@ -23,6 +23,9 @@ resignation confirmation, draw claims, and reconnect input fencing; see
 seat changes, restoration, persisted history and annotated PGN, with old-turn fencing.
 **Stage 6C consultation** adds adviser suggestions for human turns, separate move
 confirmation, cancellation, and disclosed Human-AI Team history without automatic moves.
+**Stage 7A (draft)** adds the Model Lab experiment builder: deterministic schedules,
+effort sweeps, opening suites, color swaps, saved plans and configuration hashes.
+Saving a plan starts no games; see [Model Lab](docs/STAGE_7_MODEL_LAB.md).
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
 writers; Fischer clocks, deadlines, pause/resume, and timeout results are owned by the

@@ -26,7 +26,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     let message = `${response.status} ${response.statusText}`;
     try {
       const payload = (await response.json()) as ApiError;
-      message = payload.detail || message;
+      const detail: unknown = payload.detail;
+      message = typeof detail === "string" ? detail : Array.isArray(detail)
+        ? detail.map(item => typeof item?.msg === "string" ? item.msg : "Invalid request field").join("; ")
+        : message;
     } catch {
       // Keep the HTTP status when the response is not JSON.
     }
@@ -182,4 +185,17 @@ export function playConsultation(gameId: string, advice: Consultation, revision:
     method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify({ move: advice.move, position_version: advice.position_version, consultation_id: advice.id, consultation_revision: revision }),
   });
+}
+
+export function previewExperiment(configuration: import("./ModelLab").ExperimentConfig) {
+  return request<import("./ModelLab").ExperimentPlan>("/api/experiments/preview", { method: "POST", body: JSON.stringify(configuration) });
+}
+export function saveExperiment(id: string, configuration: import("./ModelLab").ExperimentConfig) {
+  return request<import("./ModelLab").ExperimentPlan>("/api/experiments", { method: "POST", body: JSON.stringify({ id, configuration }) });
+}
+export function listExperiments(offset = 0) {
+  return request<import("./ModelLab").ExperimentSummary[]>(`/api/experiments?offset=${offset}`);
+}
+export function fetchExperiment(id: string) {
+  return request<import("./ModelLab").ExperimentPlan>(`/api/experiments/${encodeURIComponent(id)}`);
 }

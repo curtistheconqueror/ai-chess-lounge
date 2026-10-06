@@ -900,3 +900,34 @@ test("a human can ignore advice and stale confirmation closes", async ({ page },
   expect(result.consultations[0].status).toBe("stale");
   expect(result.moves[0].uci).toBe("e2e4");
 });
+
+test("Model Lab previews and saves a color-swapped plan without launching games", async ({ page }, testInfo) => {
+  test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Lab acceptance runs on desktop and phone.");
+  const matchUrl = page.url();
+  await page.getByRole("button", { name: "Model Lab", exact: true }).click();
+  const lab = page.getByRole("region", { name: "Model Lab", exact: true });
+  await lab.getByRole("textbox", { name: "Experiment name", exact: true }).fill(`Lab acceptance ${testInfo.project.name}`);
+  await lab.getByRole("button", { name: "Preview experiment", exact: true }).click();
+  const preview = lab.getByRole("article", { name: "Experiment preview", exact: true });
+  await expect(preview).toContainText("6 planned games");
+  await expect(preview.getByRole("row")).toHaveCount(7);
+  await expect(preview).toContainText("Unsaved preview");
+  const savedResponse = page.waitForResponse(r => r.url().endsWith("/api/experiments") && r.request().method() === "POST");
+  await preview.getByRole("button", { name: "Save draft plan", exact: true }).click();
+  const saved = await (await savedResponse).json();
+  await expect(preview).toContainText("Saved draft");
+  expect(page.url()).toBe(matchUrl);
+  await page.reload();
+  await page.getByRole("button", { name: "Model Lab", exact: true }).click();
+  await lab.getByText(/Saved experiments ·/).click();
+  await lab.getByRole("button", { name: `Lab acceptance ${testInfo.project.name} · 6 games`, exact: true }).last().click();
+  await expect(preview).toContainText(saved.configuration_hash);
+  const width = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+  expect(width.scroll).toBeLessThanOrEqual(width.client + 1);
+  await page.screenshot({ path: testInfo.outputPath(`lab-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
+  await lab.getByRole("button", { name: "Create another draft", exact: true }).click();
+  await lab.getByRole("textbox", { name: "Opening suite" }).fill("Bad | e2e5");
+  await expect(preview).not.toBeVisible();
+  await lab.getByRole("button", { name: "Preview experiment", exact: true }).click();
+  await expect(lab.getByRole("alert")).toBeVisible();
+});
