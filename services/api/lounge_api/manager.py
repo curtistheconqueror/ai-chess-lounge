@@ -31,6 +31,7 @@ from .adapters import (
     StockfishPlayerAdapter,
 )
 from .anthropic_adapter import AnthropicMessagesAdapter
+from .comparison_identity import snapshot as comparison_snapshot
 from .consultation import ConsultationService
 from .domain import (
     ClockExpired,
@@ -233,6 +234,7 @@ class GameManager:
             game.engine_summary = await self.engine.summary(
                 game.stockfish_elo, game.engine_move_time_ms
             )
+        game.comparison_snapshot = comparison_snapshot(game, self.adapters)
         now = self._clock()
         events = [
             game.event(
@@ -397,8 +399,14 @@ class GameManager:
         async with self._game_locks[game_id]:
             game = deepcopy(await self._reload(game_id))
             expected_revision = game.revision
+            if any(p.adapter_id == "stockfish" for p in (game.white_player, game.black_player)):
+                # A new generation records the current UCI runtime, not a pre-restart label.
+                game.engine_summary = await self.engine.summary(
+                    game.stockfish_elo, game.engine_move_time_ms
+                )
             now = self._clock()
             game.reset(now=now)
+            game.comparison_snapshot = comparison_snapshot(game, self.adapters)
             payload = {"generation": game.generation, **self._clock_payload(game, now)}
             event = game.event("match.reset", payload, now=now)
             await self._record_action(game, [event], expected_revision)
@@ -900,6 +908,7 @@ class GameManager:
                 if await self._expire_locked(game, now, expected_revision=expected_revision):
                     return False
                 metadata = PlayerMoveMetadata(
+                    provider_model=proposal._provider_model,
                     player_id=player.player_id,
                     adapter_id=player.adapter_id,
                     provider=player.provider,

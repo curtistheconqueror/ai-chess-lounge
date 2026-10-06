@@ -81,6 +81,7 @@ class GameSession:
     draw_reason: str | None = None
     adjudicated_result: str | None = None
     engine_summary: EngineSummary | None = None
+    comparison_snapshot: dict | None = None
     white_remaining_ms: int | None = None
     black_remaining_ms: int | None = None
     turn_started_at: datetime | None = None
@@ -332,6 +333,7 @@ class GameSession:
         self.black_remaining_ms = self.initial_time_ms
         self.turn_started_at = action_time
         self.lifecycle = MatchState.RUNNING
+        self.comparison_snapshot = None
         self.generation += 1
         self.version += 1
         self.revision += 1
@@ -581,6 +583,7 @@ class GameSession:
         can_claim_draw, draw_claim_moves = self.draw_claim_options()
         return GameSnapshot(
             id=self.id,
+            comparison_snapshot=self.comparison_snapshot,
             lifecycle=self.lifecycle,
             status=status,
             result=self.result,

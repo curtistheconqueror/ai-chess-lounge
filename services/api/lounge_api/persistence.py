@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
 
+from .comparison_identity import outcome as comparison_outcome
 from .domain import GameSession
 from .models import (
     Consultation,
@@ -46,7 +47,7 @@ from .models import (
 from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0011_experiment_queue"
+SCHEMA_REVISION = "0012_comparison_games"
 
 
 class ConcurrentGameUpdate(RuntimeError):
@@ -146,6 +147,16 @@ class MatchRow(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ComparisonGameRow(Base):
+    __tablename__ = "comparison_games"
+    match_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("matches.id", ondelete="CASCADE"), primary_key=True
+    )
+    generation: Mapped[int] = mapped_column(Integer, primary_key=True)
+    identity: Mapped[dict] = mapped_column(JSON, nullable=False)
+    outcome: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
 class MoveRow(Base):
@@ -369,6 +380,7 @@ class DatabaseStore:
             # do not expose relationship properties. Flush the parent explicitly
             # so PostgreSQL never batches the child inserts ahead of it.
             await session.flush()
+            await self._record_comparison(session, game)
             session.add_all(self._event_rows(game.id, events))
 
     async def _guard_experiment(self, session, game, now, token=None):
@@ -470,6 +482,7 @@ class DatabaseStore:
                     ),
                 )
             )
+            await self._record_comparison(session, game)
             session.add_all(self._event_rows(game.id, events))
             if idempotency_key is not None:
                 if request_hash is None:
@@ -511,6 +524,7 @@ class DatabaseStore:
             )
             if result.rowcount != 1:
                 raise ConcurrentGameUpdate(game.id)
+            await self._record_comparison(session, game)
             session.add_all(self._event_rows(game.id, events))
             await self._flush_mutation(session)
 
@@ -942,7 +956,10 @@ class DatabaseStore:
                     )
                 ).all()
             )
-            return self._restore_game(row, moves)
+            game = self._restore_game(row, moves)
+            comparison = await session.get(ComparisonGameRow, (game.id, game.generation))
+            game.comparison_snapshot = comparison.identity if comparison else None
+            return game
 
     async def load_revision(self, game_id: str) -> tuple[int, int] | None:
         await self.initialize()
@@ -1028,7 +1045,27 @@ class DatabaseStore:
             await session.execute(delete(IdempotencyRow))
             await session.execute(delete(EventRow))
             await session.execute(delete(MoveRow))
+            await session.execute(delete(ComparisonGameRow))
             await session.execute(delete(MatchRow))
+
+    async def _record_comparison(self, session: AsyncSession, game: GameSession) -> None:
+        row = await session.get(ComparisonGameRow, (game.id, game.generation))
+        if row is None:
+            # Legacy games with no original snapshot remain explicitly unknown.
+            # Only creation/reset supplies a snapshot; later legacy mutations do not
+            # reconstruct the original identity from possibly changed seats.
+            if game.comparison_snapshot is None:
+                return
+            session.add(
+                ComparisonGameRow(
+                    match_id=game.id,
+                    generation=game.generation,
+                    identity=game.comparison_snapshot,
+                    outcome=comparison_outcome(game),
+                )
+            )
+        else:
+            row.outcome = comparison_outcome(game)
 
     async def _flush_mutation(self, session: AsyncSession) -> None:
         """Flush once inside the transaction; tests replace this to inject a crash."""
