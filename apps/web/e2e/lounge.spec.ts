@@ -947,6 +947,7 @@ test("Model Lab prepares confirms and watches a bounded local batch", async ({ p
   const execution = lab.getByRole("region", { name: "Experiment execution" });
   await execution.getByRole("button", { name: "Prepare batch", exact: true }).click();
   await expect(execution.getByRole("status")).toContainText("Batch ready");
+  await expect(execution.getByRole("button", { name: "Download report bundle (ZIP)" })).not.toBeVisible();
   await execution.getByRole("button", { name: "Start batch", exact: true }).click();
   await execution.getByRole("button", { name: "Keep batch stopped", exact: true }).click();
   await expect(execution.getByRole("status")).toContainText("Batch ready");
@@ -956,6 +957,31 @@ test("Model Lab prepares confirms and watches a bounded local batch", async ({ p
   await expect(execution.getByRole("cell", { name: "limited", exact: true })).toHaveCount(2);
   await expect(execution.getByRole("link", { name: /Game [12]/ })).toHaveCount(2);
   await page.screenshot({ path: testInfo.outputPath(`batch-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
+  const metricsResponse = page.waitForResponse(response => response.url().includes("/api/experiment-runs/") && response.url().endsWith("/metrics") && response.request().method() === "GET");
+  await execution.getByRole("button", { name: "Load comparison metrics", exact: true }).click();
+  expect((await metricsResponse).ok()).toBeTruthy();
+  const metrics = execution.getByRole("region", { name: "Comparison metrics", exact: true });
+  await expect(metrics).toContainText("Every scheduled game must finish with a chess result.");
+  await expect(metrics).toContainText("Unknown (0/");
+  await expect(metrics).toContainText("not calibrated human Elo");
+  const poolFilter = metrics.getByLabel("Filter comparison pool");
+  await expect(poolFilter.locator("option")).toHaveCount(2);
+  await poolFilter.selectOption({ index: 1 });
+  await expect(metrics.locator(".metrics-filter-row").getByRole("status")).toContainText("Showing 2 of 2 competitors");
+  await poolFilter.selectOption("all");
+  const efficiency = metrics.getByRole("region", { name: "Efficiency metrics", exact: true });
+  await expect(efficiency.locator("tbody tr").first().locator("td").nth(8)).toContainText("Unknown");
+  const metricsDimensions = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+  expect(metricsDimensions.scroll).toBeLessThanOrEqual(metricsDimensions.width + 1);
+  await page.screenshot({ path: testInfo.outputPath(`metrics-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
+  await expect(execution.getByRole("button", { name: "Download report bundle (ZIP)" })).toBeVisible();
+  await expect(execution.getByText(/Includes the saved manifest, JSON and CSV reports, and PGNs for the full run, regardless of the current pool filter/)).toBeVisible();
+  const downloadResponse = page.waitForResponse(response => response.url().includes("/api/experiment-runs/") && response.url().endsWith("/bundle") && response.request().method() === "GET");
+  const downloadEvent = page.waitForEvent("download");
+  await execution.getByRole("button", { name: "Download report bundle (ZIP)" }).click();
+  const [bundleResponse, download] = await Promise.all([downloadResponse, downloadEvent]);
+  expect(bundleResponse.ok()).toBeTruthy();
+  expect(download.suggestedFilename()).toMatch(/\.zip$/);
   await execution.getByRole("button", { name: "Prepare another run", exact: true }).click();
   await execution.getByRole("button", { name: "Prepare batch", exact: true }).click();
   await execution.getByRole("button", { name: "Cancel batch", exact: true }).click();
@@ -1034,4 +1060,47 @@ test("limited tournament games are no-results and do not earn provisional rating
   const dimensions = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
   expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width + 1);
   await page.screenshot({ path: testInfo.outputPath(`tournament-report-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
+});
+
+test("identity snapshots and leaderboard counts remain clear on desktop and phone", async ({ page }, testInfo) => {
+  test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Identity acceptance covers desktop and phone.");
+  const version = `fixture-${testInfo.project.name}-${Date.now()}`;
+  const player = (color: string) => ({
+    protocol_version: "1.0", adapter_id: "scripted", display_name: "Private fixture operator",
+    provider: "Reference", model: "deterministic-v1", connection_mode: "local",
+    effort: null, division: "legal_assist", settings: { moves: color === "white" ? ["f2f3", "g2g4"] : ["e7e5", "d8h4"] },
+    comparison: { model_version: `${version}-${color}`, harness: "Generated fixture", effort_raw: "fixture-default" },
+  });
+  const response = await page.request.post("/api/games", { data: { opponent: "human", initial_time_ms: 300000, increment_ms: 0, white_player: player("white"), black_player: player("black") } });
+  expect(response.status()).toBe(201);
+  const game = await response.json();
+  await expect.poll(async () => (await (await page.request.get(`/api/games/${game.id}`)).json()).result).toBe("0-1");
+  await page.getByRole("button", { name: "AI leaderboards", exact: true }).click();
+  await page.getByText("White next match · optional identity declarations", {exact: true}).click();
+  const optIn = page.getByLabel("White next match Opt in to alias listing");
+  await expect(optIn).not.toBeChecked();
+  await optIn.check();
+  await page.getByLabel("White next match Listing alias").fill("Optional alias");
+  await optIn.uncheck();
+  await expect(page.getByLabel("White next match Listing alias")).toHaveCount(0);
+  await page.getByText("Filter games involving a matching seat", {exact: true}).click();
+  await page.getByLabel("Leaderboard version filter").fill(`${version}-white`);
+  const panel = page.getByRole("region", {name: "AI leaderboards", exact: true});
+  await expect(panel).toContainText("1 selected games");
+  await expect(panel.getByRole("region", {name: "Leaderboard results table"})).toContainText("Eligible n=1; total=1");
+  await expect(panel).toContainText(`${version}-black`);
+  await expect(panel).not.toContainText("Private fixture operator");
+  await page.getByLabel("Leaderboard grouping").selectOption("model");
+  await expect(panel).toContainText("Excluded same_comparison_group: 1");
+  await expect(panel).toContainText("denominator=0");
+  await page.getByLabel("Leaderboard grouping").selectOption("exact");
+  await expect(panel).toContainText("denominator=1");
+  if (testInfo.project.name === "phone") {
+    await expect(panel.locator(".leaderboard-mobile-label").first()).toBeVisible();
+    const table = await panel.locator(".leaderboard-table-scroll").evaluate(el => ({client: el.clientWidth, scroll: el.scrollWidth}));
+    expect(table.scroll).toBeLessThanOrEqual(table.client + 1);
+  }
+  const widths = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+  expect(widths.scroll).toBeLessThanOrEqual(widths.client + 1);
+  await page.screenshot({path: testInfo.outputPath(`leaderboards-${testInfo.project.name}.png`), fullPage: true, animations: "disabled"});
 });

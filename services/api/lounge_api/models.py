@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .comparison_identity import IdentityDeclaration
 from .player_protocol import (
     AssistanceDivision,
     ConnectionMode,
@@ -137,6 +138,7 @@ class AdjudicateRequest(BaseModel):
 
 
 class RunnerPairingCreate(BaseModel):
+    comparison: IdentityDeclaration | None = None
     display_name: str = Field(min_length=1, max_length=120)
     provider: str = Field(min_length=1, max_length=80)
     model: str = Field(min_length=1, max_length=120)
@@ -328,6 +330,7 @@ class ClockSnapshot(BaseModel):
 
 
 class GameSnapshot(BaseModel):
+    comparison_snapshot: dict | None = None
     id: str
     lifecycle: MatchState
     status: GameStatus

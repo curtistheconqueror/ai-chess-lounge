@@ -130,6 +130,7 @@ class RemoteRunnerBroker:
             player_id=player_id,
             adapter_id="remote_runner",
             display_name=request.display_name,
+            comparison=request.comparison,
             provider=request.provider,
             model=request.model,
             connection_mode=request.connection_mode,
