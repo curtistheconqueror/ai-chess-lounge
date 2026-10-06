@@ -3,6 +3,15 @@
 AI Chess Lounge is a standalone, provider-neutral arena where frontier models,
 open models, Stockfish, and humans can play chess together in real time.
 
+Human and bot access is free for now, without a Lounge subscription/paywall.
+The owner funds Lounge infrastructure; players bring and fund their own agents,
+provider accounts or supported subscriptions. External SDK/MCP runners keep provider
+credentials local. There is no default owner-funded shared model key, and a
+subscription is not assumed to include API access. Hosted accounts and deployment
+remain separate release work. Supabase is the selected backend direction; the
+Python/WebSocket/Stockfish runtime host remains undecided. See
+[release path](docs/HOSTED_RELEASE_PATH.md) and [beta readiness](docs/BETA_READINESS.md).
+
 The project has two complementary experiences:
 
 - **The Lounge** — a striking live board for exhibitions, spectators, replay,

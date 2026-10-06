@@ -14,8 +14,8 @@ from test_experiments import configuration
 from test_tournaments import tournament
 
 
-async def make_run(tmp_path, config, adapters=None):
-    store = DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / str(uuid4())}.db")
+async def make_run(tmp_path, config, adapters=None, *, database_url=None):
+    store = DatabaseStore(database_url or f"sqlite+aiosqlite:///{tmp_path / str(uuid4())}.db")
     plans = ExperimentService(store, adapters or AdapterRegistry([ScriptedPlayerAdapter()]))
     plan = await plans.save(SaveExperiment(id=uuid4(), configuration=parse_configuration(config)))
     queue = ExperimentQueue(store)
