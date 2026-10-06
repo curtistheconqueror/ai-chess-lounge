@@ -42,7 +42,8 @@ Do not compress the final security, restore, CI or visual gates to meet the date
 
 - 2E accounts and 6D owner/player/spectator/moderator roles, private invitations and
   private/public visibility are release dependencies for hosted multi-user operation.
-  Supabase is an option, not an assumed purchased or authorized dependency.
+  Supabase is now the selected backend direction; account/project/plan/access remain
+  unverified, with no purchase/deployment authorization.
 - 6A negotiated draw offers remain deferred; track explicitly in acceptance scope.
 - Remote consultation requires purpose-scoped authorization; current grants cover
   one match, not advisers or tournament batches. Extending access needs approval.
@@ -199,3 +200,44 @@ identity/invitations, followed by 8E hosted onboarding and integrated review. Ex
 engineering ranges and Oct 5 / Oct 6 checkpoints remain conditional; external waits
 can exceed them. Preserve the final 09:00–17:40 UTC Oct6 review/CI/restore/visual buffer.
 Stage 9 all-candidate scope remains unanswered rather than silently marked complete.
+
+## Verified transport and beta preparation — October4 21:20UTC
+
+PR29 source e6c2e40 passed CI37234869427:357 Python/3 absent-engine skips,
+3 SDK,34 browser, both migrations/native generated restore/performance/build gates.
+Measured native SQLite/PostgreSQL loopback32-request and100-spectator workloads;
+correctness, idempotent replays, reconnect and owned-resource cleanup passed. These
+short fixture measurements do not establish representative hosted capacity.
+PR28 final5f560ea and PR27 finalc267056 independently passed their final-head CI.
+
+8E preparation packet now makes the local reference exhibition and actual hosted
+acceptance sequence reviewable. Roughly44h remain to Oct6 17:40UTC at this checkpoint.
+The dated Oct5/Oct6 gates remain conditional on account/security/budget/topology and
+merge/release decisions; keep Oct6 09:00–17:40UTC for integrated review/CI/restore/visual
+acceptance. Local tested-candidate confidence is higher than hosted-beta confidence;
+all-stages feasibility cannot be established while Stage9 scope is unselected.
+No implementation estimate absorbs unanswered approvals or external service waits.
+
+## BYO funding clarification — October4 2026
+
+Resolved: owner funds infrastructure, players fund inference, no default owner shared
+model key. Free human/bot access has no Lounge paywall for now. Supabase is the
+selected backend direction, without verified account/project/plan/access or spending
+authorization. This removes
+an owner inference-budget decision from external SDK/MCP/subscription-runner acceptance;
+it does not require a new adapter or a duplicate ledger prototype. Existing local
+runner paths can be source/fixture-verified without paid calls or server-held provider
+credentials. Paid-call monetary enforcement applies when Lounge dispatches for a player.
+
+Still critical: hosted identity/ownership/isolation, authorized grants, infrastructure
+and abuse/request/compute quota values, application runtime host/Supabase setup/plan
+and release/merge approval;
+player-paid connection policy for any Lounge-dispatched routes. Existing turn/time
+limits and four-game leases are not full shared resource quotas. Keep 2E/6D and all
+Stage9/deferred scope explicit. Oct6 17:40UTC remains conditional with Oct6 09:00–17:40
+integration buffer. The clarification removes no security/deployment gates or waits.
+
+Supabase setup is needed before actual hosted auth/database acceptance, not local
+play or generated fixture work. Revised conditional release ranges and the first-playable
+versus full-hosted distinction are in HOSTED_RELEASE_PATH.md. No Supabase tool is
+exposed in this session; account/project status and access are unverified.
