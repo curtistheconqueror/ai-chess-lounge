@@ -533,13 +533,13 @@ Local loopback reviewed checkpoint b4dab469d808d3626900d303a7acd37b6b88313e:
 Ruff format/check passed; actual default SQLite/ASGI/queue/loopback/Stockfish
 scenarios all measured successfully. Source tree was clean. Retained loopback
 evidence is docs/verification/stage8c-loopback-local.json; no hosted capacity claim.
-PR28 final5f560ea independently passed CI37233840243. Native PostgreSQL
+PR28 final5f560ea independently passed CI 37233840243. Native PostgreSQL
 loopback and this contributor's published full/browser CI remain new gates.
 
 ## Stage 8C loopback published source verified
 
 Draft PR29: https://github.com/curtistheconqueror/ai-chess-lounge/pull/29
-Source e6c2e409189fcdd3f23f62aa9387d9231db58e16 passed CI37234869427 /
+Source e6c2e409189fcdd3f23f62aa9387d9231db58e16 passed CI 37234869427 /
 job111531856822:357 Python/3 absent-engine skips,3 SDK,34 browser/76 intentional
 viewport skips, SQLite/PostgreSQL migrations, native restore/performance and all
 format/lint/type/build gates. Artifact11314774765 was inspected: SQLite/PostgreSQL
@@ -548,11 +548,11 @@ four idempotent replays, persisted position/event continuity, reconnect, zero ac
 connections and closed owned listener. Desktop/phone metric screenshots inspected.
 These are bounded generated measurements, not hosted capacity or a sustained SLA.
 Installed Stockfish evidence remains the clean local artifact; CI explicitly skips it.
-PR28 final5f560ea passed CI37233840243 and PR27 finalc267056 passed CI37232631478.
+PR28 final5f560ea passed CI 37233840243 and PR27 finalc267056 passed CI 37232631478.
 This documentation follow-up receives its own distinct check; no merge/deployment.
 
 Next safe target: Stage8E preparation-only beta readiness packet, retaining all open
-production/account/budget/performance and Stage9 decisions. Main remains087c565;
+production/account/budget/performance and Stage 9 decisions. Main remains 087c565;
 all contributor branches/draft dependencies are preserved. Completed pickup branches
 remain gated on approved verified merges. Deadline Oct6 17:40UTC keeps final8–9h
 integration/review/CI/restore/visual buffer; external decisions can exceed this window.
@@ -562,7 +562,7 @@ integration/review/CI/restore/visual buffer; external decisions can exceed this 
 Contributor docs/stage-8e-beta-readiness starts from the verified PR29 source plus
 its documentation handoff. docs/BETA_READINESS.md separates the local no-credential
 reference exhibition, supported connection acceptance, hosted integration sequence,
-feedback/incident intake, deferred requirements and all eight unselected Stage9 areas.
+feedback/incident intake, deferred requirements and all eight unselected Stage 9 areas.
 This is preparation only: no hosted beta, new account/access/security/budget change,
 paid connection call, deployment or complete Stage8E claim. No runtime behavior changed.
 
@@ -574,10 +574,133 @@ replace them. Keep draft/contributor branches; do not merge or deploy without ap
 
 Published dependent draft PR30:
 https://github.com/curtistheconqueror/ai-chess-lounge/pull/30
-Preparation source5a920a46db63dea655a88d62388a3e565cef5e6c; runtime unchanged.
+Preparation source 5a920a46db63dea655a88d62388a3e565cef5e6c; runtime unchanged.
 Current-head CI is pending and must be checked independently; no beta completion.
 PR29 final documentation4ac5fc3d3862d36fac3e42f88bfdc411c630ed6e likewise has
 its separate run37235709129 pending; source run37234869427 remains verified green.
 The next genuine dependency is the owner release/account/budget/topology/deferred
 scope decision packet. Do not repeat fixture tests or create another monitor as a
 substitute for those decisions. Preserve all quality gates and draft pickup branches.
+
+## BYO agent economics clarification in progress
+
+Contributor docs/byo-agent-cost-ownership starts from PR30 final 00c96f4c51d6f9f444ea5ef91f3efeceb868efb8
+(local f38eb34 equivalent tree). Final PR30 CI 37235916209 / job 111534858353 passed;
+source 5a920a4 passed CI 37235866015. PR29 final 4ac5fc3 passed CI 37235709129.
+These supersede historical publication-time pending notes above. Main remains 087c565.
+
+Owner funds Lounge infrastructure; players fund their own agents/API/subscriptions.
+No owner-funded shared model key by default. Human/bot Lounge access is free for now.
+Supabase is the selected backend direction; account/project/plan/access remain
+unverified and no purchase/deployment authorization is inferred. Account/budget/beta/plan docs now distinguish
+external inference from Lounge-dispatched player-paid calls and owner compute.
+Inspected existing SDK/MCP/bridge and remote adapter: player credentials already stay
+local; pairing remains required and match/seat grants unchanged. No duplicate adapter,
+monetary prototype, new access control, provider call, merge or deployment.
+
+Removed blocker: funding responsibility ambiguity/owner inference-budget prerequisite
+for external BYO routes. Safe next work: verify existing BYO fixture contracts and
+publish this narrow documentation checkpoint. Remaining actual choices: hosted route
+scope, identity/admin/visibility/invites, Supabase account/project/plan/access,
+application runtime host and infrastructure limits/topology,
+abuse/request/compute quotas, player paid-call policy if Lounge dispatches, approved
+merge/release, purpose/distributed/deferred scope and Stage 9. No blanket stop on safe
+work, but no public BYO launch or all-stage completion claimed without these gates.
+
+Existing BYO capability verification: 73 warning-strict tests passed across remote
+runner/trust/cleanup, Python SDK, MCP and subscription bridge. No provider request
+or new credentials. Exposed tool metadata contains no Supabase capability or tool
+search; no account/session probing, login or setup occurred. Claude access is not
+evidence of this session access. HOSTED_RELEASE_PATH.md records what is playable,
+what is unmerged, real runtime requirements, setup timing and conditional estimates.
+
+Published dependent draft PR31:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/31
+Source 678dc6511246bc4ac71d03bed88322a5fa0e8c38; full current-head CI pending.
+This pickup follow-up is documentation only and has its own check. Main unchanged;
+all contributor branches retained. No completed pickup until approved verified merge.
+After this head's check, the next real target is approved Supabase/account/runtime
+integration under HOSTED_RELEASE_PATH.md. Safe existing BYO acceptance is verified;
+no duplicate adapters or owner inference-budget decision is required. No payment
+subsystem is needed for free access. Quota/access/paid-dispatch policies remain open.
+Stage9 selection and the Oct6 17:40UTC target with final integration buffer remain.
+
+
+## Stage 7F AI leaderboards — implementation in progress (2026-10-05 UTC)
+
+Contributor `feat/stage-7f-ai-leaderboards` starts from local PR31-equivalent a4ecd92;
+remote PR31 final 293b97664ba5e061d215538a4a1cef9d973a45dc passed CI37240469753.
+Main remains 087c565. No merge/deploy/account/credential/paid-call/security approval.
+Read STAGE_7F_LEADERBOARDS.md and ADR0033. Preserve this branch and the earlier draft
+stack. Parent owns notifications; the hourly monitor remains paused.
+
+Implemented optional identity declarations, additive migration0012, transactional
+per-generation snapshots/outcomes and bounded conditions-aware leaderboards. New UI
+and tests are in progress. Publication/final acceptance is not yet claimed. Next:
+full warning-strict tests, migration/data compatibility, SDK/build, draft publication,
+source/final-head PostgreSQL and desktop/phone browser CI, visual inspection and
+precise handoff. Routine fixture failures must be fixed before completion claims.
+Free human/bot access and BYO inference funding unchanged; no owner directory.
+Supabase account/runtime/deferred rollout and Stage9 remain explicit external gates.
+
+
+### Stage 7F draft PR32 source verified; final follow-up gate
+
+PR32 https://github.com/curtistheconqueror/ai-chess-lounge/pull/32 is Draft, based on
+PR31 branch `docs/byo-agent-cost-ownership`. Source remote6ebff8d151d3418701c7a8b2d9ebb134e457543e
+passed CI37248389001 / job111570790115: 374 Python tests (3 engine skips), SQLite/PG
+migrations, native comparison history/CAS/reset, PG restore14tables/15rows, performance,
+3 SDK tests, production build and36 browser passes/79 intentional skips. All33 changed
+source files matched local31e8bd0 tree hashes; screenshots reviewed desktop/phone.
+This supersedes source-publication pending notes above. Original main remains087c565.
+
+Local follow-up3715269 refreshes UCI engine evidence at reset without rewriting older
+identity; 32 targeted tests pass/1PG skip. A bounded real localStockfish16 check confirms
+separate1600/2500 rows with null unfinished rates. Mobile cards/readable evidence labels
+and retry-independent generated browser fixture IDs are included in the final follow-up.
+Engine color-swap cohorts preserve both colors while keeping strength separate;
+local serving connectors do not imply underlying providers. Final19 identity tests
+pass/1PG skip. Final published-head acceptance must cover these changes: inspect PR32's latest head
+and checks; final PR description carries exact final SHA/run/evidence. Publication-time
+pending is not a final green claim. Preserve contributor branch; no completed pickup
+branch until an approved, verified merge. No credentials/accounts/paid calls/merges,
+public deployment or access-policy changes. Monitor remains paused; parent notifies.
+
+Exact next target: finish final-head CI, inspect desktop/phone artifacts and report
+verified local7F checkpoint. If acceptance fails, repair within scope and rerun affected
+full gates. After verification, remain at hosted decisions in HOSTED_RELEASE_PATH.md:
+Supabase account/project/plan/access plus runtime host, identity/visibility/quota policies,
+merge/release approval, deferred2E/6D/etc and Stage9 choice. Free human/bot access;
+player-funded BYO inference and owner-funded infrastructure unchanged. Added7F work
+uses the Oct6 17:40UTC delivery window; do not convert conditional hosted estimates
+or integration buffer into an all-stage completion promise.
+
+
+### Latest checkpoint — Stage 7F local acceptance verified; Draft PR32 retained
+
+Implementation head b95b51f81d50917084d159ddadaa17238f7a13fd passed
+CI37249535756 / job111574151986: 377 warning-strict Python tests, 3 unavailable-engine
+skips; SQLite/PG upgrades/downgrades; native snapshot/reset/CAS; generated PG restore;
+performance fixtures; 3 SDK tests; production web/SDK builds; 36 browser passes and
+79 intentional viewport skips. All33 changed files matched local80d4892 blob hashes.
+Latest desktop/phone artifacts reviewed; stacked phone cards have no horizontal/page
+overflow. The final doc-only checkpoint has its own current-head CI check; fetch PR32's
+actual latest SHA/checks and final PR evidence before any integration. Earlier pending
+entries above are chronological publication-time notes superseded by these passes.
+
+Local7F candidate is ready in `feat/stage-7f-ai-leaderboards` (Draft PR32, dependent
+on PR31). No merge/deployment is claimed and no completed-pickup branch is created
+before an approved, verified merge. Schema0012 preserves legacy match/settings data,
+adds no fabricated backfill, and keeps history immutable. Unknown/declarations/observed
+response labels remain distinct; no invented catalog or universal effort equivalence.
+Record cap5000 explicitly exposes truncation; rates are descriptive, not calibrated
+Elo/intelligence. Default names/owners/IDs are absent; aliases are opt-in. No owner
+directory or public profile is implemented. Free/BYO economics remain unchanged.
+
+Next target after final doc-head verification: wait for authorized hosted/account/
+runtime, policy and merge/release decisions under HOSTED_RELEASE_PATH.md, or a new
+explicit local feature task. Stage9 selection and deferred2E/6D/etc remain unresolved;
+do not resume blocked public setup, spend, fetch credentials, expand permissions or
+merge. Parent owns notifications; hourly monitor remains paused. Preserve all drafts
+and this contributor branch for pickup. Oct6 17:40UTC remains a conditional delivery
+target, not a guaranteed all-stage release; keep integration/test buffer explicit.

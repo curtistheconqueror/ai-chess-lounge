@@ -2,9 +2,39 @@
 
 Status: **Preparation only. No hosted beta, deployment or complete Stage 8 claim.**
 The Lounge is a standalone React/FastAPI application with provider-neutral player
-connections. A production URL/vendor/domain has not been selected or deployed.
+connections. Supabase is the selected backend direction; application runtime host, production
+URL/domain and account/project setup remain unverified or unselected. Nothing deployed.
 This packet makes the remaining release work concrete without creating accounts,
 credentials, permissions, spending policy or services.
+
+## Bring your own agent; separate infrastructure and inference
+
+The owner pays Lounge hosting/database/compute. Players bring and fund their own
+agents, API accounts or supported subscriptions; no shared owner model key is the
+default. Human and bot access is free for now, without a Lounge subscription/paywall.
+Supabase is the selected backend direction, without a verified account/project/plan
+or authorization to spend, create credentials or deploy. The application runtime
+needs separate selection; see HOSTED_RELEASE_PATH.md.
+
+For an external runner, use the existing [Python SDK](../packages/runner-sdk-python/README.md),
+[TypeScript SDK](../packages/runner-sdk-typescript/README.md),
+[MCP host](../packages/mcp-server/README.md) or
+[supported local subscription bridge](../packages/subscription-bridge/README.md).
+Pair once for one match/seat; choose the paired agent and let it answer signed turn
+requests unattended. Keep provider credentials on the runner machine; a Lounge
+pairing code is separate. Repeat with a second runner for the opposing seat.
+The reference sample uses no provider inference and does not prove frontier strength.
+
+These existing local paths need no owner provider key or Lounge provider billing
+meter. Hosted acceptance still requires identity/isolation, approved scopes and
+abuse/request/compute limits. Current turn/time authorization limits do not prove
+full shared quotas. A subscription is not assumed to include API access, and no
+unsupported provider login/token route is added here.
+
+When the Lounge sends paid calls using a player's connection, that player funds
+inference and the Lounge must enforce approved per-user dispatch/reservation policy.
+External inference cost remains unknown if not trusted; it is not zero, an owner
+charge, or a Lounge-enforced provider ceiling. Infrastructure limits remain separate.
 
 ## Verified candidate versus release acceptance
 
@@ -14,7 +44,7 @@ credentials, permissions, spending policy or services.
 | Model Lab | Draft experiment plans, shared batch leases, tournament formats, honest metrics/report bundles | Approved merge train, current integrated CI and deferred metric/scope reconciliation |
 | Local health/recovery | Bounded readiness/local telemetry, generated SQLite/WAL and native PostgreSQL restore | Production tracing/metrics/alerts/retention, backup ownership/schedule, approved RPO/RTO and rollback |
 | Performance | Generated ASGI/queue/database and installed-engine fixtures; loopback transport candidate | Declared production topology/hardware, representative sustained load, operator latency/resource targets, pool supervision |
-| Cost control | Reviewed per-attempt contract and test-only symbolic SQLite oracle | Approved ownership/prices/unknown-cost rules; shared monetary/rate ledger, all paid boundaries, estimates and authorized kill switch |
+| Cost control | Player-funded inference clarified; reviewed paid-attempt contract and test-only symbolic oracle | Infrastructure/abuse/request/compute quotas for all routes; approved player mapping/prices/unknown-cost rules and shared monetary ledger for Lounge-dispatched paid calls |
 | Accounts/invitations | 2E/6D actor/action proposal | Vendor/admin selection, identity verification, ownership/visibility/invites, HTTP/WS/export/runner isolation and two-user tests |
 | Provider-neutral onboarding | Existing direct adapters, local models, remote runner SDK/MCP and one supported subscription bridge | Supported route/model/effort validation per provider, connection tests with approved billing and clear error/availability states |
 | Standalone beta | Independently runnable app and local exhibition path below | Approved hosting/TLS/URL, onboarding on actual release, sample exhibition and feedback/incident ownership |
@@ -62,8 +92,10 @@ billing scope. Credential-free reference play does not validate every provider a
 
 ## Release connection test contract
 
-Before a paid/remote beta exhibition, the operator must select an approved connection
-and budget scope. The test should show provider/model/effort capability, authentication
+Before a remote beta exhibition, verify the approved connection, identity/access and
+resource scope. External runners bring player-funded inference without a Lounge
+provider bill reservation. Before Lounge-dispatched paid tests, additionally select
+the player-owned connection and approved paid budget scope. The test should show provider/model/effort capability, authentication
 outcome, schema/legality compatibility, bounded timeout/cancellation, availability,
 usage coverage and explicitly unknown cost. It must not expose credentials/prompts,
 create implicit spending authority or accept unsupported effort as a silent fallback.
@@ -80,7 +112,8 @@ A connection test may be billable and needs approved limits; none is run by this
    identity/admin, roles/visibility/invites, budget ownership/policy, topology and release
    scope. Keep Stage 9 explicit. No credentials are required just to review this packet.
 2. Implement/review 2E/6D, approved remediation, shared paid-call enforcement and
-   production operational controls. Exercise the full actor/action matrix across HTTP,
+   production operational controls. Monetary enforcement applies to included
+   Lounge-dispatched paid routes; external runners still need resource/abuse controls. Exercise the full actor/action matrix across HTTP,
    WebSockets, downloads and runner paths, including wrong-user/seat/revoked invites.
 3. Review the dependent PR train, approve merges, retain contributor branches and
    create immutable completed pickup branches only after verified approved merges.
@@ -127,7 +160,8 @@ none and does not omit them from the request.
 ## Exact release-blocking decisions
 
 The reviewable authorization packet already exists in ACCOUNT_AND_RELEASE_DECISIONS.md.
-Outstanding dependencies are approved merge/release; identity/database/hosting/admin
+Outstanding dependencies are approved merge/release; Supabase account/project/auth,
+application runtime hosting/admin
 and private/public/invite policy; provider credential and budget ownership, units,
 ceilings/prices/unknown usage, shared rates and kill-switch authority; supported
 production topology/operational targets; and deferred/Stage 9 scope. These block

@@ -1,3 +1,5 @@
+import { IdentityEditor } from "./IdentityEditor";
+import type { IdentityDeclaration } from "./types";
 import { ExperimentRunPanel } from "./ExperimentRunPanel";
 import { useEffect, useState } from "react";
 import { fetchExperiment, listExperiments, previewExperiment, saveExperiment } from "./api";
@@ -32,7 +34,7 @@ const allowed = ["scripted", "stockfish", "openai", "anthropic", "google", "open
 
 export function ModelLab({ catalog }: { catalog: PlayerAdapterCatalog | null }) {
   const choices = (catalog?.adapters ?? []).filter(a => allowed.includes(a.adapter_id)).flatMap(a => a.models.filter(model => a.adapter_id === "scripted" || (a.adapter_id === "stockfish" ? a.capabilities[model]?.available !== false : a.capabilities[model]?.selectable === true)).map(model => ({ key: `${a.adapter_id}:${model}`, adapter: a.adapter_id, model, cap: a.capabilities[model] })));
-  const [entrants, setEntrants] = useState([{ key: "A", model: "scripted:deterministic-v1", efforts: [] as EffortLevel[], elo: 1600 }, { key: "B", model: "scripted:deterministic-v1", efforts: [] as EffortLevel[], elo: 1600 }]);
+  const [entrants, setEntrants] = useState([{ key: "A", model: "scripted:deterministic-v1", efforts: [] as EffortLevel[], elo: 1600, comparison: {} as IdentityDeclaration }, { key: "B", model: "scripted:deterministic-v1", efforts: [] as EffortLevel[], elo: 1600, comparison: {} as IdentityDeclaration }]);
   const [name, setName] = useState("My first comparison");
   const [openings, setOpenings] = useState("Start |\nOpen game | e2e4 e7e5\nQueen pawn | d2d4 d7d5");
   const [repetitions, setRepetitions] = useState(1);
@@ -69,6 +71,7 @@ export function ModelLab({ catalog }: { catalog: PlayerAdapterCatalog | null }) 
       if (!c) throw new Error("Select an available model for each entrant.");
       const efforts = selectedEfforts(e);
       return { key: e.key, efforts, player: { protocol_version: "1.0", player_id: e.key, adapter_id: c.adapter, display_name: `${e.key} · ${c.model}`, provider: providerNames[c.adapter], model: c.model,
+        ...(Object.keys(e.comparison).length ? { comparison: e.comparison } : {}),
         connection_mode: c.cap.connection_mode ?? "local", division: c.adapter === "stockfish" ? "engine_assisted" : "legal_assist", effort: efforts[0], settings: { move_timeout_ms: 20_000, ...(c.adapter === "stockfish" ? { target_elo: e.elo, move_time_ms: 450 } : {}) } } };
     }), openings: openings.split("\n").filter(l => l.trim()).map(l => { const [label, moves, ...extra] = l.split("|"); if (moves === undefined || extra.length) throw new Error("Use one opening per line: Name | UCI moves"); return { name: label.trim(), moves: moves.trim() ? moves.trim().split(/\s+/) : [] }; }), repetitions, color_swap: swap, initial_time_ms: seconds * 1000, increment_ms: increment * 1000, stops: { max_plies: maxPlies, max_failures: maxFailures, max_wall_time_ms: minutes * 60_000 } };
     if (format === "comparison") return base;
@@ -93,9 +96,10 @@ export function ModelLab({ catalog }: { catalog: PlayerAdapterCatalog | null }) 
         return <fieldset key={e.key}><legend>Entrant {e.key}</legend><label>Model {e.key}<select value={e.model} onChange={event => setEntrants(old => old.map((v, j) => j === i ? { ...v, model: event.target.value, efforts: [] } : v))}>{choices.map(c => <option key={c.key} value={c.key}>{c.adapter} · {c.model}</option>)}</select></label>
           {levels.length > 0 ? <div className="lab-efforts"><p>Effort sweep · empty uses {levels[0]}</p>{levels.map(level => <label key={level}><input type="checkbox" checked={e.efforts.includes(level)} onChange={event => setEntrants(old => old.map((v, j) => j === i ? { ...v, efforts: event.target.checked ? [...v.efforts, level] : v.efforts.filter(l => l !== level) } : v))} />{level}</label>)}</div> : <small>Provider default effort; no simulated effort levels.</small>}
           {choice?.adapter === "stockfish" && <label>Target Elo {e.key}<input type="number" min={800} max={3200} value={e.elo} onChange={event => setEntrants(old => old.map((v, j) => j === i ? { ...v, elo: Number(event.target.value) } : v))} /></label>}
+          <IdentityEditor label={`Entrant ${e.key}`} value={e.comparison} onChange={comparison => setEntrants(old => old.map((v,j) => j === i ? { ...v, comparison } : v))} />
         </fieldset>;
       })}</div>
-      <button disabled={entrants.length >= 8} onClick={() => { invalidate(); const key = "ABCDEFGH".split("").find(k => !entrants.some(e => e.key === k))!; setEntrants(old => [...old, { key, model: "scripted:deterministic-v1", efforts: [], elo: 1600 }]); }}>Add entrant</button>
+      <button disabled={entrants.length >= 8} onClick={() => { invalidate(); const key = "ABCDEFGH".split("").find(k => !entrants.some(e => e.key === k))!; setEntrants(old => [...old, { key, model: "scripted:deterministic-v1", efforts: [], elo: 1600, comparison: {} as IdentityDeclaration }]); }}>Add entrant</button>
       <button disabled={entrants.length <= 2} onClick={() => { invalidate(); setEntrants(old => old.slice(0, -1)); }}>Remove last entrant</button>
       <div className="lab-grid"><label>Opening suite<textarea rows={4} value={openings} onChange={e => setOpenings(e.target.value)} /><small>One line per opening: Name | legal UCI moves. Empty moves use the starting position.</small></label><div className="lab-grid">
         <label>Repetitions<input type="number" min={1} max={20} value={repetitions} onChange={e => setRepetitions(Number(e.target.value))} /></label>

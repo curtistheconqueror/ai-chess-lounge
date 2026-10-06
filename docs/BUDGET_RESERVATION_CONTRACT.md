@@ -1,7 +1,26 @@
 # Stage 8D provider-attempt reservations
 
 Status: **Design proposal, not an enforced spend guarantee or completed phase.**
-No amounts, currencies, prices, identity ownership or paid calls are selected here.
+The owner funds Lounge infrastructure; players fund their own inference/accounts.
+Free Lounge access for humans/bots has no subscription/paywall for now.
+No default owner-funded shared model key. Amounts, currency, authenticated ownership
+mapping, policy and paid calls remain unselected.
+
+## Route applicability
+
+This monetary contract applies where the Lounge dispatches a paid call on a player's
+behalf. Map that authenticated player to their own approved connection and budget;
+match ownership alone grants no spending authority. Infrastructure cost is a separate
+owner responsibility, including database, spectators and Lounge engine compute.
+
+External agents/SDK/MCP clients and supported local subscription bridges perform
+inference outside the Lounge using player-held authorization. The Lounge does not
+reserve or certify their provider bill. Their reported cost remains untrusted/unknown
+when unsupported. No owner inference budget is a prerequisite for these routes.
+They still require Lounge abuse/request/concurrency/compute quotas and stop controls;
+removing monetary metering does not exempt them from access or resource limits.
+Subscription entitlement does not imply API entitlement. No route scope, grant,
+quota value or security behavior is changed by this clarification.
 
 ## What a reservation represents
 
@@ -111,15 +130,20 @@ Use generated stores, fake adapters and symbolic units, with no real money or ca
 ## Owner decisions and sequencing
 
 ACCOUNT_AND_RELEASE_DECISIONS.md already identifies the required ownership and
-release choices. Resolve budget owner and credential ownership; applicable API,
-subscription/local and runner scopes; currency/precision/period; ceilings and shared
+release choices. Inference funding belongs to the player; resolve authenticated
+connection/budget
+ownership for Lounge-dispatched calls and hosted route scope. Separate external-agent
+abuse/resource limits from paid-call monetary enforcement; then select currency,
+precision, period, ceilings and shared
 hold rules; maximum input/output/request sizes; price source/version; unknown-metering
 behavior; rate scopes/caps; billing evidence/manual resolution; and kill-switch
 scope/authority. Do not select these implicitly while implementing tests.
 
-Next safe work is a generated-store ledger prototype and state-machine/concurrent
-reservation tests using injected symbolic policy. Then review schema, lock ordering,
-recovery and redaction. Live integration, enforced monetary policy, accounts, admin
+The generated-store symbolic oracle below already exists; reuse its verified tests
+rather than build it again. Safe BYO route acceptance/onboarding does not depend on
+an owner model budget. Production ledger schema, lock ordering, recovery and redaction
+apply to included Lounge-dispatched paid routes and remain review targets. Live
+integration, enforced monetary policy, accounts, admin
 permissions and paid validation remain distinct owner/security approval gates.
 The October6 17:40 UTC delivery target does not waive those gates. 8E and deferred
 2E/6D depend on the approved hosted/account model; Stage9 scope remains unanswered.
