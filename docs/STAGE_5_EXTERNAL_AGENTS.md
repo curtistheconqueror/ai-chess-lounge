@@ -81,6 +81,20 @@ call any provider, local model, policy-compliant subscription SDK, or agent work
 The UI polls only safe session presence. It never receives runner tokens or signing
 keys.
 
+## Pause reasons and operator recovery
+
+When an automated seat cannot produce a move, the match pauses and the event log records
+`agent.failed` with a `reason`; the Match control panel shows it in plain language.
+`move_deadline_exceeded` means the player did not answer before its move deadline (a
+stalled or crashed runner), `illegal_move` that the arbiter rejected the proposed move,
+`runner_authorization_unavailable` that the runner's grant was revoked, expired or used
+up, and `adapter_error` any other adapter failure. A proposal receipt only confirms the
+signed proposal was received; legality is decided afterwards by the arbiter.
+
+Reset starts a new generation, so paired runners lose their authorization. The UI asks
+for confirmation before resetting a match with a remote or subscription seat; to replay
+with the same bots, pair them again and start a **New match**.
+
 ## Transport endpoints
 
 | Method | Path | Purpose |

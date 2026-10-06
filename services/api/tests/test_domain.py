@@ -188,3 +188,30 @@ def test_deadline_is_terminal_and_late_move_is_rejected() -> None:
     assert snapshot.clock.white_remaining_ms == 0
     assert snapshot.clock.timed_out_by == "white"
     assert snapshot.moves == []
+
+
+def play(game: GameSession, *moves: str) -> None:
+    for uci in moves:
+        game.apply_uci(uci, actor="human", position_version=game.version)
+
+
+def test_termination_reason_names_how_a_finished_game_ended() -> None:
+    live = running_game()
+    play(live, "e2e4")
+    assert live.termination_reason is None
+    assert live.snapshot().termination_reason is None
+
+    mated = running_game()
+    play(mated, "f2f3", "e7e5", "g2g4", "d8h4")
+    assert mated.termination_reason == "checkmate"
+
+    repeated = running_game()
+    play(repeated, *(["g1f3", "g8f6", "f3g1", "f6g8"] * 4))
+    assert repeated.status is GameStatus.DRAW
+    assert repeated.draw_reason is None
+    assert repeated.termination_reason == "fivefold_repetition"
+    assert repeated.snapshot().termination_reason == "fivefold_repetition"
+
+    aborted = running_game()
+    aborted.abort()
+    assert aborted.termination_reason == "aborted"

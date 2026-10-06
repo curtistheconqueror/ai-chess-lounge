@@ -146,6 +146,33 @@ class GameSession:
         return GameStatus.ACTIVE
 
     @property
+    def termination_reason(self) -> str | None:
+        """Why a finished match ended; None while it is still live."""
+        if self.lifecycle is MatchState.ABORTED:
+            return "aborted"
+        if self.lifecycle is MatchState.ADJUDICATED:
+            return "adjudicated"
+        if self.lifecycle is not MatchState.COMPLETED:
+            return None
+        if self.draw_reason:
+            return self.draw_reason
+        if self.timed_out_by:
+            return "timeout"
+        if self.resigned_by:
+            return "resignation"
+        if self.board.is_checkmate():
+            return "checkmate"
+        if self.board.is_stalemate():
+            return "stalemate"
+        if self.board.is_insufficient_material():
+            return "insufficient_material"
+        if self.board.is_fivefold_repetition():
+            return "fivefold_repetition"
+        if self.board.is_seventyfive_moves():
+            return "seventyfive_moves"
+        return None
+
+    @property
     def result(self) -> str:
         if self.draw_reason:
             return "1/2-1/2"
@@ -607,6 +634,7 @@ class GameSession:
             can_claim_draw=can_claim_draw,
             draw_claim_moves=draw_claim_moves,
             draw_reason=self.draw_reason,
+            termination_reason=self.termination_reason,
             seat_history=list(self.seat_history),
             consultations=self.consultation_snapshots(snapshot_time),
             opponent=self.opponent,

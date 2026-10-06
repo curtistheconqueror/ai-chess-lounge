@@ -7,6 +7,7 @@ import type {
   EffortLevel,
   GameAnalysis,
   GameSnapshot,
+  MatchEvent,
   PlayerAdapterCatalog,
   PlayerConfigurationInput,
   RunnerPairingResponse,
@@ -71,6 +72,26 @@ export function createGame({
 
 export function fetchGame(gameId: string): Promise<GameSnapshot> {
   return request<GameSnapshot>(`/api/games/${gameId}`);
+}
+
+/** The newest running or paused match, or null when nothing is live. */
+export async function fetchLiveMatch(): Promise<GameSnapshot | null> {
+  const response = await fetch(`${apiBase}/api/live-match`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  return (await response.json()) as GameSnapshot;
+}
+
+export function fetchGameEvents(gameId: string): Promise<MatchEvent[]> {
+  return request<MatchEvent[]>(`/api/games/${gameId}/events`);
+}
+
+export function abortGame(gameId: string): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/abort`, { method: "POST" });
+}
+
+export function adjudicateGame(gameId: string, result: "1-0" | "0-1" | "1/2-1/2"): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/adjudicate`, { method: "POST", body: JSON.stringify({ result }) });
 }
 
 export function fetchAnalysis(gameId: string): Promise<GameAnalysis> {

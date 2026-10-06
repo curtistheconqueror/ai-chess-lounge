@@ -961,6 +961,26 @@ class DatabaseStore:
             game.comparison_snapshot = comparison.identity if comparison else None
             return game
 
+    async def latest_live_match_ids(self, limit: int = 5) -> list[str]:
+        """Most recently updated running or paused exhibition matches (not batch jobs)."""
+        await self.initialize()
+        async with self.sessions() as session:
+            return list(
+                (
+                    await session.scalars(
+                        select(MatchRow.id)
+                        .where(
+                            MatchRow.lifecycle.in_(
+                                [MatchState.RUNNING.value, MatchState.PAUSED.value]
+                            ),
+                            MatchRow.id.not_in(select(ExperimentJobRow.id)),
+                        )
+                        .order_by(MatchRow.updated_at.desc())
+                        .limit(limit)
+                    )
+                ).all()
+            )
+
     async def load_revision(self, game_id: str) -> tuple[int, int] | None:
         await self.initialize()
         async with self.sessions() as session:

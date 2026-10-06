@@ -574,3 +574,28 @@ def test_manager_accepts_remote_runner_move_through_authoritative_lease() -> Non
             await manager.close()
 
     asyncio.run(run())
+
+
+def test_unanswered_remote_turn_pauses_with_a_deadline_reason() -> None:
+    async def run() -> None:
+        store = DatabaseStore("sqlite+aiosqlite:///:memory:")
+        broker = RemoteRunnerBroker(store, secret=SECRET)
+        manager = GameManager(store=store, remote_runners=broker, schedule_timeouts=False)
+        await manager.start()
+        try:
+            pairing = await broker.create_pairing(pairing_request(move_timeout_ms=200))
+            credentials = await broker.claim_pairing(pairing.pairing_id, pairing.pairing_code)
+            game = await manager.create(
+                CreateGameRequest(opponent=OpponentKind.HUMAN, black_player=credentials.player)
+            )
+            await manager.make_human_move(game.id, "e2e4", 0)
+            snapshot = await manager.wait_for_automation(game.id, timeout=3)
+            events = await manager.events(game.id)
+
+            assert snapshot.lifecycle.value == "paused"
+            assert [event.type for event in events[-2:]] == ["agent.failed", "match.paused"]
+            assert events[-2].payload["reason"] == "move_deadline_exceeded"
+        finally:
+            await manager.close()
+
+    asyncio.run(run())

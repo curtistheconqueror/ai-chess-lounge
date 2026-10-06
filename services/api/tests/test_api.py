@@ -360,3 +360,52 @@ def test_runner_revoke_endpoint_and_safe_audit(client: TestClient) -> None:
         ).status_code
         == 401
     )
+
+
+def test_automatic_draw_completion_event_records_its_reason(client: TestClient) -> None:
+    game = client.post("/api/games", json={"opponent": "human"}).json()
+    for uci in ["g1f3", "g8f6", "f3g1", "f6g8"] * 4:
+        game = client.post(
+            f"/api/games/{game['id']}/moves",
+            json={"move": uci, "position_version": game["version"]},
+        ).json()
+
+    assert game["status"] == "draw"
+    assert game["termination_reason"] == "fivefold_repetition"
+    completed = client.get(f"/api/games/{game['id']}/events").json()[-1]
+    assert completed["type"] == "match.completed"
+    assert completed["payload"] == {"result": "1/2-1/2", "reason": "fivefold_repetition"}
+
+
+def test_live_match_returns_the_newest_game_still_in_play(client: TestClient) -> None:
+    assert client.get("/api/live-match").status_code == 404
+
+    older = client.post("/api/games", json={"opponent": "human"}).json()
+    newer = client.post("/api/games", json={"opponent": "human"}).json()
+    assert client.get("/api/live-match").json()["id"] == newer["id"]
+
+    assert client.post(f"/api/games/{newer['id']}/abort").status_code == 200
+    assert client.get("/api/live-match").json()["id"] == older["id"]
+
+    assert client.post(f"/api/games/{older['id']}/abort").status_code == 200
+    assert client.get("/api/live-match").status_code == 404
+
+
+def test_unknown_api_paths_are_404_while_app_routes_serve_the_web_app(
+    tmp_path, monkeypatch
+) -> None:
+    import lounge_api.main as main
+    from lounge_api.manager import GameManager
+    from lounge_api.persistence import DatabaseStore
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<!doctype html><title>Lounge</title>")
+    monkeypatch.setattr(main, "web_dist", dist)
+    manager = GameManager(store=DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'spa.db'}"))
+    with TestClient(main.create_app(manager)) as spa_client:
+        assert spa_client.get("/games/some-match").text.startswith("<!doctype html>")
+        for path in ("/api/games", "/api/no-such-route", "/ws/nothing"):
+            response = spa_client.get(path)
+            assert response.status_code == 404, path
+            assert response.json() == {"detail": "Not found."}
