@@ -2022,6 +2022,7 @@ select {
 .takeover-panel h3 { margin: 0 0 10px; font-size: 14px; color: #e5c474; }
 .takeover-panel p, .seat-history { font-size: 12px; line-height: 1.6; }
 .takeover-panel > button { padding: 10px 14px; border: 1px solid #476057; border-radius: 8px; background: #15201c; color: #eee; }
+.takeover-panel .pause-reason { margin: 0 0 8px; padding: 8px 10px; border-left: 3px solid var(--gold); background: rgba(217, 172, 85, .08); color: var(--gold-soft); }
 .seat-history { margin-top: 12px; overflow-wrap: anywhere; }
 .seat-history summary { cursor: pointer; }
 .seat-history ol { padding-left: 18px; }

@@ -4,6 +4,97 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("grid", { name: "Chess board" })).toBeVisible();
   await expect(page.getByRole("gridcell")).toHaveCount(64);
+  // A first visit spectates whichever match is live. Wait for that lookup, then start
+  // this test's own default Human vs Stockfish match so tests stay independent.
+  await expect.poll(async () =>
+    (await page.locator(".match-header small").innerText()).startsWith("Match ")
+    || (await page.getByText("No match is live").count()) > 0).toBe(true);
+  const created = page.waitForResponse((response) =>
+    response.url().endsWith("/api/games") && response.request().method() === "POST");
+  await page.getByRole("button", { name: "New match" }).click();
+  const game = await (await created).json() as { id: string };
+  await expect(page).toHaveURL(new RegExp(`/games/${game.id}$`));
+});
+
+test("a first visit spectates the live match instead of creating one", async ({ page, browser }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "First-visit behavior runs once on desktop.");
+  const liveId = new URL(page.url()).pathname.split("/").at(-1);
+  const context = await browser.newContext();
+  const visitor = await context.newPage();
+  const creates: string[] = [];
+  visitor.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/api/games")) creates.push(request.url());
+  });
+  await visitor.goto(new URL("/", page.url()).toString());
+  await expect(visitor).toHaveURL(/\/games\/[A-Za-z0-9-]+$/);
+  await expect(visitor.locator(".match-header small")).toContainText("Match ");
+  const shown = new URL(visitor.url()).pathname.split("/").at(-1);
+  const live = await (await visitor.request.get(`/api/games/${shown}`)).json() as { lifecycle: string };
+  expect(["running", "paused"]).toContain(live.lifecycle);
+  expect(liveId).toBeTruthy();
+  expect(creates).toEqual([]);
+  await context.close();
+});
+
+test("with nothing live a first visit shows an empty table", async ({ page, browser }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "First-visit behavior runs once on desktop.");
+  const context = await browser.newContext();
+  const visitor = await context.newPage();
+  await visitor.route("**/api/live-match", (route) =>
+    route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ detail: "No match is live." }) }));
+  const creates: string[] = [];
+  visitor.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/api/games")) creates.push(request.url());
+  });
+  await visitor.goto(new URL("/", page.url()).toString());
+  await expect(visitor.getByText("No match is live")).toBeVisible();
+  await expect(visitor.locator(".match-header small")).toHaveText("No match loaded");
+  expect(creates).toEqual([]);
+  await context.close();
+});
+
+test("operators can adjudicate or abort a match after confirming", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Operator controls run once on desktop.");
+  await page.getByRole("button", { name: "Adjudicate…" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Adjudicate this match?");
+  await page.getByLabel("Adjudicated result").selectOption("1-0");
+  await page.getByRole("button", { name: "Record result" }).click();
+  await expect(page.locator(".match-header")).toContainText("Adjudicated");
+  await expect(page.locator(".result-badge")).toHaveText("1-0");
+
+  const created = page.waitForResponse((response) =>
+    response.url().endsWith("/api/games") && response.request().method() === "POST");
+  await page.getByRole("button", { name: "New match" }).click();
+  await created;
+  await page.getByRole("button", { name: "Abort match" }).click();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator(".match-header")).not.toContainText("Aborted");
+  await page.getByRole("button", { name: "Abort match" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Abort match" }).click();
+  await expect(page.locator(".match-header")).toContainText("Aborted");
+});
+
+test("reset warns before breaking a paired bot's authorization", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Reset warning runs once on desktop.");
+  const pairing = await (await page.request.post("/api/runner-pairings", {
+    data: { display_name: "Reset Warning Bot", provider: "Test Runner", model: "sample-v1" },
+  })).json() as { pairing_id: string; pairing_code: string };
+  const claimed = await (await page.request.post(`/api/runner-pairings/${pairing.pairing_id}/claim`, {
+    data: { pairing_code: pairing.pairing_code },
+  })).json() as { session_id: string; player: Record<string, unknown> };
+  const game = await (await page.request.post("/api/games", {
+    data: { opponent: "human", black_player: claimed.player },
+  })).json() as { id: string };
+  await page.goto(`/games/${game.id}`);
+  await expect(page.locator(".match-header")).toContainText("Reset Warning Bot");
+
+  await page.getByRole("button", { name: "Reset", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("Reset with paired bots?");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  const after = await (await page.request.get(`/api/games/${game.id}`)).json() as { generation: number };
+  expect(after.generation).toBe(0);
+  // Leave no unbound session behind for later seat-selection tests.
+  expect((await page.request.post(`/api/runner-sessions/${claimed.session_id}/revoke`)).ok()).toBeTruthy();
 });
 
 test("broadcast shell fits its viewport and captures a visual artifact", async ({ page }, testInfo) => {
@@ -245,6 +336,9 @@ test("paused automated turns expose an audited operator retry", async ({ page },
 
   await page.goto(`/games/${game.id}`);
   await expect(page.locator(".broadcast-ribbon")).toContainText("RECOVERY PAUSED");
+  await expect(page.locator(".pause-reason")).toContainText(
+    "Paused because White (Recovery Test Agent) proposed an illegal move.",
+  );
   await page.getByRole("button", { name: "Retry agent turn" }).click();
 
   await expect.poll(async () => {

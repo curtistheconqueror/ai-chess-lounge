@@ -241,6 +241,7 @@ export interface GameSnapshot {
   can_claim_draw: boolean;
   draw_claim_moves: string[];
   draw_reason: string | null;
+  termination_reason?: string | null;
   seat_history: SeatChange[];
   consultations: Consultation[];
   opponent: OpponentKind;
@@ -255,4 +256,12 @@ export interface GameSnapshot {
 
 export interface ApiError {
   detail: string;
+}
+
+export interface MatchEvent {
+  sequence: number;
+  type: string;
+  position_version: number;
+  payload: Record<string, unknown>;
+  timestamp: string;
 }
