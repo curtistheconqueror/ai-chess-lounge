@@ -386,6 +386,13 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         return await active_manager.snapshot(game.id)
 
+    @application.get("/api/live-match", response_model=GameSnapshot)
+    async def get_live_match() -> GameSnapshot:
+        snapshot = await active_manager.latest_live_snapshot()
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="No match is live.")
+        return snapshot
+
     @application.get("/api/games/{game_id}", response_model=GameSnapshot)
     async def get_game(game_id: str) -> GameSnapshot:
         try:
@@ -608,6 +615,9 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
 
         @application.get("/{path:path}", include_in_schema=False)
         async def spa(path: str) -> FileResponse:
+            if path == "api" or path.startswith(("api/", "ws/")):
+                # Unknown API routes are errors, not the web app.
+                raise HTTPException(status_code=404, detail="Not found.")
             candidate = web_dist / path
             if path and candidate.is_file():
                 return FileResponse(candidate)

@@ -20,7 +20,7 @@ import httpx
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
-from .adapters import AdapterConfigurationError, AdapterError
+from .adapters import AdapterConfigurationError, AdapterDeadlineExceeded, AdapterError
 from .models import (
     RunnerPairingCreate,
     RunnerPairingRecord,
@@ -358,7 +358,7 @@ class RemoteRunnerBroker:
             async with asyncio.timeout(max(0, (deadline - now).total_seconds())):
                 return await pending.future
         except TimeoutError as exc:
-            raise AdapterError(
+            raise AdapterDeadlineExceeded(
                 "The remote runner did not answer before the move deadline."
             ) from exc
         finally:

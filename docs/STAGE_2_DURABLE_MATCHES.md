@@ -95,6 +95,16 @@ outside Compose.
 | Resume | `POST /api/games/{game_id}/resume` |
 | Abort | `POST /api/games/{game_id}/abort` |
 | Adjudicate | `POST /api/games/{game_id}/adjudicate` with `result` |
+| Newest live match | `GET /api/live-match` (404 when nothing is running or paused) |
+
+Abort and Adjudicate are also buttons under **Match control**, each behind a confirmation.
+A first-time visitor with no remembered match spectates the newest running or paused
+exhibition match (Model Lab batch games are excluded) instead of creating one; with
+nothing live the table stays empty until **New match**. Snapshots carry an additive
+`termination_reason` (`checkmate`, `stalemate`, `insufficient_material`,
+`fivefold_repetition`, `seventyfive_moves`, a claimed draw reason, `timeout`,
+`resignation`, `adjudicated` or `aborted`), and `match.completed` events include it.
+Unknown `/api/` and `/ws/` paths return 404 rather than the web app.
 
 Existing create, move, reset, resign, fetch, and WebSocket routes remain compatible.
 Snapshots now disclose lifecycle, durable revision, reset generation, ordered event

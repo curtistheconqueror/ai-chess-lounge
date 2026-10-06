@@ -351,6 +351,7 @@ class GameSnapshot(BaseModel):
     can_claim_draw: bool = False
     draw_claim_moves: list[str] = Field(default_factory=list)
     draw_reason: str | None = None
+    termination_reason: str | None = None
     seat_history: list[SeatChange] = Field(default_factory=list)
     consultations: list[Consultation] = Field(default_factory=list)
     opponent: OpponentKind

@@ -23,6 +23,7 @@ from sqlalchemy.exc import (
 
 from .adapters import (
     AdapterConfigurationError,
+    AdapterDeadlineExceeded,
     AdapterError,
     AdapterRegistry,
     PlayerAdapter,
@@ -297,6 +298,18 @@ class GameManager:
                 game = self.games[game_id]
             return game.snapshot(now=self._clock())
 
+    async def latest_live_snapshot(self) -> GameSnapshot | None:
+        """The newest match still in play, so a first-time visitor can spectate it."""
+        for game_id in await self.store.latest_live_match_ids():
+            try:
+                snapshot = await self.snapshot(game_id)
+            except GameNotFound:
+                continue
+            # Reading adjudicates an elapsed clock, so a stale "running" row can finish here.
+            if snapshot.lifecycle in {MatchState.RUNNING, MatchState.PAUSED}:
+                return snapshot
+        return None
+
     async def make_human_move(
         self,
         game_id: str,
@@ -352,7 +365,7 @@ class GameManager:
             )
             events = [game.event("move.accepted", self._move_payload(move), now=now)]
             if game.lifecycle is MatchState.COMPLETED:
-                events.append(game.event("match.completed", {"result": game.result}, now=now))
+                events.append(self._completed_event(game, now))
             try:
                 await self.store.record_move(
                     game,
@@ -453,7 +466,7 @@ class GameManager:
                         {"color": color, "result": game.result, **self._clock_payload(game, now)},
                         now=now,
                     ),
-                    game.event("match.completed", {"result": game.result}, now=now),
+                    self._completed_event(game, now),
                 ]
                 await self._record_action(game, events, expected_revision)
                 self._cancel_timeout(game_id)
@@ -488,7 +501,7 @@ class GameManager:
                     },
                     now=now,
                 ),
-                game.event("match.completed", {"result": game.result}, now=now),
+                self._completed_event(game, now),
             ]
             await self._record_action(game, events, expected_revision)
             self._cancel_timeout(game_id)
@@ -931,7 +944,7 @@ class GameManager:
                 move.elapsed_ms = elapsed_ms
                 events = [game.event("move.accepted", self._move_payload(move), now=now)]
                 if game.lifecycle is MatchState.COMPLETED:
-                    events.append(game.event("match.completed", {"result": game.result}, now=now))
+                    events.append(self._completed_event(game, now))
                 await self.store.record_move(
                     game,
                     move,
@@ -988,6 +1001,14 @@ class GameManager:
                     await self._pause_for_invalid_proposal(
                         game, game.revision, player, "runner_authorization_unavailable"
                     )
+                return False
+            except AdapterDeadlineExceeded:
+                await self._pause_for_invalid_proposal(
+                    game,
+                    expected_revision,
+                    player,
+                    "move_deadline_exceeded",
+                )
                 return False
             except AdapterError:
                 await self._pause_for_invalid_proposal(
@@ -1098,7 +1119,9 @@ class GameManager:
             while True:
                 remaining = deadline - loop.time()
                 if remaining <= 0:
-                    raise AdapterError("The player exceeded the authoritative move deadline.")
+                    raise AdapterDeadlineExceeded(
+                        "The player exceeded the authoritative move deadline."
+                    )
                 try:
                     proposal = await asyncio.wait_for(
                         asyncio.shield(call),
@@ -1109,7 +1132,7 @@ class GameManager:
                     if call.done():
                         return call.result(), current_lease
                     if loop.time() >= deadline:
-                        raise AdapterError(
+                        raise AdapterDeadlineExceeded(
                             "The player exceeded the authoritative move deadline."
                         ) from None
                     current_lease = await self.renew_turn_lease(
@@ -1120,6 +1143,13 @@ class GameManager:
             if not call.done():
                 call.cancel()
                 await asyncio.gather(call, return_exceptions=True)
+
+    @staticmethod
+    def _completed_event(game: GameSession, now: datetime) -> MatchEvent:
+        payload: dict[str, object] = {"result": game.result}
+        if game.termination_reason:
+            payload["reason"] = game.termination_reason
+        return game.event("match.completed", payload, now=now)
 
     async def _pause_for_invalid_proposal(
         self,

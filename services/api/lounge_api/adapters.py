@@ -21,6 +21,10 @@ class AdapterError(RuntimeError):
     """A configured player adapter could not produce a move."""
 
 
+class AdapterDeadlineExceeded(AdapterError):
+    """The player did not answer before the authoritative move deadline."""
+
+
 class AdapterConfigurationError(AdapterError):
     """A player configuration cannot be served by the selected adapter."""
 
