@@ -22,6 +22,7 @@ from .experiment_queue import QueueConflict
 from .experiment_reports import ExperimentReports, ReportConflict, ReportTooLarge
 from .experiment_worker import ExperimentWorker
 from .experiments import ExperimentService, PlanConfiguration, SaveExperiment
+from .leaderboards import Leaderboards
 from .manager import AnalysisSuperseded, GameManager, GameNotFound
 from .models import (
     AdjudicateRequest,
@@ -108,6 +109,36 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @application.get("/api/leaderboards")
+    async def get_leaderboards(
+        grouping: Literal["exact", "model", "family", "version", "effort_raw", "access"] = "exact",
+        model: str | None = Query(default=None, max_length=160),
+        version: str | None = Query(default=None, max_length=160),
+        effort: str | None = Query(default=None, max_length=512),
+        access: str | None = Query(default=None, max_length=120),
+        provider: str | None = Query(default=None, max_length=120),
+        broker: str | None = Query(default=None, max_length=120),
+        harness: str | None = Query(default=None, max_length=120),
+        color: Literal["white", "black"] | None = None,
+        include_forfeits: bool = True,
+    ):
+        filters = {
+            field: value
+            for field, value in {
+                "model": model,
+                "version": version,
+                "effort_raw": effort,
+                "access": access,
+                "provider": provider,
+                "broker": broker,
+                "harness": harness,
+            }.items()
+            if value is not None
+        }
+        return await Leaderboards(active_manager.store).get(
+            grouping=grouping, filters=filters, color=color, include_forfeits=include_forfeits
+        )
 
     experiments = ExperimentService(active_manager.store, active_manager.adapters)
 

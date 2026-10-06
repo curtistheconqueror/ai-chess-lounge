@@ -187,7 +187,7 @@ class OpenAICompatibleChatAdapter:
             threat=output.threat,
             confidence=output.confidence,
             usage=self.normalize_usage(body.get("usage")),
-        )
+        ).with_provider_observation(body.get("model"))
 
     def _request_payload(
         self,

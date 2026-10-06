@@ -60,6 +60,7 @@ def move_request(*, legal_moves: list[str] | None = None) -> MoveRequest:
 def completed_response(*, move: str = "e2e4") -> dict[str, object]:
     return {
         "id": "resp_test",
+        "model": "provider-reported-fixture-alias",
         "status": "completed",
         "output": [
             {
@@ -116,6 +117,8 @@ def test_openai_adapter_sends_non_stored_structured_request() -> None:
         assert payload["text"]["format"]["type"] == "json_schema"
         assert payload["text"]["format"]["strict"] is True
         assert "Legal moves (UCI): d2d4 e2e4" in payload["input"]
+        assert proposal._provider_model == "provider-reported-fixture-alias"
+        assert "provider-reported-fixture-alias" not in proposal.model_dump_json()
         assert proposal.move == "e2e4"
         assert proposal.request_id == request.request_id
         assert proposal.match_id == request.match_id
