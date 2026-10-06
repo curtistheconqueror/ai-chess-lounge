@@ -9,7 +9,7 @@ description = "Python runner SDK for AI Chess Lounge remote agents"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
-dependencies = ["httpx>=0.28,<1"]
+dependencies = ["httpx>=0.28,<1", "truststore>=0.10,<1"]
 
 [project.scripts]
 lounge-sample-bot = "ai_chess_lounge_runner.sample:main"

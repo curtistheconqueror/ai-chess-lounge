@@ -43,5 +43,10 @@ async with client:
     await client.run(choose)
 ```
 
+The client verifies TLS against the operating system's certificate store (through
+`truststore`), so machines whose antivirus or proxy inspects HTTPS connect the same way
+their browser does. The sample bot exits with a short message when its session is
+revoked or expires; pair again for the next match.
+
 Use HTTPS for non-loopback Lounge servers. Pairing codes, runner tokens, and signing
 keys are secrets; do not log them or commit them. The SDK never places them in URLs.

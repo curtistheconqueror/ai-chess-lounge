@@ -4,7 +4,7 @@ import argparse
 import asyncio
 import getpass
 
-from .client import RunnerClient
+from .client import RunnerClient, RunnerHTTPError
 from .models import TurnDelivery, proposal_for
 
 
@@ -31,7 +31,13 @@ async def _run(args: argparse.Namespace) -> None:
     display_name = client.credentials.player.get("display_name", "remote runner")
     print(f"Paired {display_name}; waiting for turns. Press Ctrl+C to stop.")
     async with client:
-        await client.run(choose_first_legal)
+        try:
+            await client.run(choose_first_legal)
+        except RunnerHTTPError as exc:
+            if exc.status_code not in {401, 403}:
+                raise
+            # Revoked, expired or replaced: the authorization is over, not the program.
+            print(f"Runner session ended ({exc.status_code}). Pair again for the next match.")
 
 
 def main() -> None:

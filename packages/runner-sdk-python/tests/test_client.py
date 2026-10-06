@@ -197,3 +197,54 @@ def test_rejects_insecure_remote_server_and_mismatched_binding() -> None:
                 await client.submit(delivery, wrong)
 
     asyncio.run(run())
+
+
+def test_default_client_verifies_tls_with_the_os_trust_store(monkeypatch) -> None:
+    import ssl
+
+    import ai_chess_lounge_runner.client as client_module
+
+    created: list[int] = []
+
+    def fake_context(protocol: int) -> ssl.SSLContext:
+        created.append(protocol)
+        return ssl.create_default_context()
+
+    monkeypatch.setattr(client_module.truststore, "SSLContext", fake_context)
+
+    async def run() -> None:
+        http = client_module.default_http_client()
+        await http.aclose()
+
+    asyncio.run(run())
+    assert created == [ssl.PROTOCOL_TLS_CLIENT]
+
+
+def test_sample_bot_reports_an_ended_session_instead_of_crashing(monkeypatch, capsys) -> None:
+    from ai_chess_lounge_runner import RunnerHTTPError, sample
+
+    class EndedClient:
+        credentials = type("Credentials", (), {"player": {"display_name": "Sample"}})()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+        async def run(self, _handler) -> None:
+            raise RunnerHTTPError(401, "The runner session has been revoked.")
+
+    async def fake_claim(*_: object, **__: object) -> EndedClient:
+        return EndedClient()
+
+    monkeypatch.setattr(sample.getpass, "getpass", lambda _prompt: "pair_code")
+    monkeypatch.setattr(sample.RunnerClient, "claim", fake_claim)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["lounge-sample-bot", "--base-url", "http://127.0.0.1:8000", "--pairing-id", "p"],
+    )
+
+    sample.main()
+
+    assert "Runner session ended (401)" in capsys.readouterr().out

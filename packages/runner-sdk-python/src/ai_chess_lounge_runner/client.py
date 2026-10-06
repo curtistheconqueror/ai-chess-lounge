@@ -8,12 +8,14 @@ import inspect
 import json
 import math
 import re
+import ssl
 from collections.abc import Awaitable, Callable
 from decimal import Decimal
 from typing import Any
 from urllib.parse import quote, urlsplit
 
 import httpx
+import truststore
 
 from .models import (
     MoveProposal,
@@ -22,6 +24,17 @@ from .models import (
     RunnerCredentials,
     TurnDelivery,
 )
+
+
+def default_http_client() -> httpx.AsyncClient:
+    """HTTP client that verifies TLS against the operating system's trust store.
+
+    Antivirus and corporate proxies that inspect HTTPS install their root in the OS
+    store; a bundled CA list would reject them even though browsers connect fine.
+    """
+    context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    return httpx.AsyncClient(timeout=35.0, follow_redirects=False, verify=context)
+
 
 MoveHandler = Callable[[TurnDelivery], MoveProposal | Awaitable[MoveProposal]]
 _IDEMPOTENCY_KEY = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
@@ -120,7 +133,7 @@ class RunnerClient:
     ) -> None:
         self.base_url = _normalize_base_url(base_url)
         self.credentials = credentials
-        self._http = http_client or httpx.AsyncClient(timeout=35.0, follow_redirects=False)
+        self._http = http_client or default_http_client()
         self._owns_http = http_client is None if _owns_http_client is None else _owns_http_client
 
     @classmethod
@@ -134,7 +147,7 @@ class RunnerClient:
     ) -> RunnerClient:
         normalized = _normalize_base_url(base_url)
         owns_client = http_client is None
-        client = http_client or httpx.AsyncClient(timeout=35.0, follow_redirects=False)
+        client = http_client or default_http_client()
         try:
             response = await client.post(
                 f"{normalized}/api/runner-pairings/{quote(pairing_id, safe='')}/claim",
