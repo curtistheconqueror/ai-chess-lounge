@@ -42,7 +42,8 @@ Do not compress the final security, restore, CI or visual gates to meet the date
 
 - 2E accounts and 6D owner/player/spectator/moderator roles, private invitations and
   private/public visibility are release dependencies for hosted multi-user operation.
-  Supabase is an option, not an assumed purchased or authorized dependency.
+  Supabase is now the selected backend direction; account/project/plan/access remain
+  unverified, with no purchase/deployment authorization.
 - 6A negotiated draw offers remain deferred; track explicitly in acceptance scope.
 - Remote consultation requires purpose-scoped authorization; current grants cover
   one match, not advisers or tournament batches. Extending access needs approval.
@@ -153,3 +154,90 @@ Current local readiness/capped telemetry and fixture recovery are verified; the 
 The final documentation follow-up receives a separate current-head CI check.
 No new owner decision has arrived; continue independent fixture performance work
 and budget design. The production/account/Stage 9 confidence and gates remain as above.
+
+## Performance checkpoint — October 4, 15:05 America/Chicago (20:05 UTC)
+
+PR25 final head 076c82a passed CI 37227215973. Stage8C generated-fixture harness
+now measures five workload areas locally, including installed Stockfish; native
+PostgreSQL and final browser CI remain upcoming gates. In-process latency is not
+hosted capacity. Full 8C still requires outstanding recovery/representative-load
+acceptance; 8B production operations and 8A approved remediation also remain open.
+8D ledger design can proceed with symbolic-unit tests independently of policy;
+live monetary enforcement still needs approved ownership/pricing/unknown-cost rules.
+8E hosted onboarding and deferred 2E/6D remain gated. Stage 9 is still unselected.
+Keep the dated checkpoints and final 8–9-hour integration buffer; no new approval
+or improved all-stages guarantee is inferred from these local results.
+
+## Continuation checkpoint — October 4, 15:35 America/Chicago (20:35 UTC)
+
+8C PR26 reviewed 105eb2a passed CI 37231626012 (324 Python / 2 engine skips);
+8D PR27 source 969eb7c passed CI 37231957628 (336 Python / 2 engine skips);
+both include native fixtures, 3 SDK, 34 browser and all migration/lint/type/build gates.
+PR27's final documentation head c267056 has a separate check pending. The local
+engine lifecycle correction adds real interruption recovery and 353 passing tests;
+publication remains a separate gate. Generated-only 8C/8D checkpoints are ahead
+of discovery targets, but do not close production operations, policy or hosted scope.
+
+Keep the Oct 5 12:00 operational/cost-control target conditional on approved policy;
+Oct 5 20:00 account candidate still depends on owner choices/authorization. Oct 6
+03:00 representative-performance and 09:00 release-candidate targets depend on
+approved topology and integration. Preserve 09:00–17:40 for review/CI/restore/visual
+acceptance. Hosted-beta confidence remains conditional/low without decisions; a
+tested local candidate is more plausible. Stage 9 all-candidate delivery is unresolved
+and unestimated, not silently included in these ranges or excluded from the request.
+
+## Loopback checkpoint — October 4, 15:55 America/Chicago (20:55 UTC)
+
+8D final docs c267056 passed CI 37232631478. Engine PR28 source 603c216 passed
+CI 37233085222 (354 Python/3 engine skips, 3 SDK, 34 browser and native/build gates);
+its final docs head 5f560ea has a separate CI check. Local loopback transport tests
+and the 100-spectator discovery ramp passed; full current candidate/native CI remain
+before publication acceptance. No topology/identity/pricing scope was selected.
+
+The remaining release critical path is still approved 8A remediation, production 8B
+operations, representative 8C targets/topology, live 8D ownership/policy and 2E/6D
+identity/invitations, followed by 8E hosted onboarding and integrated review. Existing
+engineering ranges and Oct 5 / Oct 6 checkpoints remain conditional; external waits
+can exceed them. Preserve the final 09:00–17:40 UTC Oct6 review/CI/restore/visual buffer.
+Stage 9 all-candidate scope remains unanswered rather than silently marked complete.
+
+## Verified transport and beta preparation — October4 21:20UTC
+
+PR29 source e6c2e40 passed CI37234869427:357 Python/3 absent-engine skips,
+3 SDK,34 browser, both migrations/native generated restore/performance/build gates.
+Measured native SQLite/PostgreSQL loopback32-request and100-spectator workloads;
+correctness, idempotent replays, reconnect and owned-resource cleanup passed. These
+short fixture measurements do not establish representative hosted capacity.
+PR28 final5f560ea and PR27 finalc267056 independently passed their final-head CI.
+
+8E preparation packet now makes the local reference exhibition and actual hosted
+acceptance sequence reviewable. Roughly44h remain to Oct6 17:40UTC at this checkpoint.
+The dated Oct5/Oct6 gates remain conditional on account/security/budget/topology and
+merge/release decisions; keep Oct6 09:00–17:40UTC for integrated review/CI/restore/visual
+acceptance. Local tested-candidate confidence is higher than hosted-beta confidence;
+all-stages feasibility cannot be established while Stage9 scope is unselected.
+No implementation estimate absorbs unanswered approvals or external service waits.
+
+## BYO funding clarification — October4 2026
+
+Resolved: owner funds infrastructure, players fund inference, no default owner shared
+model key. Free human/bot access has no Lounge paywall for now. Supabase is the
+selected backend direction, without verified account/project/plan/access or spending
+authorization. This removes
+an owner inference-budget decision from external SDK/MCP/subscription-runner acceptance;
+it does not require a new adapter or a duplicate ledger prototype. Existing local
+runner paths can be source/fixture-verified without paid calls or server-held provider
+credentials. Paid-call monetary enforcement applies when Lounge dispatches for a player.
+
+Still critical: hosted identity/ownership/isolation, authorized grants, infrastructure
+and abuse/request/compute quota values, application runtime host/Supabase setup/plan
+and release/merge approval;
+player-paid connection policy for any Lounge-dispatched routes. Existing turn/time
+limits and four-game leases are not full shared resource quotas. Keep 2E/6D and all
+Stage9/deferred scope explicit. Oct6 17:40UTC remains conditional with Oct6 09:00–17:40
+integration buffer. The clarification removes no security/deployment gates or waits.
+
+Supabase setup is needed before actual hosted auth/database acceptance, not local
+play or generated fixture work. Revised conditional release ranges and the first-playable
+versus full-hosted distinction are in HOSTED_RELEASE_PATH.md. No Supabase tool is
+exposed in this session; account/project status and access are unverified.

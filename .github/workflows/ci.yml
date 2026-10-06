@@ -66,6 +66,15 @@ jobs:
           ruff check services/api packages/runner-sdk-python packages/mcp-server packages/subscription-bridge
           pytest -W error
 
+      - name: Measure bounded generated performance fixtures
+        env:
+          PYTHONPATH: services/api
+          TEST_POSTGRES_URL: postgresql+asyncpg://lounge:lounge@127.0.0.1:5432/lounge_test
+          TEST_POSTGRES_RESTORE: "1"
+        run: >-
+          python -W error -m lounge_api.performance --postgres-ci --engine --loopback
+          --out ${{ runner.temp }}/lounge-performance/baseline.json
+
       - name: Set up Node
         uses: actions/setup-node@v5
         with:
@@ -107,4 +116,5 @@ jobs:
             apps/web/playwright-report
             apps/web/test-results
             ${{ runner.temp }}/lounge-recovery/restore-evidence.json
+            ${{ runner.temp }}/lounge-performance/baseline.json
           if-no-files-found: ignore
