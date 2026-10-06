@@ -234,3 +234,473 @@ and pip-audit 2.10.1 for 54 pinned Python records reported zero known advisories
 These are scoped, dated observations, not proof of security; trust-boundary review,
 abuse tests and account/deployment decisions remain. Preserve detailed findings
 privately per SECURITY.md. Parent continues to own monitoring and approvals.
+
+## Stage 8A read-only assessment in progress
+
+Contributor: docs/stage-8a-security-assessment, based on final 7E handoff
+5baac32a098d21bf046d2c201daea25be7812097. Preserve all earlier branches.
+Main was rechecked and remains 087c565. See STAGE_8_HARDENING.md for scoped
+audit evidence and remaining validation; ACCOUNT_AND_RELEASE_DECISIONS.md is an
+owner-review proposal, not approval to implement or enable security/account access.
+No confidential exploit details or credential material belong in this public handoff.
+Next safe independent work: 8B operational runbooks and offline fixture backup/restore
+rehearsal, 8C bounded local load design, and 8D budget semantics. Do not mark 8A
+complete until reviewed findings and authorized remediation are dispositioned.
+
+PR22 final documentation head 5baac32a098d21bf046d2c201daea25be7812097
+passed CI 37223844056. Its description now records source and final-head evidence.
+Stage 7E implementation and browser acceptance are verified; merge remains gated.
+
+## Stage 8B offline operations preparation in progress
+
+Stage 8A assessment was published as dependent draft PR23:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/23
+Its source head is 786f8b70cdb12b29bf009e2214817c4c31e63494 (local b87cbbd
+has the same tree). It remains an assessment/decision packet, not 8A completion.
+
+Current contributor: test/stage-8b-restore-rehearsal, based on that published head.
+Two offline generated-fixture SQLite recovery tests verify complete persisted data,
+terminal game/run/report reconstruction and committed-versus-uncommitted WAL handling.
+OPERATIONS_RUNBOOK.md tracks health/readiness, telemetry, alerting, backup/restore,
+retention and incident/rollback deliverables honestly; production acceptance is pending.
+No live data, credentials, security settings, paid providers or deployment changed.
+Next: verify this branch's complete checks, publish a dependent draft, then bounded
+local readiness/instrumentation and native PostgreSQL fixture recovery. Keep 8B open.
+
+Local 8B checkpoint: 303 Python tests passed with warnings as errors (3 PostgreSQL
+environment skips), including both restore rehearsals; Ruff format/check and
+`git diff --check` passed. No PostgreSQL client/server binary is available locally;
+native PostgreSQL backup/restore acceptance remains outstanding. Current-head CI
+and published browser checks must be recorded separately after publication.
+
+PR23 source head 786f8b7 passed CI 37224743392 / job 111501964970, including
+both migrations, Python, SDK, web build and responsive browser gates. This verifies
+the assessment branch's unchanged runtime, not completion of 8A remediation.
+
+Published 8B preparation draft: https://github.com/curtistheconqueror/ai-chess-lounge/pull/24
+Base is PR23 / docs/stage-8a-security-assessment. Source checkpoint f53c4922dbc672b068dc62e81bd073ab304d49ae
+triggered CI 37225092974; status was pending at this documentation update. Verify
+this follow-up's final head independently. The dated plan includes remaining effort
+ranges and integration buffer; Stage 9 and release decisions are still unresolved.
+
+## Stage 8B local operations continuation in progress
+
+PR24 final head fc7ea99b77d6409bfe907bfa195073d788e946ab passed
+CI 37225178400; parent evidence was independently rechecked. Remote head matches
+that SHA and its complete tree was already stored locally. Current environment
+blocks direct GitHub network fetch; use GitHub connector reads and the previously
+authorized publication UI, not alternate network routes. Preserve all branches.
+
+Contributor: feat/stage-8b-local-operations, based exactly on PR24 final head.
+Added compatible liveness plus bounded shared-probe readiness, local capped request
+correlation/timing summaries and WebSocket counts. Privacy, slow-probe/single-flight,
+worker staleness, shutdown, concurrency and unchanged-match tests pass locally.
+Added explicit generated-only native PostgreSQL CI restore and event-accessor
+validation. CI service supplies native tools; no local PostgreSQL/Docker tools exist.
+Native recovery is NOT verified until published CI passes. ADR0028 records bounds
+and limits. Full 8B tracing/metrics/alerts/retention/production backup acceptance remains
+open; no access/security/account/deployment or paid-service action was performed.
+
+Next: complete current-head checks and native CI restore, review and publish a
+dependent draft with exact evidence. Continue bounded performance preparation and
+budget reservation design while owner account/release decisions remain pending.
+
+Local continuation verification: 309 Python tests passed with warnings as errors
+(4 PostgreSQL infrastructure skips), Ruff format/check, web type/production build
+and 3 SDK tests passed. Native PostgreSQL restore and final published browser checks
+remain CI gates. No dependency or external service was added.
+
+Independent read-only review found no route from the native fixture to a configured
+application DB/provider. It prompted clearer quiescent-fixture versus production
+recovery wording and nested cleanup so a close/dispose failure cannot skip attempted
+disposal of the other resources, generated DB cleanup or admin-engine disposal.
+Native tools run in the ephemeral CI service; Docker-client timeout is not a claim
+of generic remote process termination. Native recovery verification still requires CI.
+
+## Stage 8B local operations verified source checkpoint; phase still in progress
+
+Dependent draft PR25: https://github.com/curtistheconqueror/ai-chess-lounge/pull/25
+Contributor feat/stage-8b-local-operations is based on PR24's final fc7ea99.
+Reviewed source head 2e3c150ac0d094486130b8f6e42dc197a0b4115e passed
+CI 37226798676 / job 111507996632: 311 Python (2 engine skips), 3 SDK,
+34 browser (76 intentional viewport skips), SQLite/PostgreSQL migrations and all
+lint/type/build gates. Initial source 3d65fed also passed CI 37226694209.
+Native PostgreSQL restore executed successfully, not skipped. Artifact 11312098665
+contains secret-free fixture evidence: 13 tables, 14 rows, 31,864-byte custom archive,
+0.3104 seconds including restore/validation; no production RPO/RTO claim.
+The artifact's desktop/phone metrics/board screenshots were visually inspected; no
+layout blocker found. No live provider call, production restore or deployment used.
+
+This follow-up updates docs only; verify its final head separately. Retain every
+contributor branch and draft. Main still 087c565; no target-branch merge or completed
+pickup is claimed. OPERATIONS_RUNBOOK.md/ADR0028 specify implemented limits and
+remaining 8B production tracing/metrics/alerts/retention/backups. PERFORMANCE_ACCEPTANCE.md
+is bounded 8C preparation only, not measured capacity or 8C completion.
+
+Exact next safe target: implement and measure the generated-fixture 8C harness
+across HTTP/readiness, spectators/WebSockets, queue/database and real engine when
+available, preserving correctness and cleanup gates. Continue 8D budget reservation
+contract design; account/security/budget-owner/release policies remain decisions.
+Keep the October 6 12:40 PM America/Chicago target and final integration buffer
+visible; Stage 9 scope is still unresolved and 2E/6D requirements remain deferred.
+
+## Stage 8C bounded performance continuation in progress
+
+PR25 final docs head 076c82aabcaf77312389c99625c37ac955a313bf independently
+passed CI 37227215973. Local retained 2836835 has the equivalent final tree;
+remote/local browser-upload commit histories differ. Preserve both histories.
+Contributor test/stage-8c-bounded-performance starts from that verified tree.
+The harness exercises HTTP/readiness, coalesced spectators/reconnect, shared queue
+claims/fencing/database recovery/report exports, plus real bounded Stockfish when
+available. No live provider, account/security change, deployment or merge.
+
+Initial local discovery succeeded across all default schedules; regression tests
+cover rejected unsafe bounds, non-CI PG refusal, real pipelines, sibling cancellation
+and socket validation-failure cleanup. Native PG benchmark and final full/browser CI
+remain publication gates. See PERFORMANCE_ACCEPTANCE.md/ADR0029 for measured
+scope and gaps; no full 8C completion or hosted capacity claim.
+
+Next safe work: publish dependent draft and verify exact current-head CI/artifacts;
+continue 8D attempt reservation contract and symbolic-unit offline invariants. Keep
+all contributor branches. Main remains 087c565. No immutable completed pickup before
+approved merge. Account/budget/release decisions and Stage 9 selection remain open.
+Target October 6 17:40 UTC with 8–9-hour integration buffer remains conditional.
+
+Local source checkpoint 79aac08: 321 Python tests passed with warnings as errors,
+4 PostgreSQL infrastructure skips; Ruff format/check passed. Default SQLite/ASGI/
+queue plus actual Stockfish 16 benchmark succeeded with explicit limits.
+Remote publication history differs; record its head and full CI separately.
+
+Published dependent draft PR26:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/26
+Source head 3c84e1fe06bf3bb7a3c00ff9111da670eecae261 passed
+CI 37230951795 / job 111520263552: 323 Python (2 missing-engine skips),
+3 SDK, 34 browser (76 intentional viewport skips), both migrations/lint/types/build.
+Native benchmark measured SQLite and PostgreSQL17.11; installed engine absent in CI
+and explicitly skipped, while local Stockfish 16 measurement succeeded. Artifact
+11313727043 records tested synthetic merge SHA a4996b50aa1926408bfacea6404964db055707cd
+(the PR source SHA above is distinct), runner EPYC7763/four CPUs/~16GiB memory,
+100-spectator post-commit drain p95 386.6ms SQLite/615.6ms PG, eight-game queue
+1/4-lease times 4.562/1.743s SQLite and 4.572/1.501s PG. All fixture correctness and
+cleanup checks passed; no hosted capacity claim. Native restore evidence remains
+in the artifact. Desktop/phone screenshots inspected with no layout blocker found.
+This documentation follow-up receives a separate current-head CI verification.
+
+## Stage 8D reservation design and offline oracle in progress
+
+Contributor docs/stage-8d-reservation-contract follows the Stage8C final docs tree
+(local88745f9; published7b8f35b356a26cf7f129c37c98ae3488af5b0daf).
+PR26 source3c84e1f passed CI 37230951795; final docs CI 37231366411 is running.
+Do not describe a pending final head as green. Preserve all branches and drafts.
+
+Added BUDGET_RESERVATION_CONTRACT.md/ADR0030 and a strictly test-only generated
+SQLite oracle with symbolic units. Five local tests pass, including four spawned
+processes competing for eight reservations, replay/recovery/uncertainty/evidence and
+unknown-versus-zero/overage behavior. The application imports none of this fixture;
+no schema/dispatch/permission/paid-call change. Rates, multiple scopes, PG locking,
+rollover/adjustments and live integration remain open, as do owner policy decisions.
+
+Next: independent review, full current-head CI, dependent draft publication and exact
+pickup. Continue safe local recovery/acceptance work where approvals do not apply.
+No merge/deployment/account/security/spending authorization is inferred. October 6
+17:40 UTC remains conditional with final integration buffer; Stage 9 selection and
+deferred 2E/6D are unchanged outstanding decisions.
+Read-only review prompted an 8C correction: move startup under its cleanup guard,
+bound fixture regression runs to20 seconds, and label persisted move/event agreement
+as an invariant rather than a measured duplicate-submission rate. Declare Linux
+resource units explicitly. These changes require a new source-head full CI check.
+
+8D review corrections now reject invalid/null attempt IDs and changed fixture policy;
+billing identity is source plus line-item ID, with multiple lines per source supported.
+Tests explicitly cover symbolic reopen/recovery, not real process death or chess
+commit fencing. Disposable proof tokens state release/recovery preconditions without
+implementing actual authorization. Twelve focused tests pass, including both unique
+and duplicate attempt races across four spawned processes. No production policy is
+selected. Reviewed 8C head105eb2a CI 37231626012 is pending at this update; verify
+before stating current-head green. Full 8D CI remains a separate publication gate.
+
+8D local reviewed source8f3383f: 334 Python tests passed with warnings as errors,
+4 PostgreSQL infrastructure skips; complete Ruff format/check passed. Reviewed
+8C correction is incorporated locally without discarding either contributor branch.
+Publication base is PR26 reviewed 105eb2a7db08b0bdfe15e96e4adaaf673b591904;
+its full current-head CI is still running at this documentation update.
+
+## Stage 8D verified source checkpoint; full phase still in progress
+
+Dependent draft PR27:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/27
+Source 969eb7cf22fc566e3fd583be7537b992d1cdd6ea passed
+CI 37231957628 / job 111523407944: 336 Python (2 absent-engine skips),
+3 SDK, 34 browser (76 intentional viewport skips), native performance/restore,
+both migrations/lint/types/build. Artifact 11314172768 retains aggregate fixture
+and browser evidence. No paid calls, production quota or deployment were used.
+PR26 reviewed 105eb2a passed full CI  37231626012 (324 Python / 2 engine skips).
+Review's 8D oracle blockers were corrected and independently rereviewed without a
+remaining material flaw in the stated single-subject/static-symbolic-policy scope.
+
+This follow-up changes docs only; verify its final current-head CI independently.
+Retain all contributor branches/drafts. Main remains 087c565; no completed pickup
+or merge. BUDGET_RESERVATION_CONTRACT.md/ADR0030 list implemented scope and
+remaining shared-rate/multi-scope/PG/period/authority/live integration requirements.
+Owner identity/budget/pricing/unknown-cost/kill-switch choices remain gates.
+
+Next safe independent target: local UCI lifecycle/cancellation/failure recovery
+regressions and bounded real-engine interruption evidence on a separate contributor
+branch. No unrelated owner gate stops that work. Production 8A/8B/8C/8D acceptance,
+8E hosted onboarding and deferred 2E/6D remain distinct; Stage 9 scope is unanswered.
+October 6 17:40 UTC target remains conditional with the final 8–9-hour buffer.
+
+## Stage 8C engine lifecycle recovery candidate in progress
+
+Contributor fix/stage-8c-engine-recovery retains the 8D reviewed source tree
+(local8f73e96, published969eb7cf22fc566e3fd583be7537b992d1cdd6ea).
+PR26 reviewed 105eb2a passed fullCI 37231626012; PR27 source 969eb7c passed
+fullCI 37231957628. Published counts/artifact evidence are recorded separately at
+its checkpoint. No merge/deployment or completed pickup is claimed.
+
+Startup summary/shutdown now serialize with UCI commands. Thread work is drained
+on cancellation; failed or cancelled-and-failed handles are discarded; cancelled
+startup closes its newly created process. Later requests can restart without an
+engine-service move replay. Twenty-one focused engine tests pass, including a real
+installed Stockfish termination/reap/fresh legal move; the performance fixture adds
+explicit interrupted-service restart evidence. ADR0031 records boundaries. Full
+current candidate suite/CI and review are still gates; no hosted capacity claim.
+
+Next: verify latest cancellation/error corrections, full suite and real benchmark,
+finish source review, publish dependent draft and verify exact CI/browser artifacts.
+8C sustained/hosted load and operator targets remain open. 8D production money/rate
+integration requires owner policy; 8B production operations/8A reviewed remediation,
+8E hosted onboarding and 2E/6D identity/release choices remain outstanding. Stage 9
+scope is still unselected; October 6 17:40 UTC target preserves integration buffer.
+
+Engine reviewed candidate 2e1996f: 353 Python passed with warnings as errors,
+4 local PG-infrastructure skips; complete Ruff format/check passed. Real Stockfish 16
+fixture interruption/reap/explicit restart succeeded; artifact is local fixture evidence,
+not hosted capacity. Independent review found no remaining material defect in the
+corrected lifecycle scope. Publication base is PR27 final docs c2670561a685dc93151ef86ded4269b51cff8b74
+(local 70df473 equivalent doc tree); CI 37232631478 is still pending at this update.
+New engine source needs its own complete published CI/browser check.
+
+## Stage 8C engine lifecycle verified source checkpoint
+
+Dependent draft PR28:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/28
+Source 603c21652e2fa1982a4c2f11c97a31ff831bae45 passed
+CI 37233085222 / job 111526705162: 354 Python (3 absent-Stockfish skips),
+3 SDK, 34 browser (76 intentional viewport skips), native fixtures/restore,
+both migrations and all lint/type/build gates. Artifact 11314985275 retained.
+Local 353 Python/4 PG infrastructure skips and 21 focused engine tests passed;
+real local Stockfish 16 termination/reap/explicit restart evidence is committed
+in docs/verification/stage8c-engine-local.json at source fd0ee8a. CI has no engine;
+its skips are not substituted with fake engine performance evidence.
+PR27 final docs c267056 passed CI 37232631478. No merge or deployment.
+
+This documentation-only follow-up has a distinct current-head check; verify it
+independently before claiming final-head green. Retain all contributor branches;
+full 8C hosted/sustained performance and hard process supervision remain open.
+The next safe target is the generated loopback transport rehearsal, separate from
+in-process overhead and hosted/TLS/proxy/browser measurements. Preserve cleanup
+and native/browser/restore gates. Owner account/budget/release decisions and Stage 9
+selection remain unanswered; October 6 17:40 UTC target keeps final 8–9-hour buffer.
+
+## Stage 8C loopback transport candidate in progress
+
+Contributor test/stage-8c-loopback-performance is based on PR28 final docs
+5f560eaa64679d5ffd0c47a151df0878ddd0b8dd (local 032ff54 equivalent tree).
+PR28 source 603c216 passed CI 37233085222; its final docs CI 37233840243 is pending
+at this update. Local source 98f86cf adds bounded generated-only loopback TCP across
+HTTP/readiness and spectators, four actual idempotent command replays per game,
+exact revision/FEN/event continuity/reconnect and owned server/socket/lifespan cleanup.
+No provider calls, grants, external endpoint, public exposure, permissions or deployment.
+
+Three focused loopback tests and 16 combined performance tests pass; the default local
+100-spectator ramp succeeded. Independent read-only review found no material issue.
+Queue/protocol and metric wording were checked against locked dependency source;
+actual client receive high-watermark is disclosed, no server inbound-queue/flood or
+hard-memory-cap claim. CLI source metadata now marks dirty trees. ADR0032 records
+scope. Full current suite/native CI/browser gates and exact clean-source measurement
+remain before source acceptance. Retain all branches/drafts; no completed pickup.
+
+Exact next safe target: publish/review full loopback/native acceptance and retained
+aggregate evidence, then reconcile the release-readiness packet with the verified
+local scope. Actual hosted performance, ownership, account/access/security changes,
+monetary enforcement, paid validation, deployment and Stage 9 selection remain external
+decision gates. Main remains 087c565. October 6 17:40 UTC target preserves the final
+8–9-hour integration buffer and does not waive these decisions or quality gates.
+
+Local loopback reviewed checkpoint b4dab469d808d3626900d303a7acd37b6b88313e:
+356 Python passed with warnings as errors (4 local PG-infrastructure skips), full
+Ruff format/check passed; actual default SQLite/ASGI/queue/loopback/Stockfish
+scenarios all measured successfully. Source tree was clean. Retained loopback
+evidence is docs/verification/stage8c-loopback-local.json; no hosted capacity claim.
+PR28 final5f560ea independently passed CI 37233840243. Native PostgreSQL
+loopback and this contributor's published full/browser CI remain new gates.
+
+## Stage 8C loopback published source verified
+
+Draft PR29: https://github.com/curtistheconqueror/ai-chess-lounge/pull/29
+Source e6c2e409189fcdd3f23f62aa9387d9231db58e16 passed CI 37234869427 /
+job111531856822:357 Python/3 absent-engine skips,3 SDK,34 browser/76 intentional
+viewport skips, SQLite/PostgreSQL migrations, native restore/performance and all
+format/lint/type/build gates. Artifact11314774765 was inspected: SQLite/PostgreSQL
+loopback scenarios reached32 concurrent HTTP requests and100 spectators, verified
+four idempotent replays, persisted position/event continuity, reconnect, zero active
+connections and closed owned listener. Desktop/phone metric screenshots inspected.
+These are bounded generated measurements, not hosted capacity or a sustained SLA.
+Installed Stockfish evidence remains the clean local artifact; CI explicitly skips it.
+PR28 final5f560ea passed CI 37233840243 and PR27 finalc267056 passed CI 37232631478.
+This documentation follow-up receives its own distinct check; no merge/deployment.
+
+Next safe target: Stage8E preparation-only beta readiness packet, retaining all open
+production/account/budget/performance and Stage 9 decisions. Main remains 087c565;
+all contributor branches/draft dependencies are preserved. Completed pickup branches
+remain gated on approved verified merges. Deadline Oct6 17:40UTC keeps final8–9h
+integration/review/CI/restore/visual buffer; external decisions can exceed this window.
+
+## Stage8E preparation packet in progress
+
+Contributor docs/stage-8e-beta-readiness starts from the verified PR29 source plus
+its documentation handoff. docs/BETA_READINESS.md separates the local no-credential
+reference exhibition, supported connection acceptance, hosted integration sequence,
+feedback/incident intake, deferred requirements and all eight unselected Stage 9 areas.
+This is preparation only: no hosted beta, new account/access/security/budget change,
+paid connection call, deployment or complete Stage8E claim. No runtime behavior changed.
+
+Exact next target after publication/current-head verification: owner decisions in
+ACCOUNT_AND_RELEASE_DECISIONS.md and approved integration. Actual 2E/6D ownership,
+production operations/remediation, global paid-call enforcement, representative hosted
+load and onboarding require those decisions. No independent fixture work is claimed to
+replace them. Keep draft/contributor branches; do not merge or deploy without approval.
+
+Published dependent draft PR30:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/30
+Preparation source 5a920a46db63dea655a88d62388a3e565cef5e6c; runtime unchanged.
+Current-head CI is pending and must be checked independently; no beta completion.
+PR29 final documentation4ac5fc3d3862d36fac3e42f88bfdc411c630ed6e likewise has
+its separate run37235709129 pending; source run37234869427 remains verified green.
+The next genuine dependency is the owner release/account/budget/topology/deferred
+scope decision packet. Do not repeat fixture tests or create another monitor as a
+substitute for those decisions. Preserve all quality gates and draft pickup branches.
+
+## BYO agent economics clarification in progress
+
+Contributor docs/byo-agent-cost-ownership starts from PR30 final 00c96f4c51d6f9f444ea5ef91f3efeceb868efb8
+(local f38eb34 equivalent tree). Final PR30 CI 37235916209 / job 111534858353 passed;
+source 5a920a4 passed CI 37235866015. PR29 final 4ac5fc3 passed CI 37235709129.
+These supersede historical publication-time pending notes above. Main remains 087c565.
+
+Owner funds Lounge infrastructure; players fund their own agents/API/subscriptions.
+No owner-funded shared model key by default. Human/bot Lounge access is free for now.
+Supabase is the selected backend direction; account/project/plan/access remain
+unverified and no purchase/deployment authorization is inferred. Account/budget/beta/plan docs now distinguish
+external inference from Lounge-dispatched player-paid calls and owner compute.
+Inspected existing SDK/MCP/bridge and remote adapter: player credentials already stay
+local; pairing remains required and match/seat grants unchanged. No duplicate adapter,
+monetary prototype, new access control, provider call, merge or deployment.
+
+Removed blocker: funding responsibility ambiguity/owner inference-budget prerequisite
+for external BYO routes. Safe next work: verify existing BYO fixture contracts and
+publish this narrow documentation checkpoint. Remaining actual choices: hosted route
+scope, identity/admin/visibility/invites, Supabase account/project/plan/access,
+application runtime host and infrastructure limits/topology,
+abuse/request/compute quotas, player paid-call policy if Lounge dispatches, approved
+merge/release, purpose/distributed/deferred scope and Stage 9. No blanket stop on safe
+work, but no public BYO launch or all-stage completion claimed without these gates.
+
+Existing BYO capability verification: 73 warning-strict tests passed across remote
+runner/trust/cleanup, Python SDK, MCP and subscription bridge. No provider request
+or new credentials. Exposed tool metadata contains no Supabase capability or tool
+search; no account/session probing, login or setup occurred. Claude access is not
+evidence of this session access. HOSTED_RELEASE_PATH.md records what is playable,
+what is unmerged, real runtime requirements, setup timing and conditional estimates.
+
+Published dependent draft PR31:
+https://github.com/curtistheconqueror/ai-chess-lounge/pull/31
+Source 678dc6511246bc4ac71d03bed88322a5fa0e8c38; full current-head CI pending.
+This pickup follow-up is documentation only and has its own check. Main unchanged;
+all contributor branches retained. No completed pickup until approved verified merge.
+After this head's check, the next real target is approved Supabase/account/runtime
+integration under HOSTED_RELEASE_PATH.md. Safe existing BYO acceptance is verified;
+no duplicate adapters or owner inference-budget decision is required. No payment
+subsystem is needed for free access. Quota/access/paid-dispatch policies remain open.
+Stage9 selection and the Oct6 17:40UTC target with final integration buffer remain.
+
+
+## Stage 7F AI leaderboards — implementation in progress (2026-10-05 UTC)
+
+Contributor `feat/stage-7f-ai-leaderboards` starts from local PR31-equivalent a4ecd92;
+remote PR31 final 293b97664ba5e061d215538a4a1cef9d973a45dc passed CI37240469753.
+Main remains 087c565. No merge/deploy/account/credential/paid-call/security approval.
+Read STAGE_7F_LEADERBOARDS.md and ADR0033. Preserve this branch and the earlier draft
+stack. Parent owns notifications; the hourly monitor remains paused.
+
+Implemented optional identity declarations, additive migration0012, transactional
+per-generation snapshots/outcomes and bounded conditions-aware leaderboards. New UI
+and tests are in progress. Publication/final acceptance is not yet claimed. Next:
+full warning-strict tests, migration/data compatibility, SDK/build, draft publication,
+source/final-head PostgreSQL and desktop/phone browser CI, visual inspection and
+precise handoff. Routine fixture failures must be fixed before completion claims.
+Free human/bot access and BYO inference funding unchanged; no owner directory.
+Supabase account/runtime/deferred rollout and Stage9 remain explicit external gates.
+
+
+### Stage 7F draft PR32 source verified; final follow-up gate
+
+PR32 https://github.com/curtistheconqueror/ai-chess-lounge/pull/32 is Draft, based on
+PR31 branch `docs/byo-agent-cost-ownership`. Source remote6ebff8d151d3418701c7a8b2d9ebb134e457543e
+passed CI37248389001 / job111570790115: 374 Python tests (3 engine skips), SQLite/PG
+migrations, native comparison history/CAS/reset, PG restore14tables/15rows, performance,
+3 SDK tests, production build and36 browser passes/79 intentional skips. All33 changed
+source files matched local31e8bd0 tree hashes; screenshots reviewed desktop/phone.
+This supersedes source-publication pending notes above. Original main remains087c565.
+
+Local follow-up3715269 refreshes UCI engine evidence at reset without rewriting older
+identity; 32 targeted tests pass/1PG skip. A bounded real localStockfish16 check confirms
+separate1600/2500 rows with null unfinished rates. Mobile cards/readable evidence labels
+and retry-independent generated browser fixture IDs are included in the final follow-up.
+Engine color-swap cohorts preserve both colors while keeping strength separate;
+local serving connectors do not imply underlying providers. Final19 identity tests
+pass/1PG skip. Final published-head acceptance must cover these changes: inspect PR32's latest head
+and checks; final PR description carries exact final SHA/run/evidence. Publication-time
+pending is not a final green claim. Preserve contributor branch; no completed pickup
+branch until an approved, verified merge. No credentials/accounts/paid calls/merges,
+public deployment or access-policy changes. Monitor remains paused; parent notifies.
+
+Exact next target: finish final-head CI, inspect desktop/phone artifacts and report
+verified local7F checkpoint. If acceptance fails, repair within scope and rerun affected
+full gates. After verification, remain at hosted decisions in HOSTED_RELEASE_PATH.md:
+Supabase account/project/plan/access plus runtime host, identity/visibility/quota policies,
+merge/release approval, deferred2E/6D/etc and Stage9 choice. Free human/bot access;
+player-funded BYO inference and owner-funded infrastructure unchanged. Added7F work
+uses the Oct6 17:40UTC delivery window; do not convert conditional hosted estimates
+or integration buffer into an all-stage completion promise.
+
+
+### Latest checkpoint — Stage 7F local acceptance verified; Draft PR32 retained
+
+Implementation head b95b51f81d50917084d159ddadaa17238f7a13fd passed
+CI37249535756 / job111574151986: 377 warning-strict Python tests, 3 unavailable-engine
+skips; SQLite/PG upgrades/downgrades; native snapshot/reset/CAS; generated PG restore;
+performance fixtures; 3 SDK tests; production web/SDK builds; 36 browser passes and
+79 intentional viewport skips. All33 changed files matched local80d4892 blob hashes.
+Latest desktop/phone artifacts reviewed; stacked phone cards have no horizontal/page
+overflow. The final doc-only checkpoint has its own current-head CI check; fetch PR32's
+actual latest SHA/checks and final PR evidence before any integration. Earlier pending
+entries above are chronological publication-time notes superseded by these passes.
+
+Local7F candidate is ready in `feat/stage-7f-ai-leaderboards` (Draft PR32, dependent
+on PR31). No merge/deployment is claimed and no completed-pickup branch is created
+before an approved, verified merge. Schema0012 preserves legacy match/settings data,
+adds no fabricated backfill, and keeps history immutable. Unknown/declarations/observed
+response labels remain distinct; no invented catalog or universal effort equivalence.
+Record cap5000 explicitly exposes truncation; rates are descriptive, not calibrated
+Elo/intelligence. Default names/owners/IDs are absent; aliases are opt-in. No owner
+directory or public profile is implemented. Free/BYO economics remain unchanged.
+
+Next target after final doc-head verification: wait for authorized hosted/account/
+runtime, policy and merge/release decisions under HOSTED_RELEASE_PATH.md, or a new
+explicit local feature task. Stage9 selection and deferred2E/6D/etc remain unresolved;
+do not resume blocked public setup, spend, fetch credentials, expand permissions or
+merge. Parent owns notifications; hourly monitor remains paused. Preserve all drafts
+and this contributor branch for pickup. Oct6 17:40UTC remains a conditional delivery
+target, not a guaranteed all-stage release; keep integration/test buffer explicit.
