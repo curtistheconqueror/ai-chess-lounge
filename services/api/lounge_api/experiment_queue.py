@@ -16,6 +16,7 @@ from .persistence import (
     ExperimentRunRow,
     MatchRow,
 )
+from .tournaments import resolve_tournament, tournament_report
 
 
 class QueueConflict(ValueError):
@@ -106,6 +107,17 @@ class ExperimentQueue:
                     select(MatchRow.id).where(MatchRow.id.in_([j.id for j in jobs]))
                 )
             )
+            experiment = await session.get(ExperimentRow, run.experiment_id)
+            public_jobs = [
+                {
+                    "id": j.id,
+                    "number": j.number,
+                    "state": j.state,
+                    "result": j.result,
+                    "has_game": j.id in existing_games,
+                }
+                for j in jobs
+            ]
             return {
                 "id": run.id,
                 "experiment_id": run.experiment_id,
@@ -114,16 +126,8 @@ class ExperimentQueue:
                 "concurrency": run.concurrency,
                 "created_at": utc(run.created_at).isoformat(),
                 "deadline": utc(run.deadline).isoformat() if run.deadline else None,
-                "jobs": [
-                    {
-                        "id": j.id,
-                        "number": j.number,
-                        "state": j.state,
-                        "result": j.result,
-                        "has_game": j.id in existing_games,
-                    }
-                    for j in jobs
-                ],
+                "jobs": public_jobs,
+                "report": tournament_report(experiment.document, public_jobs, run.state),
             }
 
     async def transition(
@@ -222,12 +226,19 @@ class ExperimentQueue:
             )
             if active >= run.concurrency or total_active >= 4:
                 return None
-            job = await session.scalar(
-                select(ExperimentJobRow)
-                .where(ExperimentJobRow.run_id == run_id, ExperimentJobRow.state == "queued")
-                .order_by(ExperimentJobRow.number)
-                .limit(1)
+            jobs = list(
+                await session.scalars(
+                    select(ExperimentJobRow)
+                    .where(ExperimentJobRow.run_id == run_id)
+                    .order_by(ExperimentJobRow.number)
+                )
             )
+            experiment = await session.get(ExperimentRow, run.experiment_id)
+            opponents, _, _ = resolve_tournament(
+                experiment.document,
+                [{"number": j.number, "state": j.state, "result": j.result} for j in jobs],
+            )
+            job = next((j for j in jobs if j.state == "queued" and j.number in opponents), None)
             if job is None:
                 return None
             job.state, job.lease_token = "leased", token
@@ -238,6 +249,8 @@ class ExperimentQueue:
                 "number": job.number,
                 "lease_token": token,
                 "lease_expires_at": job.lease_expires_at.isoformat(),
+                "white": opponents[job.number][0],
+                "black": opponents[job.number][1],
             }
 
     async def finish(self, job_id: str, token: str, result: str, *, now: datetime) -> None:
@@ -271,6 +284,21 @@ class ExperimentQueue:
             )
             if run.state != "running" or updated.rowcount != 1:
                 raise QueueConflict("Job lease or run is no longer active.")
+            await session.refresh(job)
+            jobs = list(
+                await session.scalars(
+                    select(ExperimentJobRow).where(ExperimentJobRow.run_id == run.id)
+                )
+            )
+            experiment = await session.get(ExperimentRow, run.experiment_id)
+            _, blocked, _ = resolve_tournament(
+                experiment.document,
+                [{"number": j.number, "state": j.state, "result": j.result} for j in jobs],
+            )
+            for pending in jobs:
+                if pending.number in blocked and pending.state == "queued":
+                    pending.state = "blocked"
+            await session.flush()
             failed = await session.scalar(
                 select(func.count())
                 .select_from(ExperimentJobRow)
@@ -298,7 +326,7 @@ class ExperimentQueue:
                     )
                 )
                 if remaining == 0:
-                    run.state = "completed"
+                    run.state = "stopped" if blocked else "completed"
             run.revision += 1
 
     async def renew(

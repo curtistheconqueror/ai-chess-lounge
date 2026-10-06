@@ -606,20 +606,27 @@ work on desktop and mobile with full audit history.
 | --- | --- |
 | 7A Experiment builder | Draft implementation: persisted entrants, effort sweeps, legal opening suites, clocks, bounded deterministic game schedule, color swaps, stop-rule configuration and SHA-256 manifest |
 | 7B Scheduler | Dependent draft: durable runs/jobs, shared batch concurrency, existing provider retry/rate policy, restart/resume, stop rules and cancellation; global monetary/request-rate quotas remain Stage 8 work |
-| 7C Tournaments | Round robin, knockout, gauntlet, standings, and division-specific ratings |
-| 7D Metrics | Chess strength, reliability, efficiency, effort response, confidence intervals |
-| 7E Reports | Interactive comparisons and CSV/JSON/PGN experiment bundles |
+| 7C Tournaments | Dependent draft: versioned round robin/gauntlet/knockout plans, winner-dependent dispatch, honest no-result standings and division/clock/protocol-specific provisional local ratings |
+| 7D Metrics | Dependent draft: observed chess scores, structured reliability, accepted-move efficiency/usage coverage, matched effort deltas and conditional opening-block confidence ranges |
+| 7E Reports | Dependent draft: interactive comparison filters and bounded terminal-run CSV/JSON/PGN bundles with manifest hash, checksums, privacy filtering and explicit no-results |
+| 7F AI leaderboards | Verified local implementation in dependent draft PR32: immutable per-game identity/evidence, conditions-aware W/L/D and head-to-head, opt-in aliases; merge and hosted acceptance remain gated |
 
 **Exit gate:** A color-swapped, multi-opening model comparison can run to completion,
 resume after interruption, and produce a reproducible report with configuration hash.
 
 ### Stage 8 — Production hardening and public beta
 
+Current product direction: human/bot Lounge access is free for now. Players fund
+their own agents/accounts; the owner funds infrastructure without a default shared
+model key. Supabase is the selected backend direction, with project/access/setup
+and the Python/WebSocket/Stockfish runtime host still unresolved. See
+HOSTED_RELEASE_PATH.md for evidence, conditional estimates and setup timing.
+
 **Goal:** Operate safely for invited users and public spectators.
 
 | Sub-phase | Deliverables |
 | --- | --- |
-| 8A Security review | Threat model, secret audit, dependency scan, abuse cases, SSRF and injection tests |
+| 8A Security review | Read-only assessment in progress: threat boundaries, scoped secret/dependency scans and hosted abuse matrix; remediation/account decisions remain gated. See STAGE_8_HARDENING.md |
 | 8B Operations | Health checks, tracing, metrics, alerts, backups, retention, and incident runbook |
 | 8C Performance | Load tests for spectators, WebSockets, engine pool, tournament queue, and database |
 | 8D Cost controls | Quotas, budget ceilings, per-match estimates, rate limits, and kill switches |

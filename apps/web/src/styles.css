@@ -2059,6 +2059,12 @@ select {
 .lab-efforts label, .model-lab .lab-check { display: flex; align-items: center; gap: .5rem; }
 .lab-preview { margin-top: 1.5rem; }
 .lab-preview code { display: block; overflow-wrap: anywhere; font-size: .8rem; color: #e8c778; }
+.lab-save-disclosure, .lab-format-note, .lab-tournament-summary, .lab-rating-disclosure { padding: .75rem; border-left: 3px solid #a88646; background: #171f1c; border-radius: 0 8px 8px 0; }
+.lab-tournament-summary { color: #e8c778 !important; }
+.tournament-report { margin: 1.25rem 0; padding: 1rem; border: 1px solid #4b6153; border-radius: 10px; background: #111b17; }
+.tournament-report h4 { margin: .35rem 0 .75rem; color: #e8c778; }
+.tournament-report .lab-table table { min-width: 760px; }
+.lab-preview .lab-series-table table { min-width: 640px; }
 .lab-table { overflow: auto; max-height: 420px; margin: 1rem 0; }
 .lab-table table { width: 100%; border-collapse: collapse; }
 .lab-table th, .lab-table td { text-align: left; padding: .7rem; border-bottom: 1px solid #34473d; font-size: .8rem; }
@@ -2075,3 +2081,40 @@ select {
 .lab-run { margin: 1.5rem 0; padding: 1rem; border: 1px solid #736038; border-radius: 12px; }
 .lab-run-confirm { padding: 1rem; margin: 1rem 0; border: 1px solid #af8c4d; border-radius: 8px; background: #302a1b; }
 .lab-run a { color: #e8c778; }
+.comparison-metrics-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 1rem 0; }
+.comparison-metrics-controls small { flex-basis: 100%; color: #a6b5ab; line-height: 1.5; }
+.comparison-bundle-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 1rem 0; padding: .75rem; border: 1px solid #4b6153; border-radius: 9px; background: #111b17; }
+.comparison-bundle-controls small { flex-basis: 100%; color: #a6b5ab; line-height: 1.5; }
+.comparison-metrics { min-width: 0; max-width: 100%; box-sizing: border-box; margin: 1rem 0; padding: clamp(.75rem, 2vw, 1rem); border: 1px solid #4b6153; border-radius: 12px; background: #111b17; }
+.comparison-metrics h3 { margin: .25rem 0; color: #e8c778; }
+.comparison-metrics h4 { margin: 1.25rem 0 .5rem; color: #d9e4dc; }
+.comparison-metrics-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.comparison-metrics-heading p, .metrics-method, .metrics-disclosure, .metrics-stale { color: #a6b5ab; line-height: 1.5; }
+.metrics-filter-row { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: .75rem 0; }
+.metrics-filter-row label { display: grid; gap: .3rem; min-width: min(100%, 300px); color: #bbc8c0; font-size: .85rem; }
+.metrics-filter-row select { max-width: min(100%, 480px); box-sizing: border-box; padding: .6rem; border: 1px solid #34473d; border-radius: 8px; background: #101c17; color: #edf2ec; }
+.metrics-filter-row small { color: #a6b5ab; line-height: 1.5; overflow-wrap: anywhere; }
+.comparison-metrics .lab-table { max-width: 100%; }
+.comparison-metrics .lab-table table { min-width: 1180px; }
+.comparison-metrics td small { display: block; max-width: 220px; margin-top: .25rem; color: #9caaa1; overflow-wrap: anywhere; }
+.metrics-disclosure, .metrics-stale { padding: .75rem; border-left: 3px solid #a88646; background: #171f1c; border-radius: 0 8px 8px 0; }
+.metrics-stale { border-left-color: #d6a55a; }
+
+.identity-editor { margin-block: 1rem; min-width: 0; }
+.identity-editor summary { cursor: pointer; overflow-wrap: anywhere; }
+.leaderboard-table-scroll { max-width: 100%; overflow-x: auto; }
+.leaderboard-table-scroll table { width: 100%; min-width: 680px; border-collapse: collapse; }
+.leaderboard-table-scroll td, .leaderboard-table-scroll th { padding: 0.8rem; text-align: left; vertical-align: top; }
+.leaderboard-table-scroll small, .leaderboard-matchups small { display: block; margin-block: 0.4rem; overflow-wrap: anywhere; }
+.leaderboard-table-scroll pre, .leaderboard-matchups pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 360px; font-size: 0.75rem; }
+.leaderboard-matchups { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+.leaderboard-matchups article { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; }
+
+.leaderboard-mobile-label { display: none; }
+@media (max-width: 640px) {
+  .leaderboard-table-scroll table { min-width: 0; }
+  .leaderboard-table-scroll thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .leaderboard-table-scroll tbody, .leaderboard-table-scroll tr, .leaderboard-table-scroll td { display: block; width: 100%; max-width: none; }
+  .leaderboard-table-scroll tr { border-bottom: 1px solid #30463b; padding-block: 0.5rem; }
+  .leaderboard-mobile-label { display: block; margin-bottom: 0.5rem; }
+}

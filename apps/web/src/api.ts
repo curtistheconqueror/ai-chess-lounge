@@ -1,3 +1,4 @@
+import type { IdentityDeclaration, LeaderboardReport } from "./types";
 import type { Consultation } from "./types";
 import type {
   ApiError,
@@ -81,6 +82,7 @@ export function fetchPlayerAdapters(): Promise<PlayerAdapterCatalog> {
 }
 
 export function createRunnerPairing(input: {
+  comparison?: IdentityDeclaration;
   displayName: string;
   provider: string;
   model: string;
@@ -94,6 +96,7 @@ export function createRunnerPairing(input: {
   return request<RunnerPairingResponse>("/api/runner-pairings", {
     method: "POST",
     body: JSON.stringify({
+      ...(input.comparison ? { comparison: input.comparison } : {}),
       max_turns: input.maxTurns ?? 500,
       match_ttl_ms: input.matchTtlMs ?? 14_400_000,
       display_name: input.displayName,
@@ -187,10 +190,10 @@ export function playConsultation(gameId: string, advice: Consultation, revision:
   });
 }
 
-export function previewExperiment(configuration: import("./ModelLab").ExperimentConfig) {
+export function previewExperiment(configuration: import("./ModelLab").ExperimentConfiguration) {
   return request<import("./ModelLab").ExperimentPlan>("/api/experiments/preview", { method: "POST", body: JSON.stringify(configuration) });
 }
-export function saveExperiment(id: string, configuration: import("./ModelLab").ExperimentConfig) {
+export function saveExperiment(id: string, configuration: import("./ModelLab").ExperimentConfiguration) {
   return request<import("./ModelLab").ExperimentPlan>("/api/experiments", { method: "POST", body: JSON.stringify({ id, configuration }) });
 }
 export function listExperiments(offset = 0) {
@@ -206,9 +209,36 @@ export function createExperimentRun(experimentId: string, id: string, concurrenc
 export function fetchExperimentRun(id: string) {
   return request<import("./ExperimentRunPanel").ExperimentRun>(`/api/experiment-runs/${encodeURIComponent(id)}`);
 }
+export function fetchExperimentRunMetrics(id: string) {
+  return request<import("./ComparisonMetrics").ComparisonMetricsData>(`/api/experiment-runs/${encodeURIComponent(id)}/metrics`);
+}
+export async function downloadExperimentRunBundle(id: string): Promise<Blob> {
+  const response = await fetch(`${apiBase}/api/experiment-runs/${encodeURIComponent(id)}/bundle`, {
+    headers: { Accept: "application/zip" },
+  });
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const payload = (await response.json()) as ApiError;
+      const detail: unknown = payload.detail;
+      message = typeof detail === "string" ? detail : Array.isArray(detail)
+        ? detail.map(item => typeof item?.msg === "string" ? item.msg : "Invalid request field").join("; ")
+        : message;
+    } catch {
+      // Keep the HTTP status when the response is not JSON.
+    }
+    throw new Error(message);
+  }
+  return response.blob();
+}
 export function listExperimentRuns(experimentId: string) {
   return request<{ id: string; state: string }[]>(`/api/experiments/${encodeURIComponent(experimentId)}/runs`);
 }
 export function controlExperimentRun(id: string, target: "running" | "paused" | "cancelled", expected_revision: number, allow_provider_calls = false) {
   return request<import("./ExperimentRunPanel").ExperimentRun>(`/api/experiment-runs/${encodeURIComponent(id)}/control`, { method: "POST", body: JSON.stringify({ target, expected_revision, allow_provider_calls }) });
+}
+
+export function fetchLeaderboards(parameters: Record<string,string>): Promise<LeaderboardReport> {
+  const query = new URLSearchParams(Object.entries(parameters).filter(([,value]) => value !== ""));
+  return request<LeaderboardReport>(`/api/leaderboards?${query}`);
 }

@@ -10,7 +10,7 @@ from typing import Literal
 from uuid import UUID
 
 import chess
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -84,9 +84,29 @@ class ExperimentConfiguration(StrictModel):
         return self
 
 
+class TournamentConfiguration(ExperimentConfiguration):
+    schema_version: Literal["2.0"] = "2.0"
+    format: Literal["round_robin", "gauntlet", "knockout"] = "round_robin"
+    anchor: str | None = Field(default=None, max_length=60)
+
+    @model_validator(mode="after")
+    def anchor_only_for_gauntlet(self):
+        if self.format != "gauntlet" and self.anchor is not None:
+            raise ValueError("An anchor applies only to gauntlet tournaments.")
+        return self
+
+
+PlanConfiguration = ExperimentConfiguration | TournamentConfiguration
+_plan_adapter = TypeAdapter(PlanConfiguration)
+
+
+def parse_configuration(value: dict) -> PlanConfiguration:
+    return _plan_adapter.validate_python(value)
+
+
 class SaveExperiment(StrictModel):
     id: UUID
-    configuration: ExperimentConfiguration
+    configuration: PlanConfiguration
 
 
 def canonical_hash(value: object) -> str:
@@ -99,7 +119,7 @@ class ExperimentService:
     def __init__(self, store: DatabaseStore, adapters: AdapterRegistry):
         self.store, self.adapters = store, adapters
 
-    def preview(self, config: ExperimentConfiguration) -> dict:
+    def preview(self, config: PlanConfiguration) -> dict:
         normalized = config.model_dump(mode="json")
         variants = []
         for index, entrant in enumerate(config.entrants):
@@ -152,19 +172,20 @@ class ExperimentService:
                         else None,
                     }
                 )
+        is_tournament = isinstance(config, TournamentConfiguration)
         # Count before allocating the schedule; expansion is bounded on every route.
         pairs = [(a, b) for a, b in combinations(variants, 2) if a["entrant"] != b["entrant"]]
         count = (
             len(pairs) * len(config.openings) * config.repetitions * (2 if config.color_swap else 1)
         )
-        if count > 512:
+        if count > 512 and not is_tournament:
             raise ValueError(
                 "Experiment exceeds the 512-game plan limit. "
                 "Reduce entrants, efforts, openings or repetitions."
             )
         schedule = []
         for (a, b), (opening_index, opening), repetition in product(
-            pairs, enumerate(config.openings), range(config.repetitions)
+            [] if is_tournament else pairs, enumerate(config.openings), range(config.repetitions)
         ):
             board = chess.Board()
             for move in opening.moves:
@@ -181,6 +202,12 @@ class ExperimentService:
                         "repetition": repetition + 1,
                     }
                 )
+        tournament = None
+        if is_tournament:
+            from .tournaments import build_tournament
+
+            schedule, tournament = build_tournament(normalized, variants)
+            count = len(schedule)
         mixed = len({v["player"]["division"] for v in variants}) > 1
         manifest = {
             "configuration": normalized,
@@ -190,6 +217,8 @@ class ExperimentService:
             "exhibition": mixed,
             "status": "draft",
         }
+        if tournament is not None:
+            manifest["tournament"] = tournament
         manifest["configuration_hash"] = canonical_hash(manifest)
         manifest["warnings"] = (
             ["Mixed divisions: exhibition only; results cannot share one rating pool."]

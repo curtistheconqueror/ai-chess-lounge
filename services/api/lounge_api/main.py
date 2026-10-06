@@ -9,7 +9,7 @@ from uuid import UUID
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -17,9 +17,12 @@ from . import __version__
 from .adapters import AdapterConfigurationError
 from .domain import ClockExpired, MatchTransitionRejected, MoveRejected, StalePosition
 from .engine import EngineFailure
+from .experiment_metrics import ExperimentMetrics
 from .experiment_queue import QueueConflict
+from .experiment_reports import ExperimentReports, ReportConflict, ReportTooLarge
 from .experiment_worker import ExperimentWorker
-from .experiments import ExperimentConfiguration, ExperimentService, SaveExperiment
+from .experiments import ExperimentService, PlanConfiguration, SaveExperiment
+from .leaderboards import Leaderboards
 from .manager import AnalysisSuperseded, GameManager, GameNotFound
 from .models import (
     AdjudicateRequest,
@@ -43,6 +46,7 @@ from .models import (
     RunnerTurnDelivery,
     SeatTakeoverRequest,
 )
+from .operations import LocalOperations, OperationsMiddleware, Readiness
 from .persistence import ConcurrentGameUpdate, IdempotencyConflict
 from .player_protocol import PROTOCOL_VERSION
 from .remote_runner import (
@@ -73,14 +77,19 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     active_manager = game_manager or GameManager()
 
     batch_worker = ExperimentWorker(active_manager)
+    export_slots = asyncio.Semaphore(2)
+    operations = LocalOperations()
+    readiness = Readiness(active_manager, batch_worker)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         await active_manager.start()
         batch_worker.start()
+        readiness.started = True
         try:
             yield
         finally:
+            await readiness.close()
             await batch_worker.close()
             await active_manager.close()
 
@@ -90,6 +99,9 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.state.game_manager = active_manager
+    application.state.operations = operations
+    application.state.readiness = readiness
+    application.add_middleware(OperationsMiddleware, operations=operations)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -98,10 +110,40 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
+    @application.get("/api/leaderboards")
+    async def get_leaderboards(
+        grouping: Literal["exact", "model", "family", "version", "effort_raw", "access"] = "exact",
+        model: str | None = Query(default=None, max_length=160),
+        version: str | None = Query(default=None, max_length=160),
+        effort: str | None = Query(default=None, max_length=512),
+        access: str | None = Query(default=None, max_length=120),
+        provider: str | None = Query(default=None, max_length=120),
+        broker: str | None = Query(default=None, max_length=120),
+        harness: str | None = Query(default=None, max_length=120),
+        color: Literal["white", "black"] | None = None,
+        include_forfeits: bool = True,
+    ):
+        filters = {
+            field: value
+            for field, value in {
+                "model": model,
+                "version": version,
+                "effort_raw": effort,
+                "access": access,
+                "provider": provider,
+                "broker": broker,
+                "harness": harness,
+            }.items()
+            if value is not None
+        }
+        return await Leaderboards(active_manager.store).get(
+            grouping=grouping, filters=filters, color=color, include_forfeits=include_forfeits
+        )
+
     experiments = ExperimentService(active_manager.store, active_manager.adapters)
 
     @application.post("/api/experiments/preview")
-    async def preview_experiment(request: ExperimentConfiguration):
+    async def preview_experiment(request: PlanConfiguration):
         try:
             return experiments.preview(request)
         except (ValueError, AdapterConfigurationError) as exc:
@@ -149,6 +191,33 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Run not found.") from exc
 
+    @application.get("/api/experiment-runs/{run_id}/metrics")
+    async def experiment_metrics(run_id: str):
+        try:
+            return await ExperimentMetrics(active_manager.store).get(run_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Run not found.") from None
+
+    @application.get("/api/experiment-runs/{run_id}/bundle")
+    async def experiment_bundle(run_id: UUID):
+        try:
+            async with export_slots:
+                content = await ExperimentReports(active_manager.store).bundle(str(run_id))
+            return Response(
+                content,
+                media_type="application/zip",
+                headers={
+                    "Content-Disposition": f'attachment; filename="experiment-{run_id}.zip"',
+                    "Cache-Control": "no-store",
+                },
+            )
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Run not found.") from None
+        except ReportConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ReportTooLarge as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+
     @application.post("/api/experiment-runs/{run_id}/control")
     async def control_experiment_run(run_id: str, request: ControlExperimentRun):
         try:
@@ -166,6 +235,15 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     async def health() -> HealthResponse:
         return HealthResponse(
             version=__version__, stockfish_available=active_manager.engine.available
+        )
+
+    @application.get("/api/ready")
+    async def ready(require_engine: bool = False):
+        result = await readiness.check(require_engine=require_engine)
+        return JSONResponse(
+            content={"version": __version__, **result},
+            status_code=200 if result["ok"] else 503,
+            headers={"Cache-Control": "no-store"},
         )
 
     @application.get("/api/player-adapters")

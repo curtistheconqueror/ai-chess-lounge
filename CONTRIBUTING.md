@@ -49,3 +49,10 @@ Before merging code, the project should require:
 Create an ADR in `docs/adr/` for changes involving service boundaries, persistence,
 protocol compatibility, authentication, credential handling, match integrity, or
 deployment topology.
+
+
+For comparison metadata/leaderboard work, read docs/STAGE_7F_LEADERBOARDS.md and
+ADR0033. Preserve per-generation identities and provenance; never infer verified
+subscription settings, expose default owner/player names, invent provider catalogs,
+or pool different engine/execution conditions. New optional metadata must preserve
+metadata-absent plan serialization. Run migration/legacy/CAS and desktop/phone gates.
