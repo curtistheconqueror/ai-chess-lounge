@@ -1162,6 +1162,22 @@ function App() {
                     <small>Pairing model: <strong>{runnerPairing.player.model}</strong>. Use that exact model as MODEL. The next-match grant is required for each match.</small>
                   </div>
                 )}
+                {runnerPairing.player.connection_mode !== "subscription_bridge" && (
+                  <div
+                    className="runner-sdk-instructions"
+                    aria-label="Remote runner SDK instructions"
+                    style={{ display: "grid", gap: 7, minWidth: 0, width: "100%" }}
+                  >
+                    <span>PAIRING ID</span>
+                    <code style={wrappedCodeStyle}>{runnerPairing.pairing_id}</code>
+                    <button
+                      style={{ position: "static", transform: "none", justifySelf: "start" }}
+                      onClick={() => void copyText(runnerPairing.pairing_id, "Pairing ID")}
+                    >Copy pairing ID</button>
+                    <p>Send the pairing ID and code to the runner over a trusted channel. The runner prompts for the code locally.</p>
+                    <code style={wrappedCodeStyle}>lounge-sample-bot --base-url {window.location.origin} --pairing-id {runnerPairing.pairing_id}</code>
+                  </div>
+                )}
               </div>
             )}
             <div className="runner-presence">

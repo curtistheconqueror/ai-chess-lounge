@@ -88,6 +88,11 @@ test("a remote agent pairs once and becomes a selectable seat", async ({ page },
     player: { player_id: string };
   };
   await expect(page.locator(".runner-pairing-code")).toContainText("PAIRING CODE");
+  // The SDK needs --pairing-id, so the operator must be able to read it without devtools.
+  const sdkInstructions = page.getByLabel("Remote runner SDK instructions");
+  await expect(sdkInstructions).toContainText(pairing.pairing_id);
+  await expect(sdkInstructions).toContainText(`lounge-sample-bot --base-url ${new URL(page.url()).origin} --pairing-id ${pairing.pairing_id}`);
+  await expect(page.getByRole("button", { name: "Copy pairing ID" })).toBeVisible();
 
   const claimed = await page.request.post(
     `/api/runner-pairings/${pairing.pairing_id}/claim`,

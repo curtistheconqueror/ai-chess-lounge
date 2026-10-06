@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -44,14 +45,14 @@ def test_player_and_runner_migrations_upgrade_and_downgrade(
     )
 
     def columns(table: str) -> set[str]:
-        with sqlite3.connect(database_path) as connection:
+        with closing(sqlite3.connect(database_path)) as connection, connection:
             return {
                 str(row[1])
                 for row in connection.execute(f'PRAGMA table_info("{table}")').fetchall()
             }
 
     def tables() -> set[str]:
-        with sqlite3.connect(database_path) as connection:
+        with closing(sqlite3.connect(database_path)) as connection, connection:
             return {
                 str(row[0])
                 for row in connection.execute(
@@ -90,7 +91,7 @@ def test_player_and_runner_migrations_upgrade_and_downgrade(
     assert {"experiment_jobs", "experiment_runs", "experiment_dispatch_lock"}.issubset(tables())
     # A real pre-comparison match survives upgrade/downgrade without invented identity.
     old_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection, connection:
         connection.execute(
             "INSERT INTO matches (id,lifecycle,opponent,stockfish_elo,engine_move_time_ms,"
             "initial_fen,current_fen,position_version,revision,generation,event_sequence,"
@@ -113,7 +114,7 @@ def test_player_and_runner_migrations_upgrade_and_downgrade(
         )
     command.upgrade(config, "0012_comparison_games")
     assert {"match_id", "generation", "identity", "outcome"}.issubset(columns("comparison_games"))
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection, connection:
         assert connection.execute("SELECT COUNT(*) FROM comparison_games").fetchone()[0] == 0
         assert (
             connection.execute(
@@ -123,7 +124,7 @@ def test_player_and_runner_migrations_upgrade_and_downgrade(
         )
     command.downgrade(config, "0011_experiment_queue")
     assert "comparison_games" not in tables()
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection, connection:
         assert (
             connection.execute(
                 "SELECT current_fen FROM matches WHERE id='legacy-upgrade'"
