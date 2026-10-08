@@ -1,6 +1,6 @@
 # Free BYO Lounge: local milestone and hosted release path
 
-Updated October 4, 2026. This is a planning/verified-source checkpoint, not public
+Updated October 8, 2026. This is a planning/integration checkpoint, not public
 release, account setup or permission to merge/deploy/change security or spend.
 
 ## Confirmed product decisions
@@ -12,16 +12,16 @@ Lounge infrastructure. Supabase is the selected backend direction; the account,
 project, plan, region, administrator and this session's access are not verified.
 Subscription entitlement does not imply API entitlement. Routes remain provider-neutral.
 
-## What already works versus what is still a draft
+## What is integrated versus what still needs hosted acceptance
 
 | Milestone | Evidence / actual boundary |
 | --- | --- |
-| First playable local Lounge | Main remains Stage 6C at 087c565. Human, deterministic reference, Stockfish, direct provider adapters, clocks, strategy panels, PGN/FEN, replay/pause and human takeover/consultation implemented |
+| First playable local Lounge | `main` at 3b2cb0bd contains human, deterministic reference, Stockfish, direct provider adapters, clocks, strategy panels, PGN/FEN, replay/pause and human takeover/consultation |
 | AI versus AI | Two automated seats run without browser control; direct cross-provider/local-model connections exist but require the operator's configured supported accounts. Stockfish needs an installed engine. No claim that every current frontier model/account works |
 | Bring your own external agent | Paired one-match/seat signed SDK/MCP/HTTP/WS runner path keeps provider authorization local; one supported local Codex subscription bridge.73 warning-strict existing runner/SDK/MCP/bridge tests passed in this checkpoint; fake acceptance is not live provider entitlement proof |
-| Model Lab | PR18–22 dependent drafts cover plans/effort sweeps, durable batches, formats, honest metrics and exports; final heads verified but unmerged |
-| Hardening/readiness | PR23–30 drafts contain assessment, generated restore, local readiness/telemetry, bounded ASGI/loopback/queue/native database and real local engine evidence, budget contract/test oracle and beta packet; production phases remain open |
-| Current integrated candidate | PR29 source and final docs plus PR30 source/final pickup independently passed full CI:357 Python/3 absent-engine skips,3 SDK,34 browser/76 intentional viewport skips, both migrations/native fixtures/restore/lint/types/build. Desktop/phone PR29 evidence inspected. This is not an approved merged release |
+| Model Lab and leaderboards | PR18–22 and PR32 landed via the stacked merge chain: plans, batches, tournaments, metrics, exports, immutable identity and opt-in comparison UI. Local/fixture evidence does not validate paid provider behavior |
+| Hardening/readiness | PR23–31 landed in the same chain: assessment, generated restore, local readiness/telemetry, bounded ASGI/loopback/queue/native database and engine evidence, budget design/test oracle and beta packet. Production phases remain open |
+| Current main | PR33–34 added external pairing guidance, SDK OS trust, explicit pause/end reasons, operator actions and first-visit spectating after the stack landed. `main` is 3b2cb0bd. Exact-head local validation is recorded in PICKUP; previous PR-head CI is historical evidence |
 | Hosted two-person Lounge | Not yet deployed.2E/6D authenticated owners/roles/invites, object/seat visibility/isolation, approved resource controls and actual infrastructure acceptance remain |
 
 The first-playable milestone is already reached locally. Wrapping up all hosted
@@ -68,7 +68,7 @@ and newly discovered findings. They are ranges, not a promise or permission.
 
 | Next work | Estimated effort | Required dependency / exit evidence |
 | --- | --- | --- |
-| Review/integrate the retained draft train |2–4h| Merge approval, deliberate dependent-base retargeting, current integrated CI and durable pickup branches |
+| Integrated baseline review and durable pickup |2–4h| Exact-main CI/local acceptance and preserved contributor/pickup points; stacked merge has already landed |
 |2E/6D Supabase identity/ownership/invitations|6–12h| Approved project/auth/admin/access choices; HTTP/WS/export/runner two-user isolation, revocation and restart tests |
 | Production remediation/operations and all-route resource controls|4–8h| Reviewed security changes, numeric abuse/request/compute limits and runtime topology; shared limits, operator/backup/alert/retention acceptance |
 | Representative hosted performance and recovery|3–5h| Declared runtime/Supabase hardware/plan/TLS/proxy; sustained spectator/engine/queue/database load, restore/rollback and reconnect |
@@ -82,11 +82,11 @@ paid-boundary integration/validation, after player ownership/pricing/unknown-cos
 credential policy approval. External agents do not need that provider monetary ledger;
 they still need resource/access controls. Do not silently choose initial route scope.
 
-Target remains October 6,2026 at 17:40 UTC (12:40PM America/Chicago). Retain the
-October 6 09:00–17:40UTC review buffer. The optimistic path can fit if decisions/setup
-arrive promptly; the upper ranges and waits can exceed it. Local tested-candidate
-confidence is higher than hosted release confidence. Supabase direction/free/BYO
-clarifications remove ambiguity, not account/security/deploy acceptance.
+The October 6, 2026 target has passed without a hosted release. The earlier
+engineering ranges are planning estimates, not a new deadline; revisit them after
+account, scope, infrastructure and policy decisions. Local integration confidence is
+higher than hosted release confidence. Supabase direction/free/BYO clarification
+does not establish account/security/deployment acceptance.
 
 Negotiated draws, purpose-scoped adviser/batch grants, distributed routing/delivery,
 withheld-clock/adaptive effort, ACPL/strategic-coherence scope and provider route

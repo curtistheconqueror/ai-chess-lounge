@@ -40,7 +40,7 @@ charge, or a Lounge-enforced provider ceiling. Infrastructure limits remain sepa
 
 | Requirement | Current evidence | Remaining acceptance |
 | --- | --- | --- |
-| Human/reference/engine play | Durable arbiter, clocks, takeover/consultation, SDK/MCP runner protocol; responsive smoke suite | Reviewed integration of draft stack; representative acceptance on release SHA |
+| Human/reference/engine play | Durable arbiter, clocks, takeover/consultation, SDK/MCP runner protocol; responsive smoke suite and integrated Stage 7 stack | Representative acceptance on the eventual hosted release SHA |
 | Model Lab | Draft experiment plans, shared batch leases, tournament formats, honest metrics/report bundles | Approved merge train, current integrated CI and deferred metric/scope reconciliation |
 | Local health/recovery | Bounded readiness/local telemetry, generated SQLite/WAL and native PostgreSQL restore | Production tracing/metrics/alerts/retention, backup ownership/schedule, approved RPO/RTO and rollback |
 | Performance | Generated ASGI/queue/database and installed-engine fixtures; loopback transport candidate | Declared production topology/hardware, representative sustained load, operator latency/resource targets, pool supervision |
@@ -56,8 +56,8 @@ explicit, and never claim calibrated Elo or general intelligence from these scor
 
 ## Local exhibition without provider credentials
 
-Use a clean contributor checkout at the verified head in PICKUP.md. Main is still
-Stage 6C while later features remain in dependent drafts. Install dependencies with
+Use a clean checkout at the verified head in PICKUP.md. The Stage 7 and local Stage 8
+preparation stack is integrated into main, but hosted acceptance remains open. Install dependencies with
 `make setup`; start a fresh generated demo database rather than another operator's
 configured database:
 
@@ -139,11 +139,10 @@ No external feedback service, monitoring schedule or new permission is created h
 
 ## Deadline and unresolved scope
 
-Target: October 6, 2026, 12:40 PM America/Chicago (17:40 UTC), with the final
-8–9 hours reserved for integrated review/CI/restore/visual acceptance. Engineering
-ranges in DELIVERY_48H_PLAN.md remain conditional; decisions and external service
-waits can exceed the remaining window. A tested local candidate is more plausible
-than a hosted beta without account/security/budget/topology decisions. No guarantee.
+The October 6, 2026 target passed without a hosted beta. The 8–9 hour final
+integration/review/CI/restore/visual buffer remains a planning requirement, not a
+new deadline. Re-estimate after account/security/budget/topology and release-scope
+decisions. The integrated local candidate is not hosted acceptance.
 
 Deferred negotiated draws, purpose-scoped advisers/batches, distributed runner
 routing, withheld-clock/adaptive-effort experiments, ACPL/strategic-coherence scope,
