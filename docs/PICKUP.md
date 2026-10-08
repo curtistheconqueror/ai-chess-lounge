@@ -24,8 +24,11 @@ sections below are historical checkpoints, not current draft/merge status.
 Contributor branch `chore/reconcile-current-main-20261008` starts at that exact
 main commit. The previous local branches, the retained remote contributor branches,
 and the old divergent local `main` were left untouched. There are no remote
-`pickup/stage-7*` or `pickup/stage-8*` branches as of this check; create immutable
-completion points only after verifying their exact integrated commits. This
+`pickup/stage-7*` or `pickup/stage-8*` branches at the initial check. The immutable
+`pickup/stage-7-complete` branch was then created at verified integration merge
+`9a262675b124936b5f9b10cfdbb99442da67681e`, which contains the Stage 7A–7F
+chain. Do not move it. Stage 8 has no complete hosted-stage pickup; create further
+phase completion points only after verifying their exact integrated commits. This
 documentation reconciliation is not a new feature or hosted acceptance.
 
 The first-playable local AI-vs-AI/human/Stockfish/BYO experience, Model Lab and
