@@ -38,7 +38,7 @@ the added comparison table. No credentials, policies or access grants are change
 
 ## Acceptance evidence and final check
 
-Published dependent draft PR32, contributor `feat/stage-7f-ai-leaderboards`:
+Merged PR32, retained contributor `feat/stage-7f-ai-leaderboards`:
 https://github.com/curtistheconqueror/ai-chess-lounge/pull/32
 Source 6ebff8d151d3418701c7a8b2d9ebb134e457543e passed CI37248389001 /
 job111570790115: 374 warning-strict Python tests, 3 engine skips, both migration
@@ -60,9 +60,11 @@ All implementation follow-ups passed at b95b51f81d50917084d159ddadaa17238f7a13fd
 CI37249535756 / job111574151986, 377 warning-strict Python passes/3 engine skips,
 36 browser passes/79 intentional viewport skips, migrations, recovery, SDK and build.
 All 33 files matched local80d4892 blob hashes. Latest desktop/phone evidence reviewed;
-phone identity/results/conditions stack without horizontal scrolling. This final
-handoff is documentation only and requires its own head's check (see PR32).
-Local implementation acceptance is verified; merge and hosted release remain gated.
+phone identity/results/conditions stack without horizontal scrolling. Final docs head
+617d3f9 passed CI37250463131: 377 Python passes/3 engine skips, 36 browser passes/
+79 intentional viewport skips, migrations, SDK and build. The stacked merge chain
+subsequently reached main at 3b2cb0bd through PR18–34. Local implementation
+acceptance is verified; hosted release remains gated.
 Native PostgreSQL/browser execution remains CI-only in this workspace.
 
 ## Limits and next decisions
@@ -75,6 +77,6 @@ The owner funds infrastructure and players fund agents/providers; access is free
 Hosted Supabase DB/auth still needs setup and authorization; persistent API/WebSocket,
 queue and Stockfish runtime hosting still needs selection. Stage 9 remains unselected.
 
-The added 7F scope consumes time within the Oct 6 17:40 UTC target. Hosted completion
-remains conditional on approval/account/runtime/deferred-scope decisions, and the
-planned integration buffer must not be replaced with unverified feature completion.
+The October 6 target passed without a hosted release. Hosted completion remains
+conditional on account/runtime/deferred-scope decisions and an integrated release
+buffer; local feature acceptance cannot replace hosted verification.

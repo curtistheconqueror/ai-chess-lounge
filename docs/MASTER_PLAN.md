@@ -1,6 +1,6 @@
 # AI Chess Lounge — Master Product and Execution Plan
 
-**Status:** Stage 2A–2D, Stage 3A–3F, the Stage 4 broadcast slice, and Stage 5A–5E implemented
+**Status:** Stages 2A–2D, 3A–3F, 4, 5A–5E, 6A–6C and 7A–7F integrated locally. Stage 8 preparation is integrated; hosted acceptance and deferred 2E/6D remain open.
 
 **Working repository:** `curtistheconqueror/ai-chess-lounge`
 
@@ -604,12 +604,12 @@ work on desktop and mobile with full audit history.
 
 | Sub-phase | Deliverables |
 | --- | --- |
-| 7A Experiment builder | Draft implementation: persisted entrants, effort sweeps, legal opening suites, clocks, bounded deterministic game schedule, color swaps, stop-rule configuration and SHA-256 manifest |
-| 7B Scheduler | Dependent draft: durable runs/jobs, shared batch concurrency, existing provider retry/rate policy, restart/resume, stop rules and cancellation; global monetary/request-rate quotas remain Stage 8 work |
-| 7C Tournaments | Dependent draft: versioned round robin/gauntlet/knockout plans, winner-dependent dispatch, honest no-result standings and division/clock/protocol-specific provisional local ratings |
-| 7D Metrics | Dependent draft: observed chess scores, structured reliability, accepted-move efficiency/usage coverage, matched effort deltas and conditional opening-block confidence ranges |
-| 7E Reports | Dependent draft: interactive comparison filters and bounded terminal-run CSV/JSON/PGN bundles with manifest hash, checksums, privacy filtering and explicit no-results |
-| 7F AI leaderboards | Verified local implementation in dependent draft PR32: immutable per-game identity/evidence, conditions-aware W/L/D and head-to-head, opt-in aliases; merge and hosted acceptance remain gated |
+| 7A Experiment builder | Integrated: persisted entrants, effort sweeps, legal opening suites, clocks, bounded deterministic game schedule, color swaps, stop-rule configuration and SHA-256 manifest |
+| 7B Scheduler | Integrated: durable runs/jobs, shared batch concurrency, existing provider retry/rate policy, restart/resume, stop rules and cancellation; global monetary/request-rate quotas remain Stage 8 work |
+| 7C Tournaments | Integrated: versioned round robin/gauntlet/knockout plans, winner-dependent dispatch, honest no-result standings and division/clock/protocol-specific provisional local ratings |
+| 7D Metrics | Integrated: observed chess scores, structured reliability, accepted-move efficiency/usage coverage, matched effort deltas and conditional opening-block confidence ranges |
+| 7E Reports | Integrated: interactive comparison filters and bounded terminal-run CSV/JSON/PGN bundles with manifest hash, checksums, privacy filtering and explicit no-results |
+| 7F AI leaderboards | Integrated: immutable per-game identity/evidence, conditions-aware W/L/D and head-to-head, opt-in aliases; hosted acceptance remains gated |
 
 **Exit gate:** A color-swapped, multi-opening model comparison can run to completion,
 resume after interruption, and produce a reproducible report with configuration hash.

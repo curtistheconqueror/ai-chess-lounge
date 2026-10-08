@@ -1,5 +1,47 @@
 # AI Chess Lounge contributor pickup
 
+## Current integration checkpoint — October 8, 2026
+
+GitHub `main` is `3b2cb0bd9bf02e130f56d19e6a2995cbf52424dc`. The
+stacked PR18–32 chain is in its ancestry, including Stage 7A–7F and the local
+Stage 8 assessment/operations/performance/budget-design/beta packet. PR33 and
+PR34 then added external pairing instructions, OS trust store support, explicit
+pause/end reasons, operator controls and first-visit live spectating. PR34 code
+head `de7daa41e51d5be3d2b5d90030b6adf2e896a56f` passed CI run
+37461481011 / job 112261864401, including migrations, Python, generated
+performance fixtures, SDK, build and browser steps. Its tree is identical to
+current `main`; the merge commit has no PR-triggered workflow run. Local
+`make test` on that tip passed 382 Python tests (5 environment/engine skips),
+3 TypeScript SDK tests, Ruff and web typecheck after excluding this workspace's
+injected SOCKS proxy from the test process. Without that adjustment, the SDK TLS
+unit test failed during HTTPX construction because optional `socksio` is absent;
+the other 381 tests passed. `make build` passed the SDK and web production builds.
+Disposable SQLite migration upgraded through `0012_comparison_games`, reported
+head, and downgraded to base. No local PostgreSQL or browser executable is
+available at this checkpoint; PR34's identical-tree CI ran those gates. The old
+sections below are historical checkpoints, not current draft/merge status.
+
+Contributor branch `chore/reconcile-current-main-20261008` starts at that exact
+main commit. The previous local branches, the retained remote contributor branches,
+and the old divergent local `main` were left untouched. There are no remote
+`pickup/stage-7*` or `pickup/stage-8*` branches at the initial check. The immutable
+`pickup/stage-7-complete` branch was then created at verified integration merge
+`9a262675b124936b5f9b10cfdbb99442da67681e`, which contains the Stage 7A–7F
+chain. Do not move it. Stage 8 has no complete hosted-stage pickup; create further
+phase completion points only after verifying their exact integrated commits. This
+documentation reconciliation is not a new feature or hosted acceptance.
+
+The first-playable local AI-vs-AI/human/Stockfish/BYO experience, Model Lab and
+opt-in leaderboards are integrated. Stage 8 hosted identity/isolation (deferred
+2E/6D), Supabase project/access, API/WebSocket/queue/engine hosting, production
+quotas/budgets, recovery/load acceptance, paid route validation and deployment are
+still open. Stage 9's eight candidates remain unselected. Human and bot access
+remains free; players fund their own inference, and the owner funds infrastructure.
+The October 6 target passed without a hosted release. Next: verify current-main
+tests/build and durable pickup evidence, then resolve the concrete account, policy,
+runtime, scope and release decisions before hosted integration. No new account,
+credential, paid call, access-policy change, deployment or merge was performed here.
+
 Updated 2026-10-04. Read AGENTS.md, README.md, MASTER_PLAN.md, STAGE_7_MODEL_LAB.md
 and ADRs 0023–0024 before continuing.
 

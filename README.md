@@ -32,20 +32,25 @@ resignation confirmation, draw claims, and reconnect input fencing; see
 seat changes, restoration, persisted history and annotated PGN, with old-turn fencing.
 **Stage 6C consultation** adds adviser suggestions for human turns, separate move
 confirmation, cancellation, and disclosed Human-AI Team history without automatic moves.
-**Stage 7A (draft)** adds the Model Lab experiment builder: deterministic schedules,
+**Stage 7A** adds the Model Lab experiment builder: deterministic schedules,
 effort sweeps, opening suites, color swaps, saved plans and configuration hashes.
 Saving a plan starts no games; see [Model Lab](docs/STAGE_7_MODEL_LAB.md).
-**Stage 7B (dependent draft)** adds durable batch preparation, explicit execution,
+**Stage 7B** adds durable batch preparation, explicit execution,
 concurrency limits, pause/resume/cancel, stop rules and recovery with stable match IDs.
-**Stage 7C (dependent draft)** adds round robin, gauntlet and bounded knockout
+**Stage 7C** adds round robin, gauntlet and bounded knockout
 brackets with live standings and provisional ratings separated by assistance division.
-**Stage 7D (dependent draft)** adds observed chess results, reliability, accepted-move
+**Stage 7D** adds observed chess results, reliability, accepted-move
 latency/usage coverage, matched effort deltas and conditional uncertainty. Missing cost
 is unknown, not free; metrics make no model calls.
-**Stage 7E (dependent draft)** adds comparison filters and bounded terminal-run
+**Stage 7E** adds comparison filters and bounded terminal-run
 JSON/CSV/PGN bundles. See [Model Lab](docs/STAGE_7_MODEL_LAB.md) and
 [ADR0027](docs/adr/0027-terminal-experiment-report-bundles.md) for privacy and no-result
 semantics. Active runs must finish or be cancelled before export.
+**Stage 7F** adds per-game model identity evidence and conditions-aware, opt-in
+AI leaderboards. Stages 7A–7F are now in `main` through PR18–32. Stage 8 has
+local operations, bounded fixture performance/recovery and beta preparation, but
+hosted accounts, resource policy enforcement and public release are still open.
+See [pickup](docs/PICKUP.md) for the exact integrated commit and next gates.
 
 Matches, moves, resets, and immutable ordered events are persisted;
 the match lifecycle is explicit; database compare-and-swap rejects concurrent
