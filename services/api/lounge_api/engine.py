@@ -131,7 +131,7 @@ class StockfishService:
                 raise EngineFailure("Stockfish analysis could not be completed.") from exc
 
     async def choose_move(
-        self, board: chess.Board, *, target_elo: int, move_time_ms: int
+        self, board: chess.Board, *, target_elo: int, move_time_ms: int, full_strength: bool = False
     ) -> EngineMove:
         if not self.available:
             raise EngineFailure(
@@ -147,6 +147,7 @@ class StockfishService:
                     board.copy(stack=True),
                     target_elo,
                     move_time_ms,
+                    full_strength,
                     on_cancelled_error=self._discard_failed_engine,
                 )
             except (chess.engine.EngineError, OSError, TimeoutError) as exc:
@@ -155,18 +156,53 @@ class StockfishService:
             elapsed_ms = round((asyncio.get_running_loop().time() - started) * 1000)
             return EngineMove(uci=move.uci(), elapsed_ms=elapsed_ms)
 
-    def _play_sync(self, board: chess.Board, target_elo: int, move_time_ms: int) -> chess.Move:
+    async def strength_capabilities(self) -> dict[str, object]:
+        async with self._lock:
+            if self.available:
+                try:
+                    await self._ensure_started()
+                except (chess.engine.EngineError, OSError, TimeoutError) as exc:
+                    self._discard_failed_engine()
+                    raise EngineFailure("Stockfish startup could not be completed.") from exc
+            options = self._engine.options if self._engine else {}
+            elo = options.get("UCI_Elo") if "UCI_LimitStrength" in options else None
+            return {
+                "available": self.available,
+                "version": self._version,
+                "elo_min": elo.min if elo else None,
+                "elo_max": elo.max if elo else None,
+                "full_strength_available": self._engine is not None,
+            }
+
+    async def validate_strength(self, target_elo: int, full_strength: bool = False) -> None:
+        await self.strength_capabilities()
+        # Preserve unavailable-engine recovery behavior; never invent a rated range.
+        if self._engine is not None:
+            self._strength_configuration(target_elo, full_strength)
+
+    def _strength_configuration(self, target_elo: int, full_strength: bool) -> dict[str, object]:
         assert self._engine is not None
         options = self._engine.options
         configuration: dict[str, object] = {}
-        if "UCI_LimitStrength" in options and "UCI_Elo" in options:
-            elo_option = options["UCI_Elo"]
-            minimum = int(elo_option.min or 1320)
-            maximum = int(elo_option.max or 3190)
-            configuration["UCI_LimitStrength"] = target_elo < maximum
-            configuration["UCI_Elo"] = min(max(target_elo, minimum), maximum)
-        elif "Skill Level" in options:
-            configuration["Skill Level"] = max(0, min(20, round((target_elo - 800) / 120)))
+        if "Skill Level" in options:
+            configuration["Skill Level"] = options["Skill Level"].max
+        if full_strength:
+            if "UCI_LimitStrength" in options:
+                configuration["UCI_LimitStrength"] = False
+        elif "UCI_LimitStrength" in options and "UCI_Elo" in options:
+            elo = options["UCI_Elo"]
+            if elo.min is None or elo.max is None or not elo.min <= target_elo <= elo.max:
+                raise ValueError(f"Stockfish target Elo must be between {elo.min} and {elo.max}.")
+            configuration.update(UCI_LimitStrength=True, UCI_Elo=target_elo)
+        elif options:
+            raise ValueError("This engine does not advertise rated strength; use full strength.")
+        return configuration
+
+    def _play_sync(
+        self, board: chess.Board, target_elo: int, move_time_ms: int, full_strength: bool = False
+    ) -> chess.Move:
+        assert self._engine is not None
+        configuration = self._strength_configuration(target_elo, full_strength)
         if configuration:
             self._engine.configure(configuration)
         result = self._engine.play(

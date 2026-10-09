@@ -53,6 +53,7 @@ class MatchState(StrEnum):
 class CreateGameRequest(BaseModel):
     opponent: OpponentKind = OpponentKind.STOCKFISH
     stockfish_elo: int = Field(default=1600, ge=800, le=3200)
+    stockfish_full_strength: bool = Field(default=False, strict=True)
     engine_move_time_ms: int = Field(default=450, ge=50, le=10_000)
     initial_time_ms: int = Field(default=300_000, ge=100, le=86_400_000)
     increment_ms: int = Field(default=2_000, ge=0, le=60_000)
@@ -295,6 +296,7 @@ class EngineSummary(BaseModel):
     target_elo: int
     move_time_ms: int
     version: str | None = None
+    full_strength: bool = False
 
 
 class AnalysisPoint(BaseModel):

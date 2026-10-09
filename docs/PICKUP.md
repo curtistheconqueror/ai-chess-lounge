@@ -1,5 +1,43 @@
 # AI Chess Lounge contributor pickup
 
+## October 9 - native Stockfish strength controls
+
+Curtis requested the complete supported strength range, then optional 25-Elo slider
+steps and proof the runtime is real Stockfish. The previous selector had five
+hard-coded choices, always reset to 1600 after reload, and did not explain its
+next-match scope. The UCI adapter silently clamped requests and disabled the Elo
+limit at the maximum. These behaviors are corrected.
+
+The local preview now uses the official portable Stockfish 19 Windows engine,
+verified against the release archive SHA-256. Its actual UCI handshake advertises
+1320-3190 inclusive. `/api/engine/strength` publishes the installed runtime's limits.
+The UI offers exact integer entry, a collapsible slider with 1/25-Elo increments
+and both endpoints, and a separate Full strength option. Rated 3190 keeps
+UCI_LimitStrength enabled; Full strength disables it and resets Skill Level to its
+advertised maximum. Values outside the runtime range return validation errors.
+
+The chosen next-match setting persists locally. Current match strength is shown
+separately; existing games require the established pause/apply-seat workflow.
+Full-strength flags persist in player settings, engine summaries and comparison
+conditions without a database migration. Approved pieces, selected original
+single-tap sound, board colors and the user's original match are preserved.
+
+Verification: 106 backend/API/persistence/lifecycle/identity checks passed, with
+two environment skips (native-process recovery without STOCKFISH_PATH in that
+test invocation and PostgreSQL without TEST_POSTGRES_URL). Separate tests against
+the real Stockfish19 executable passed all three engine checks, including both
+Elo boundaries and full strength. Thirteen focused strength tests passed, including
+reset persistence and paused-seat validation. Five browser checks passed across
+all viewport widths, including exact input, optional 25-Elo steps, reloads, new
+matches and unchanged active configurations. Build/typecheck, Ruff and diff checks
+passed. See `STOCKFISH_STRENGTH.md` for runtime provenance and behavior.
+
+The actual app also completed a disposable 3100-target match turn: e2e4 received
+native Stockfish c7c5, with runtime version19 and108ms latency. This was a separate
+test game; the user's existing match was not reset. Contributor remains
+`feat/wooden-move-audio`, draft PR36. Baseline97b9c43 passed CI139; this change
+requires a fresh CI result. Hosted beta remains blocked on the exact patch.
+
 ## October 9 - approved pieces applied to the actual board
 
 Curtis approved the proposed original SVG set, confirmed the knight is recognizable,

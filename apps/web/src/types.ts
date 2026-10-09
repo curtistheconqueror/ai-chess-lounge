@@ -60,7 +60,7 @@ export interface ComparisonCounts {
 }
 export interface ComparisonConditions {
   initial_time_ms: number; increment_ms: number; divisions: string[];
-  engines: { target_elo: number; move_time_ms: number; version: EvidenceValue }[];
+  engines: { target_elo: number; full_strength?: boolean; move_time_ms: number; version: EvidenceValue }[];
 }
 export interface LeaderboardReport {
   selected_games: number; legacy_games_without_snapshot: number; coverage: string;
@@ -158,6 +158,7 @@ export interface EngineSummary {
   target_elo: number;
   move_time_ms: number;
   version: string | null;
+  full_strength?: boolean;
 }
 
 export interface AnalysisPoint {

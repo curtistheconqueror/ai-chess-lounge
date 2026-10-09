@@ -25,6 +25,7 @@ PUBLIC_SETTINGS_BY_ADAPTER: dict[str, frozenset[str]] = {
         {
             "color",
             "target_elo",
+            "full_strength",
             "move_time_ms",
             "move_timeout_ms",
             "spectator_delay_ms",
@@ -170,6 +171,8 @@ class PlayerConfiguration(BaseModel):
                 raise ValueError(f"{key} must be an integer between {minimum} and {maximum}.")
 
         if self.adapter_id == "stockfish":
+            if type(self.settings.get("full_strength", False)) is not bool:
+                raise ValueError("Stockfish full_strength must be a boolean.")
             target_elo = self.settings.get("target_elo", 1600)
             move_time_ms = self.settings.get("move_time_ms", 450)
             if type(target_elo) is not int or not 800 <= target_elo <= 3200:
@@ -281,10 +284,11 @@ class PlayerConfiguration(BaseModel):
         *,
         target_elo: int = 1600,
         move_time_ms: int = 450,
+        full_strength: bool = False,
     ) -> PlayerConfiguration:
         return cls(
             adapter_id="stockfish",
-            display_name=f"Stockfish {target_elo}",
+            display_name="Stockfish full strength" if full_strength else f"Stockfish {target_elo}",
             provider="Local UCI",
             model="Stockfish",
             connection_mode=ConnectionMode.LOCAL,
@@ -294,6 +298,7 @@ class PlayerConfiguration(BaseModel):
                 "color": color,
                 "target_elo": target_elo,
                 "move_time_ms": move_time_ms,
+                **({"full_strength": True} if full_strength else {}),
             },
         )
 

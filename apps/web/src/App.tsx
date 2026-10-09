@@ -1,3 +1,4 @@
+import { StockfishStrength, readStockfishChoice, stockfishChoiceKey, useStockfishCapabilities, validStrength, type StockfishChoice } from "./StockfishStrength";
 import { Leaderboards } from "./Leaderboards";
 import { IdentityEditor } from "./IdentityEditor";
 import type { IdentityDeclaration } from "./types";
@@ -129,7 +130,13 @@ function App() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [flipped, setFlipped] = useState(false);
-  const [stockfishElo, setStockfishElo] = useState(1600);
+  const [stockfishElo, setStockfishElo] = useState<StockfishChoice>(readStockfishChoice);
+  const stockfishCaps = useStockfishCapabilities();
+  useEffect(() => {
+    if (validStrength(stockfishElo, stockfishCaps)) {
+      try { localStorage.setItem(stockfishChoiceKey, JSON.stringify(stockfishElo)); } catch { /* Optional storage. */ }
+    }
+  }, [stockfishElo, stockfishCaps]);
   const [whiteSeat, setWhiteSeat] = useState<SeatChoice>("human");
   const [blackSeat, setBlackSeat] = useState<SeatChoice>("stockfish");
   const [playerAdapters, setPlayerAdapters] = useState<PlayerAdapterCatalog | null>(null);
@@ -1079,16 +1086,7 @@ function App() {
                 onRunnerChange={setBlackRunnerId}
               />
             )}
-            <label>
-              Stockfish strength
-              <select aria-label="Stockfish strength" value={stockfishElo} onChange={(event) => setStockfishElo(Number(event.target.value))} disabled={whiteSeat !== "stockfish" && blackSeat !== "stockfish"}>
-                <option value={1320}>1320 · Club entry</option>
-                <option value={1600}>1600 · Strong club</option>
-                <option value={2000}>2000 · Expert</option>
-                <option value={2500}>2500 · Grandmaster+</option>
-                <option value={3190}>3190 · Maximum</option>
-              </select>
-            </label>
+            <StockfishStrength value={stockfishElo} onChange={setStockfishElo} caps={stockfishCaps} game={game} />
             <label>
               Time control
               <select value={timeControl} onChange={(event) => setTimeControl(event.target.value as TimeControlKey)}>
@@ -1100,7 +1098,7 @@ function App() {
             <button
               className="primary-button"
               onClick={() => void startNewGame()}
-              disabled={busy || (whiteSeat === "remote_runner" && !whiteRunnerId) || (blackSeat === "remote_runner" && !blackRunnerId)}
+              disabled={busy || ((whiteSeat === "stockfish" || blackSeat === "stockfish") && !validStrength(stockfishElo, stockfishCaps)) || (whiteSeat === "remote_runner" && !whiteRunnerId) || (blackSeat === "remote_runner" && !blackRunnerId)}
             >
               New match
             </button>
@@ -1507,14 +1505,14 @@ function ProviderSeatControls({
 function createPlayerConfiguration(
   choice: Exclude<SeatChoice, AgentProviderChoice | "remote_runner">,
   color: "white" | "black",
-  stockfishElo: number,
+  stockfishElo: StockfishChoice,
 ): PlayerConfiguration {
   if (choice === "stockfish") {
     return {
       protocol_version: "1.0",
       player_id: `local-stockfish-${color}`,
       adapter_id: "stockfish",
-      display_name: `Stockfish ${stockfishElo}`,
+      display_name: stockfishElo === "full" ? "Stockfish full strength" : `Stockfish ${stockfishElo}`,
       provider: "Local UCI",
       model: "Stockfish",
       connection_mode: "local",
@@ -1522,8 +1520,9 @@ function createPlayerConfiguration(
       division: "engine_assisted",
       settings: {
         color,
-        target_elo: stockfishElo,
-        move_time_ms: stockfishElo >= 2500 ? 700 : 400,
+        target_elo: stockfishElo === "full" ? 1600 : stockfishElo,
+        full_strength: stockfishElo === "full",
+        move_time_ms: (stockfishElo === "full" || stockfishElo >= 2500) ? 700 : 400,
         spectator_delay_ms: 80,
       },
     };
@@ -1559,7 +1558,7 @@ function createPlayerConfiguration(
 function createSelectedPlayerConfiguration(
   choice: SeatChoice,
   color: Color,
-  stockfishElo: number,
+  stockfishElo: StockfishChoice,
   requestedModel: string,
   requestedEffort: EffortLevel,
   catalog: PlayerAdapterCatalog | null,
@@ -1699,7 +1698,7 @@ function playerCardForSeat(
   const targetElo = player.settings.target_elo;
   const moveTime = player.settings.move_time_ms;
   const configuration = player.adapter_id === "stockfish"
-    ? `${typeof targetElo === "number" ? targetElo : "—"} Elo · ${typeof moveTime === "number" ? moveTime : "—"} ms budget`
+    ? `${player.settings.full_strength ? "Full strength" : `${typeof targetElo === "number" ? targetElo : "—"} target Elo`} · ${typeof moveTime === "number" ? moveTime : "—"} ms budget`
     : player.adapter_id === "human"
       ? "Manual input · server validated"
       : `${player.model} · protocol v1.0`;

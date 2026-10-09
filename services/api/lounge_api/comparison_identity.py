@@ -117,6 +117,7 @@ def snapshot(game, adapters=None):
             engines.append(
                 {
                     "target_elo": player.settings.get("target_elo", game.stockfish_elo),
+                    **({"full_strength": True} if player.settings.get("full_strength") else {}),
                     "move_time_ms": player.settings.get("move_time_ms", game.engine_move_time_ms),
                     "version": seats[color]["version"],
                 }

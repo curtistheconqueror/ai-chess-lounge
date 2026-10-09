@@ -182,12 +182,19 @@ class GameManager:
                 "black",
                 target_elo=request.stockfish_elo,
                 move_time_ms=request.engine_move_time_ms,
+                full_strength=request.stockfish_full_strength,
             )
             if request.opponent is OpponentKind.STOCKFISH
             else PlayerConfiguration.human("black")
         )
         self.adapters.validate(white_player)
         self.adapters.validate(black_player)
+        for player in (white_player, black_player):
+            if player.adapter_id == "stockfish":
+                await self.engine.validate_strength(
+                    player.settings.get("target_elo", 1600),
+                    player.settings.get("full_strength", False),
+                )
         remote_players = [
             p for p in (white_player, black_player) if p.adapter_id == "remote_runner"
         ]
@@ -234,6 +241,9 @@ class GameManager:
         if stockfish_player is not None:
             game.engine_summary = await self.engine.summary(
                 game.stockfish_elo, game.engine_move_time_ms
+            )
+            game.engine_summary.full_strength = stockfish_player.settings.get(
+                "full_strength", False
             )
         game.comparison_snapshot = comparison_snapshot(game, self.adapters)
         now = self._clock()
@@ -413,10 +423,14 @@ class GameManager:
             game = deepcopy(await self._reload(game_id))
             expected_revision = game.revision
             if any(p.adapter_id == "stockfish" for p in (game.white_player, game.black_player)):
+                stockfish = next(
+                    p for p in (game.white_player, game.black_player) if p.adapter_id == "stockfish"
+                )
                 # A new generation records the current UCI runtime, not a pre-restart label.
                 game.engine_summary = await self.engine.summary(
                     game.stockfish_elo, game.engine_move_time_ms
                 )
+                game.engine_summary.full_strength = stockfish.settings.get("full_strength", False)
             now = self._clock()
             game.reset(now=now)
             game.comparison_snapshot = comparison_snapshot(game, self.adapters)
@@ -521,6 +535,11 @@ class GameManager:
             if game.lifecycle is not MatchState.PAUSED:
                 raise MatchTransitionRejected("Pause the match before changing a seat.")
             self.adapters.validate(player)
+            if player.adapter_id == "stockfish":
+                await self.engine.validate_strength(
+                    player.settings.get("target_elo", 1600),
+                    player.settings.get("full_strength", False),
+                )
             if player.adapter_id == "remote_runner":
                 other = game.player_for_color("black" if color == "white" else "white")
                 if other.player_id == player.player_id:
@@ -539,6 +558,7 @@ class GameManager:
                 game.engine_summary = await self.engine.summary(
                     game.stockfish_elo, game.engine_move_time_ms
                 )
+                game.engine_summary.full_strength = stockfish.settings.get("full_strength", False)
             else:
                 game.engine_summary = None
             event = game.event("seat.changed", change.model_dump(mode="json"), now=game.updated_at)

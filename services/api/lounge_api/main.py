@@ -246,6 +246,13 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             headers={"Cache-Control": "no-store"},
         )
 
+    @application.get("/api/engine/strength")
+    async def engine_strength():
+        try:
+            return await active_manager.engine.strength_capabilities()
+        except EngineFailure as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     @application.get("/api/player-adapters")
     async def player_adapters() -> dict[str, object]:
         return {
@@ -380,7 +387,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     async def create_game(request: CreateGameRequest) -> GameSnapshot:
         try:
             game = await active_manager.create(request)
-        except AdapterConfigurationError as exc:
+        except (AdapterConfigurationError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -552,7 +559,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
         except (MatchTransitionRejected, ConcurrentGameUpdate) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except AdapterConfigurationError as exc:
+        except (AdapterConfigurationError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @application.post("/api/games/{game_id}/retry-agent", response_model=GameSnapshot)

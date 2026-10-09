@@ -236,6 +236,7 @@ class StockfishPlayerAdapter:
                 board,
                 target_elo=int(player.settings.get("target_elo", 1600)),
                 move_time_ms=max(1, min(configured_move_time, request.move_deadline_ms)),
+                **({"full_strength": True} if player.settings.get("full_strength", False) else {}),
             )
         except EngineFailure as exc:
             raise RetryableAdapterError(str(exc)) from exc

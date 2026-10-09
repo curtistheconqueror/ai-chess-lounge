@@ -2225,3 +2225,15 @@ select {
 .silhouette-review .classic-line, .silhouette-review .classic-eye { visibility: hidden; }
 .silhouette-review .classic-piece .classic-shape { fill: #111; stroke: #111; }
 .board-studio-controls button[aria-pressed="true"] { outline: 1px solid #dab268; color: #f0d396; }
+
+.stockfish-strength { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 12px; border: 1px solid #44554b; border-radius: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stockfish-strength legend { padding: 0 6px; font-size: .78rem; font-weight: 700; color: #e8c778; }
+.stockfish-strength label { min-width: 0; }
+.stockfish-strength input[type="number"] { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px; border: 1px solid #44554b; border-radius: 8px; background: #121d17; color: #edf2ec; }
+.stockfish-strength input[type="range"], .stockfish-strength p { grid-column: 1 / -1; width: 100%; }
+.stockfish-strength p { margin: 0; color: #b8c5bc; font-size: .74rem; line-height: 1.5; }
+.stockfish-strength p[role="alert"] { color: #ffbcac; }
+.stockfish-strength .stockfish-current { color: #e8c778; }
+.stockfish-slider { grid-column: 1 / -1; min-width: 0; color: #c5d2c8; font-size: .75rem; }
+.stockfish-slider summary { cursor: pointer; margin-bottom: 8px; }
+.stockfish-slider input { width: 100%; margin-top: 10px; }

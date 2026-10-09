@@ -1,3 +1,4 @@
+import type { StockfishChoice } from "./StockfishStrength";
 import type { IdentityDeclaration, LeaderboardReport } from "./types";
 import type { Consultation } from "./types";
 import type {
@@ -42,7 +43,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export interface CreateGameOptions {
-  stockfishElo: number;
+  stockfishElo: StockfishChoice;
   initialTimeMs?: number;
   incrementMs?: number;
   whitePlayer: PlayerConfigurationInput;
@@ -60,8 +61,9 @@ export function createGame({
     method: "POST",
     body: JSON.stringify({
       opponent: "stockfish",
-      stockfish_elo: stockfishElo,
-      engine_move_time_ms: stockfishElo >= 2500 ? 700 : 400,
+      stockfish_elo: stockfishElo === "full" ? 1600 : stockfishElo,
+      stockfish_full_strength: stockfishElo === "full",
+      engine_move_time_ms: (stockfishElo === "full" || stockfishElo >= 2500) ? 700 : 400,
       initial_time_ms: initialTimeMs,
       increment_ms: incrementMs,
       white_player: whitePlayer,
