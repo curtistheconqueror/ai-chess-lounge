@@ -43,6 +43,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export interface CreateGameOptions {
+  startPaused?: boolean;
+  singleGame?: boolean;
   stockfishElo: StockfishChoice;
   initialTimeMs?: number;
   incrementMs?: number;
@@ -51,6 +53,8 @@ export interface CreateGameOptions {
 }
 
 export function createGame({
+  startPaused = false,
+  singleGame = false,
   stockfishElo,
   initialTimeMs = 300_000,
   incrementMs = 2_000,
@@ -60,6 +64,8 @@ export function createGame({
   return request<GameSnapshot>("/api/games", {
     method: "POST",
     body: JSON.stringify({
+      start_paused: startPaused,
+      single_game: singleGame,
       opponent: "stockfish",
       stockfish_elo: stockfishElo === "full" ? 1600 : stockfishElo,
       stockfish_full_strength: stockfishElo === "full",
@@ -74,6 +80,12 @@ export function createGame({
 
 export function fetchGame(gameId: string): Promise<GameSnapshot> {
   return request<GameSnapshot>(`/api/games/${gameId}`);
+}
+
+export function suggestToAgent(game: GameSnapshot, move: string | null): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${game.id}/human-suggestion`, {
+    method: "POST", body: JSON.stringify({ move, expected_revision: game.revision }),
+  });
 }
 
 /** The newest running or paused match, or null when nothing is live. */

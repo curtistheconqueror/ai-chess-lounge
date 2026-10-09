@@ -158,7 +158,9 @@ def outcome(game):
         "status": game.status.value,
         "result": game.result,
         "takeover": bool(game.seat_history),
-        "consultation": any(c.status == "played" for c in game.consultations),
+        "consultation": any(
+            c.status == "played" or c.direction == "human_to_ai" for c in game.consultations
+        ),
         "moves": len(game.moves),
         "observed_models": {
             c: sorted(

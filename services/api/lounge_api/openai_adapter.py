@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
+from .adapter_prompt import human_suggestion_prompt
 from .adapters import (
     AdapterConfigurationError,
     AdapterError,
@@ -164,6 +165,7 @@ class OpenAIResponsesAdapter:
             f"PGN: {request.pgn}",
             f"Assistance division: {request.division.value}",
         ]
+        position_lines.extend(human_suggestion_prompt(request))
         if request.legal_moves is not None:
             position_lines.append(f"Legal moves (UCI): {' '.join(request.legal_moves)}")
         position_lines.append(

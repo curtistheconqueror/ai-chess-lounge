@@ -564,9 +564,14 @@ class GameSession:
             game.headers["Consultations"] = str(len(self.consultations))
             nodes = [game, *game.mainline()]
             for advice in self.consultations:
+                label = (
+                    "Human suggestion to AI"
+                    if advice.direction == "human_to_ai"
+                    else "Consultation"
+                )
                 text = (
                     (
-                        f"Consultation ({advice.color}): {advice.advisor.display_name}; "
+                        f"{label} ({advice.color}): {advice.advisor.display_name}; "
                         f"{advice.advisor.provider}/{advice.advisor.model}; "
                         f"{advice.advisor.effort or 'default'}; {advice.advisor.division.value}; "
                         f"suggested {advice.san or 'no published move'}"
@@ -583,6 +588,14 @@ class GameSession:
     def consultation_snapshots(self, now: datetime) -> list[Consultation]:
         records = []
         for item in self.consultations:
+            if item.direction == "human_to_ai":
+                valid = self.current_human_suggestion() == item
+                records.append(
+                    item.model_copy(update={"status": "stale"})
+                    if item.status == "ready" and not valid
+                    else item
+                )
+                continue
             stale = item.status in {"pending", "ready"} and (
                 item.revision != self.revision
                 or item.position_version != self.version
@@ -591,6 +604,23 @@ class GameSession:
             )
             records.append(item.model_copy(update={"status": "stale"}) if stale else item)
         return records
+
+    def current_human_suggestion(self) -> Consultation | None:
+        revision_offset = 1 if self.lifecycle is MatchState.RUNNING else 0
+        if self.lifecycle not in {MatchState.PAUSED, MatchState.RUNNING}:
+            return None
+        return next(
+            (
+                item
+                for item in reversed(self.consultations)
+                if item.direction == "human_to_ai"
+                and item.status == "ready"
+                and item.position_version == self.version
+                and item.revision + revision_offset == self.revision
+                and item.advisor == self.active_player()
+            ),
+            None,
+        )
 
     def snapshot(self, *, now: datetime | None = None) -> GameSnapshot:
         snapshot_time = self._normalize_now(now)

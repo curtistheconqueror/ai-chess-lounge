@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { finishFixtureGames } from "./fixture-games";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -11,6 +12,7 @@ test.beforeEach(async ({ page }) => {
     || (await page.getByText("No match is live").count()) > 0).toBe(true);
   const created = page.waitForResponse((response) =>
     response.url().endsWith("/api/games") && response.request().method() === "POST");
+  await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match" }).click();
   const game = await (await created).json() as { id: string };
   await expect(page).toHaveURL(new RegExp(`/games/${game.id}$`));
@@ -64,6 +66,7 @@ test("operators can adjudicate or abort a match after confirming", async ({ page
 
   const created = page.waitForResponse((response) =>
     response.url().endsWith("/api/games") && response.request().method() === "POST");
+  await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match" }).click();
   await created;
   await page.getByRole("button", { name: "Abort match" }).click();
@@ -150,6 +153,7 @@ test("two credential-free agents start an unattended match", async ({ page }, te
 
   await page.getByLabel("White seat").selectOption("scripted");
   await page.getByLabel("Black seat").selectOption("scripted");
+  await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match" }).click();
 
   await expect(page.locator(".move-row").first()).toBeVisible({ timeout: 10_000 });
@@ -209,6 +213,7 @@ test("a remote agent pairs once and becomes a selectable seat", async ({ page },
     }
     await route.continue();
   });
+  await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match" }).click();
   await expect(page.getByRole("alert")).toContainText("Remote runner payload captured");
   expect(submitted).toMatchObject({
@@ -420,6 +425,7 @@ test("OpenAI seats use catalog models, selected effort, and only public settings
   await page.getByLabel("Black seat").selectOption("openai");
   await page.getByLabel("Black OpenAI model").selectOption("gpt-compact-latest");
   await page.getByLabel("Black effort").selectOption("deep");
+  await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match" }).click();
 
   await expect(page.getByRole("alert")).toContainText("Provider setup payload captured");
@@ -547,6 +553,7 @@ test("Claude and OpenAI can be configured as opposing provider seats", async ({ 
   await page.getByLabel("Black seat").selectOption("openai");
   await page.getByLabel("Black OpenAI model").selectOption("gpt-frontier-latest");
   await page.getByLabel("Black effort").selectOption("deep");
+  await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match" }).click();
 
   await expect(page.getByRole("alert")).toContainText("Cross-provider payload captured");
@@ -673,6 +680,7 @@ test("Gemini exposes model-specific effort and can face Claude", async ({ page }
   await page.getByLabel("Black seat").selectOption("anthropic");
   await page.getByLabel("Black Claude model").selectOption("claude-opus-5-5");
   await page.getByLabel("Black effort").selectOption("maximum");
+  await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match" }).click();
 
   await expect(page.getByRole("alert")).toContainText("Gemini payload captured");
@@ -771,6 +779,7 @@ test("OpenRouter can face a local Ollama model without invented effort", async (
   await page.getByLabel("Black Ollama model").selectOption("llama-chess:latest");
   await expect(page.getByLabel("Black effort")).toBeDisabled();
   await expect(page.getByLabel("Black effort")).toHaveValue("");
+  await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match" }).click();
 
   await expect(page.getByRole("alert")).toContainText("Open ecosystem payload captured");
@@ -903,6 +912,7 @@ test("announced repetition claim is durable without playing the intended move", 
 test("paused seat takeover preserves the board and restores the human", async ({ page }, testInfo) => {
   test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Takeover smoke on desktop and phone.");
   await page.getByLabel("Black seat").selectOption("human");
+  await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match" }).click();
   await page.getByRole("gridcell", { name: "e2 white pawn" }).click();
   await page.getByRole("gridcell", { name: "e4 empty" }).click();
@@ -954,6 +964,7 @@ test("human consultation suggests without moving and needs confirmation", async 
   test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Consultation on desktop and phone.");
   await page.getByLabel("Black seat").selectOption("human");
   const created = page.waitForResponse(r => r.url().endsWith("/api/games") && r.request().method() === "POST");
+  await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match", exact: true }).click();
   await created;
   await page.getByLabel("Adviser model").selectOption("scripted:deterministic-v1");

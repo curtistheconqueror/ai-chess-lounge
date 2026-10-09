@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .adapters import AdapterConfigurationError, AdapterError
 from .domain import ClockExpired, MatchTransitionRejected, StalePosition
 from .engine import EngineFailure
-from .models import Consultation, ConsultationRequest, MatchState
+from .models import Consultation, ConsultationRequest, HumanSuggestionRequest, MatchState
 from .persistence import ConcurrentGameUpdate, TurnLeaseUnavailable
 from .player_protocol import MoveRequest
 from .provider_reliability import ProviderRecoveryRequired
@@ -31,6 +31,56 @@ class ConsultationService:
     def __init__(self, manager: GameManager):
         self.manager = manager
         self.tasks: dict[str, asyncio.Task] = {}
+
+    async def suggest_to_agent(self, game_id: str, command: HumanSuggestionRequest):
+        m = self.manager
+        await m._reject_experiment_edit(game_id)
+        await m.get(game_id)
+        async with m._game_locks[game_id]:
+            game = deepcopy(await m._reload(game_id))
+            if game.revision != command.expected_revision:
+                raise StalePosition("The match changed. Refresh before suggesting a move.")
+            player = game.active_player()
+            if game.lifecycle is not MatchState.PAUSED or player.adapter_id not in PROVIDERS | {
+                "scripted"
+            }:
+                raise MatchTransitionRejected(
+                    "Suggestions require a paused direct/local model turn. "
+                    "Stockfish and remote runners do not accept suggestions."
+                )
+            if command.move and chess.Move.from_uci(command.move) not in game.board.legal_moves:
+                raise MatchTransitionRejected("The suggested move must be legal in this position.")
+            if command.move and len(game.consultations) >= 1000:
+                raise MatchTransitionRejected("This game has reached its consultation limit.")
+            for item in game.consultations:
+                if item.direction == "human_to_ai" and item.status == "ready":
+                    item.status = "cancelled"
+            now = m._clock()
+            game.revision += 1
+            game.updated_at = now
+            payload = {"move": command.move, "position_version": game.version}
+            if command.move:
+                item = Consultation(
+                    direction="human_to_ai",
+                    id=str(uuid4()),
+                    color="white" if game.board.turn else "black",
+                    advisor=player,
+                    position_version=game.version,
+                    revision=game.revision,
+                    after_ply=len(game.moves),
+                    status="ready",
+                    timestamp=now.isoformat(),
+                    deadline_at=now.isoformat(),
+                    move=command.move,
+                    san=game.board.san(chess.Move.from_uci(command.move)),
+                )
+                game.consultations.append(item)
+                payload = item.model_dump(mode="json")
+            await m._record_action(
+                game, [game.event("human.suggestion", payload, now=now)], command.expected_revision
+            )
+            await m.broadcast(game, now=now)
+            return game.snapshot(now=now)
 
     async def request(self, game_id: str, command: ConsultationRequest):
         m = self.manager

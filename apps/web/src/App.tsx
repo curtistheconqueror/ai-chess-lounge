@@ -24,6 +24,7 @@ import {
   resetGame,
   retryAgentTurn,
   submitMove,
+  suggestToAgent,
   websocketUrl,
 } from "./api";
 import { pairMoves, parseFen } from "./chess";
@@ -31,6 +32,7 @@ import { ConsultationPanel } from "./ConsultationPanel";
 import { SeatTakeoverDialog } from "./SeatTakeoverDialog";
 import { HumanActionDialog } from "./HumanActionDialog";
 import { MatchActionDialog, type AdjudicatedResult, type MatchAction } from "./MatchActionDialog";
+import { GameUsage } from "./GameUsage";
 import { ChessBoard } from "./ChessBoard";
 import { BoardSoundControls, useBoardSound } from "./BoardSoundControls";
 import { newMoveSound } from "./boardSound";
@@ -167,6 +169,8 @@ function App() {
   const [matchAction, setMatchAction] = useState<MatchAction | null>(null);
   const [pauseReason, setPauseReason] = useState<string | null>(null);
   const [promotion, setPromotion] = useState<PromotionRequest | null>(null);
+  const [adviceMode, setAdviceMode] = useState(false);
+  const [startPaused, setStartPaused] = useState(false);
   const cancelPromotion = useCallback(() => setPromotion(null), []);
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [busy, setBusy] = useState(false);
@@ -316,6 +320,8 @@ function App() {
       const control = timeControls[timeControl];
       acceptSnapshot(
         await createGame({
+          startPaused,
+          singleGame: true,
           stockfishElo,
           initialTimeMs: control.initialTimeMs,
           incrementMs: control.incrementMs,
@@ -350,6 +356,7 @@ function App() {
       setBusy(false);
     }
   }, [
+    startPaused,
     acceptSnapshot,
     whiteIdentity,
     blackIdentity,
@@ -588,6 +595,25 @@ function App() {
     [game, clockTick],
   );
   const playerCanMove = Boolean(game?.can_move && followingLive && !busy && connection === "live");
+  const activeSeat = game?.[game.turn === "white" ? "white_player" : "black_player"];
+  const adviceSupported = !!activeSeat && ["scripted", "openai", "anthropic", "google", "openrouter", "ollama", "vllm"].includes(activeSeat.adapter_id);
+  const canSuggest = Boolean(adviceMode && adviceSupported && game?.lifecycle === "paused" && followingLive && !busy && connection === "live");
+  const boardCanInteract = playerCanMove || canSuggest;
+  const humanSuggestions = game?.consultations?.filter(c => c.direction === "human_to_ai") ?? [];
+  const latestHumanSuggestion = humanSuggestions.at(-1);
+  useEffect(() => { setAdviceMode(false); setSelected(null); setPromotion(null); }, [game?.id, game?.revision]);
+
+  async function saveHumanSuggestion(move: string | null) {
+    if (!game || !canSuggest) return;
+    setBusy(true);
+    try {
+      acceptSnapshot(await suggestToAgent(game, move));
+      setNotice(move ? "Suggestion saved. Resume when ready; the AI chooses its own move." : "Suggestion cleared.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Suggestion failed.");
+      try { acceptSnapshot(await fetchGame(game.id)); } catch { /* Keep original error. */ }
+    } finally { setBusy(false); setSelected(null); setPromotion(null); }
+  }
   const currentAnalysis =
     analysis &&
     game &&
@@ -604,6 +630,7 @@ function App() {
   const evalShare = evaluationShare(selectedPoint);
 
   async function commitMove(move: string) {
+    if (canSuggest) { await saveHumanSuggestion(move); return; }
     if (!game || !playerCanMove) return;
     setSelected(null);
     setPromotion(null);
@@ -624,7 +651,7 @@ function App() {
   }
 
   async function onSquareClick(square: string) {
-    if (!game || !playerCanMove) return;
+    if (!game || !boardCanInteract) return;
     const boardSquare = parseFen(game.fen).find((candidate) => candidate.name === square);
     if (!selected) {
       if (boardSquare?.piece?.color === game.turn) setSelected(square);
@@ -638,7 +665,7 @@ function App() {
   }
 
   async function onMoveDrop(from: string, to: string) {
-    if (!game || !playerCanMove) return;
+    if (!game || !boardCanInteract) return;
     const candidates = game.legal_moves.filter(
       (move) => move.startsWith(from) && move.slice(2, 4) === to,
     );
@@ -654,7 +681,7 @@ function App() {
   }
 
   function choosePromotion(piece: PromotionPiece) {
-    if (!promotion || !game || promotion.gameId !== game.id || promotion.version !== game.version || !playerCanMove) {
+    if (!promotion || !game || promotion.gameId !== game.id || promotion.version !== game.version || !boardCanInteract) {
       setPromotion(null);
       return;
     }
@@ -982,12 +1009,21 @@ function App() {
               selected={selected}
               lastMove={displayLastMove}
               inCheck={Boolean(followingLive && game?.in_check)}
-              disabled={!playerCanMove}
+              disabled={!boardCanInteract}
               onSquareClick={(square) => void onSquareClick(square)}
               onMoveDrop={(from, to) => void onMoveDrop(from, to)}
             />
           </div>
 
+          {game && adviceSupported && <section className="consultation-panel" aria-label="Suggest a move to your AI">
+            <h3>Suggest a move to your AI</h3>
+            <p>Pause on the AI turn, enable suggestion mode, then drag a piece or select two squares. The board stays unchanged. Resume to let the AI decide.</p>
+            <label><input type="checkbox" checked={adviceMode} disabled={game.lifecycle !== "paused" || !followingLive || connection !== "live" || busy} onChange={e => setAdviceMode(e.target.checked)} /> Suggestion mode</label>
+            {canSuggest && <p role="status">Board input saves a suggestion for {activeSeat?.display_name}; it does not play a move.</p>}
+            {latestHumanSuggestion && <p>Human suggested {latestHumanSuggestion.san} to {latestHumanSuggestion.advisor.display_name}: {latestHumanSuggestion.status === "played" ? "AI turn completed (may choose differently)" : latestHumanSuggestion.status}.</p>}
+            {latestHumanSuggestion?.status === "ready" && <button disabled={!canSuggest} onClick={() => void saveHumanSuggestion(null)}>Clear human suggestion</button>}
+            <small>Human-AI Team exhibition. Advice is recorded in history and PGN.</small>
+          </section>}
           <BoardSoundControls sound={boardSound} />
 
           <PlayerCard {...(flipped ? blackPlayer : whitePlayer)} />
@@ -1013,6 +1049,7 @@ function App() {
             <span className={`result-badge ${game?.status ?? "loading"}`}>{game?.status === "active" ? "LIVE" : game?.result ?? "LOADING"}</span>
           </div>
 
+          <p>One game at a time. Select each seat independently: Human to play, or two agents to watch. Effort choices come from each model's supported capabilities. API access is separate from ordinary consumer subscriptions.</p>
           <div className="match-controls">
             <label>
               White seat
@@ -1095,6 +1132,8 @@ function App() {
                 ))}
               </select>
             </label>
+            <label><input type="checkbox" checked={startPaused} onChange={e => setStartPaused(e.target.checked)} /> Start paused to review or advise before any agent call</label>
+            {(game?.lifecycle === "running" || game?.lifecycle === "paused") && <p>Finish or explicitly abort the current match before creating another.</p>}
             <button
               className="primary-button"
               onClick={() => void startNewGame()}
@@ -1131,6 +1170,7 @@ function App() {
             </details>}
           </section>
 
+          {game && <GameUsage game={game} />}
           {game && <ConsultationPanel key={game.id} game={game} catalog={playerAdapters}
             enabled={followingLive && connection === "live" && !busy}
             onSnapshot={snapshot => { if (gameRef.current?.id === snapshot.id) acceptSnapshot(snapshot); }} />}

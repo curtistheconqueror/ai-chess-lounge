@@ -32,6 +32,7 @@ from .models import (
     GameAnalysis,
     GameSnapshot,
     HealthResponse,
+    HumanSuggestionRequest,
     LifecycleRequest,
     MatchEvent,
     MoveRequest,
@@ -78,6 +79,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
 
     batch_worker = ExperimentWorker(active_manager)
     export_slots = asyncio.Semaphore(2)
+    single_game_creation = asyncio.Lock()
     operations = LocalOperations()
     readiness = Readiness(active_manager, batch_worker)
 
@@ -386,7 +388,18 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     @application.post("/api/games", response_model=GameSnapshot, status_code=201)
     async def create_game(request: CreateGameRequest) -> GameSnapshot:
         try:
-            game = await active_manager.create(request)
+            async with single_game_creation:
+                if request.single_game and await active_manager.latest_live_snapshot() is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "A match is already live. Finish or explicitly abort it "
+                            "before starting another."
+                        ),
+                    )
+                game = await active_manager.create(request)
+        except HTTPException:
+            raise
         except (AdapterConfigurationError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:
@@ -542,6 +555,15 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             return await active_manager.consultation.cancel(
                 game_id, advice_id, request.expected_revision
             )
+        except GameNotFound as exc:
+            raise HTTPException(status_code=404, detail="Game not found.") from exc
+        except (MatchTransitionRejected, StalePosition, ConcurrentGameUpdate) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @application.post("/api/games/{game_id}/human-suggestion", response_model=GameSnapshot)
+    async def human_suggestion(game_id: str, request: HumanSuggestionRequest):
+        try:
+            return await active_manager.consultation.suggest_to_agent(game_id, request)
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
         except (MatchTransitionRejected, StalePosition, ConcurrentGameUpdate) as exc:

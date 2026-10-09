@@ -51,6 +51,8 @@ class MatchState(StrEnum):
 
 
 class CreateGameRequest(BaseModel):
+    start_paused: bool = Field(default=False, strict=True)
+    single_game: bool = Field(default=False, strict=True)
     opponent: OpponentKind = OpponentKind.STOCKFISH
     stockfish_elo: int = Field(default=1600, ge=800, le=3200)
     stockfish_full_strength: bool = Field(default=False, strict=True)
@@ -93,7 +95,13 @@ class ConsultationRequest(BaseModel):
     expected_revision: int = Field(ge=0)
 
 
+class HumanSuggestionRequest(BaseModel):
+    move: str | None = Field(default=None, pattern=r"^[a-h][1-8][a-h][1-8][qrbn]?$")
+    expected_revision: int = Field(ge=0)
+
+
 class Consultation(BaseModel):
+    direction: Literal["ai_to_human", "human_to_ai"] = "ai_to_human"
     id: str
     color: Literal["white", "black"]
     advisor: PlayerConfiguration

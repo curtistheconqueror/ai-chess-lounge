@@ -194,6 +194,7 @@ export interface ClockSnapshot {
 }
 
 export interface Consultation {
+  direction?: "ai_to_human" | "human_to_ai";
   id: string; color: "white" | "black"; advisor: PlayerConfiguration;
   position_version: number; revision: number; after_ply: number;
   status: "pending" | "ready" | "failed" | "cancelled" | "stale" | "played";

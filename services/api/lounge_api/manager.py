@@ -65,8 +65,8 @@ from .persistence import (
     RunnerTrustError,
     TurnLeaseUnavailable,
 )
+from .player_protocol import AssistanceDivision, PlayerConfiguration, PlayerMoveMetadata
 from .player_protocol import MoveRequest as PlayerMoveRequest
-from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 from .provider_reliability import (
     ProviderRecoveryRequired,
     ProviderReliabilityController,
@@ -266,6 +266,9 @@ class GameManager:
         ]
         game.start(now=now)
         events.append(game.event("match.started", self._clock_payload(game, now), now=now))
+        if request.start_paused:
+            game.transition(MatchState.PAUSED, now=now)
+            events.append(game.event("match.paused", self._clock_payload(game, now), now=now))
         await self.store.create_game(
             game, events, experiment_token=experiment_job["lease_token"] if experiment_job else None
         )
@@ -892,6 +895,10 @@ class GameManager:
                     division=player.division,
                 )
                 request._match_revision = expected_revision
+                suggestion = game.current_human_suggestion()
+                if suggestion:
+                    request._human_suggestion = suggestion.move
+                    request.division = AssistanceDivision.HUMAN_AI_TEAM
                 started = perf_counter()
                 provider_call_started = player.adapter_id in PROVIDER_RETRY_ADAPTERS
                 if provider_call_started:
@@ -947,7 +954,7 @@ class GameManager:
                     provider=player.provider,
                     model=player.model,
                     effort=player.effort,
-                    division=player.division,
+                    division=request.division,
                     latency_ms=elapsed_ms,
                     plan=proposal.plan,
                     threat=proposal.threat,
@@ -962,6 +969,9 @@ class GameManager:
                     player_metadata=metadata,
                 )
                 move.elapsed_ms = elapsed_ms
+                if suggestion:
+                    # Delivered advice is disclosed even if the AI chose another move.
+                    suggestion.status = "played"
                 events = [game.event("move.accepted", self._move_payload(move), now=now)]
                 if game.lifecycle is MatchState.COMPLETED:
                     events.append(self._completed_event(game, now))

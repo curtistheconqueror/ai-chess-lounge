@@ -14,6 +14,8 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 8_000 },
   fullyParallel: false,
+  // The fixture server models one shared Lounge table.
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI
     ? [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]]

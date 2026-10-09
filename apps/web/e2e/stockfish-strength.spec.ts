@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { finishFixtureGames } from "./fixture-games";
 
 test("all supported Elo values and full strength persist without editing the current match", async ({ page }) => {
   // CI can lack a native engine; UCI propagation is tested separately with a recording engine.
@@ -43,6 +44,7 @@ test("all supported Elo values and full strength persist without editing the cur
   for (const value of changes) {
     await elo.fill(String(value));
     const response = page.waitForResponse(r => r.url().endsWith("/api/games") && r.request().method() === "POST");
+    await finishFixtureGames(page.request);
     await page.getByRole("button", { name: "New match", exact: true }).click();
     const created = await response;
     expect(created.ok()).toBeTruthy();
@@ -56,6 +58,7 @@ test("all supported Elo values and full strength persist without editing the cur
   await page.reload();
   await expect(page.getByLabel("Stockfish strength mode")).toHaveValue("full");
   const response = page.waitForResponse(r => r.url().endsWith("/api/games") && r.request().method() === "POST");
+  await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match", exact: true }).click();
   const created = await response;
   expect(created.ok()).toBeTruthy();

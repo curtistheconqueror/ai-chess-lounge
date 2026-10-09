@@ -1,5 +1,49 @@
 # AI Chess Lounge contributor pickup
 
+## October 9 - single-game agent advice stage
+
+Base `19deddeffaa8df225aa714e63a2a3886d794ec7b` is pushed on
+`feat/wooden-move-audio`, PR36. Stockfish strength CI140/38004749469 passed;
+native Stockfish19 advertises UCI_Elo 1320-3190. Its local runtime proof and
+engine tests remain separate from credential-free model fixture acceptance.
+
+This stage adds paused human-to-AI legal move suggestions through board dragging
+or square selection. Advice survives reload, does not move a piece, and is passed
+as optional context when the AI resumes. Position/revision/seat checks fence stale
+advice. The model may choose differently. Existing AI-to-human advice remains.
+PGN, events, move metadata and comparison exclusions disclose assistance. Uses the
+existing consultation JSON projection; no database migration or runner protocol
+change. Stockfish and remote runner advice remain unavailable by design.
+
+Lounge creation opts into one-live-game checks within the local API process;
+start-paused enables inspection before dispatch. Independent provider/model/effort
+selectors are preserved. Game/per-move usage shows known subtotals and coverage,
+keeps missing values unknown and does not double-count reasoning. OpenRouter
+reported finite nonnegative response cost is retained. No paid inference was run.
+
+Validation: 134 backend checks passed, one PostgreSQL environment skip, covering
+advice, persistence, lifecycle, both advice directions, two independent fixture
+agents through checkmate, provider payloads, cost normalization and comparison
+behavior. Ten new/strength browser checks passed across all five widths; a tablet
+drag fixture initially needed explicit board scrolling, corrected before the full
+ten-check rerun passed. Build/typecheck, Ruff and diff checks passed. Additional
+desktop/phone compatibility checks passed 11 cases, with three existing desktop-only
+skips. New head needs its
+own CI; do not attribute CI140 to these later changes.
+
+See SINGLE_GAME_AGENTS.md and ADR0035 for bounds and next gates. The preview has
+native Stockfish/practice agents; direct providers report credentials_missing and
+Ollama/vLLM have no configured models. Next: select an already authorized model
+path, verify its current effort metadata and approve bounded live inference if
+paid. Live catalog discovery, complete retry/cancellation billing and enforceable
+monetary budgets remain follow-up work; the display is not a spend cap. Existing
+Model Lab/legacy API concurrency is unchanged, not a production one-game quota.
+
+Shared hosted play remains blocked on exact a766a78 patch recovery, ownership,
+seat/runner authorization, sign-in/isolation acceptance and approved external
+hosting. Transcript-only ADR0034/HOSTED_PRIVATE_BETA copies are evidence, not
+recovered patch bytes. No credentials, access, migration, deployment or merge.
+
 ## October 9 - native Stockfish strength controls
 
 Curtis requested the complete supported strength range, then optional 25-Elo slider

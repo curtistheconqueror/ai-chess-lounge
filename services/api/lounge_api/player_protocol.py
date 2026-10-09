@@ -306,6 +306,8 @@ class PlayerConfiguration(BaseModel):
 class MoveRequest(BaseModel):
     # Internal lifecycle fence, intentionally excluded from the wire schema.
     _match_revision: int | None = PrivateAttr(default=None)
+    # Local prompt input only; external runner protocol remains unchanged.
+    _human_suggestion: str | None = PrivateAttr(default=None)
 
     schema_version: str = PROTOCOL_VERSION
     request_id: str = Field(default_factory=lambda: str(uuid4()))
