@@ -19,6 +19,12 @@ or hosted-beta completion is claimed. Exact beta patch recovery remains pending;
 the local preview uses a fresh SQLite database and is bound to loopback only.
 Keep the external/non-OpenAI hosting requirement and all live-release approvals.
 
+Published draft PR36: https://github.com/curtistheconqueror/ai-chess-lounge/pull/36
+Source `5277f3fd19a0b6a0f52fb88ce6c8da7abcb16861` was pushed and its GitHub ref
+verified exactly. Five additional dashboard checks with explicit single-active-
+source assertions also passed. This publication-note commit changes docs only;
+full current-head CI remains a separate gate. Retain this contributor branch.
+
 ## Current integration checkpoint — October 8, 2026
 
 GitHub `main` is `3b2cb0bd9bf02e130f56d19e6a2995cbf52424dc`. The
