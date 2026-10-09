@@ -2194,7 +2194,7 @@ select {
   .leaderboard-mobile-label { display: block; margin-bottom: 0.5rem; }
 }
 
-/* Original classic set is opt-in in the review studio only. */
+/* Approved original classic set, shared by boards and the promotion picker. */
 .classic-piece .classic-shape { stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .classic-piece.white .classic-shape { fill: #faf7ef; stroke: #333a38; }
 .classic-piece.black .classic-shape { fill: #343a38; stroke: #111715; }

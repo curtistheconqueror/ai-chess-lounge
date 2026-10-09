@@ -25,7 +25,7 @@ export function BoardStudio() {
     </header>
     <nav className="board-studio-controls" aria-label="Comparison category">
       <button className="ghost-button" aria-pressed={!comparePieces} onClick={() => setComparePieces(false)}>Board finishes</button>
-      <button className="ghost-button" aria-pressed={comparePieces} onClick={() => setComparePieces(true)}>Current vs proposed pieces</button>
+      <button className="ghost-button" aria-pressed={comparePieces} onClick={() => setComparePieces(true)}>Previous vs approved pieces</button>
     </nav>
     {comparePieces ? <PieceComparison /> : <>
     <section className="board-studio-controls" aria-label="Visual comparison controls">
@@ -35,7 +35,7 @@ export function BoardStudio() {
       <button className="ghost-button" aria-pressed={flipped} onClick={() => setFlipped(value => !value)}>Flip all boards</button>
       <label><input type="checkbox" checked={highlights} onChange={event => setHighlights(event.target.checked)} /> Show move highlights</label>
     </section>
-    <p className="sound-lab-note">Visual previews only. No game appearance has changed. Choose a number after comparing piece clarity and coordinates.</p>
+    <p className="sound-lab-note">Board finish previews only. The live board keeps its current colors and uses the approved classic pieces. Choose a finish after comparing piece clarity and coordinates.</p>
     <div className="board-comparison-grid">
       {looks.map(look => <section className={`board-look board-look-${look.id}`} key={look.id} aria-label={`Look ${look.number}: ${look.name}`}>
         <div className="sound-card-top"><span className="eyebrow">LOOK {look.number}</span>

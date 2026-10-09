@@ -863,14 +863,18 @@ test("promotion supports both colors, underpromotion, and keyboard cancel", asyn
   await page.getByRole("gridcell", { name: "b7 white pawn" }).click();
   await page.getByRole("gridcell", { name: "a8 black rook" }).click();
   await expect(page.getByRole("dialog", { name: "Choose your piece" })).toBeVisible();
+  await expect(page.locator(".promotion-options .classic-piece.white")).toHaveCount(4);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("gridcell", { name: "b7 white pawn" }).click();
   await page.getByRole("gridcell", { name: "a8 black rook" }).click();
   await page.getByRole("button", { name: "Promote to knight" }).click();
   await expect(page.getByRole("gridcell", { name: "a8 white knight" })).toBeVisible();
+  await expect(page.getByRole("gridcell", { name: "a8 white knight" }).locator(".classic-piece")).toBeVisible();
   await page.getByRole("gridcell", { name: "g2 black pawn" }).click();
   await page.getByRole("gridcell", { name: "h1 white rook" }).click();
+  await expect(page.locator(".promotion-options .classic-piece.black")).toHaveCount(4);
+  await page.screenshot({ path: `test-results/approved-promotion-${testInfo.project.name}.png`, fullPage: true });
   await page.getByRole("button", { name: "Promote to rook" }).click();
   await expect(page.getByRole("gridcell", { name: "h1 black rook" })).toBeVisible();
   await page.reload();

@@ -28,7 +28,7 @@ export function ChessBoard({
   disabled,
   onSquareClick,
   onMoveDrop,
-  pieceDesign = "current",
+  pieceDesign = "classic",
 }: ChessBoardProps) {
   const squares = useMemo(
     () => boardForOrientation(parseFen(fen), flipped),

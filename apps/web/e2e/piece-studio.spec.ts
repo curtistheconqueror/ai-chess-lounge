@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-test("original piece comparison preserves the live set and shows all sizes and colors", async ({ page }) => {
+test("approved classic pieces appear on the live board and all comparison surfaces", async ({ page }) => {
   const writes: string[] = [];
   page.on("request", request => { if (request.method() !== "GET") writes.push(request.url()); });
   await page.goto("/board-studio?pieces=compare");
   await expect(page.getByRole("heading", { name: "A clearer classic set." })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Current pieces", exact: true }).locator(".classic-piece")).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Proposed pieces", exact: true }).locator(".classic-piece")).toHaveCount(32);
+  await expect(page.getByRole("region", { name: "Previous pieces", exact: true }).locator(".classic-piece")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Approved pieces", exact: true }).locator(".classic-piece")).toHaveCount(32);
   for (const size of [32, 40, 64]) {
     const specimens = page.getByRole("region", { name: `${size} pixel pieces` });
     await expect(specimens.locator("svg")).toHaveCount(24);
@@ -29,11 +29,19 @@ test("original piece comparison preserves the live set and shows all sizes and c
   await page.screenshot({ path: `test-results/piece-silhouettes-${test.info().project.name}.png`, fullPage: true });
   await page.getByRole("button", { name: "Board finishes", exact: true }).click();
   await expect(page.getByRole("grid", { name: "Chess board" })).toHaveCount(4);
-  await expect(page.locator(".classic-piece")).toHaveCount(0);
+  await expect(page.locator(".classic-piece")).toHaveCount(await page.locator(".piece-svg").count());
   expect(writes).toEqual([]);
   const game = await (await page.request.post("/api/games", { data: { opponent: "human", initial_time_ms: 3600000 } })).json();
   await page.goto(`/games/${game.id}`);
   await expect(page.getByRole("gridcell")).toHaveCount(64);
   await expect(page.locator(".piece-svg")).toHaveCount(32);
-  await expect(page.locator(".classic-piece")).toHaveCount(0);
+  await expect(page.locator(".classic-piece")).toHaveCount(32);
+  await page.getByRole("gridcell", { name: "g1 white knight" }).click();
+  await page.getByRole("gridcell", { name: "f3 empty" }).click();
+  await expect(page.getByRole("gridcell", { name: "f3 white knight" }).locator(".classic-piece")).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Connection live")).toBeVisible();
+  await expect(page.getByRole("gridcell", { name: "f3 white knight" }).locator(".classic-piece")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  await page.screenshot({ path: `test-results/approved-live-board-${test.info().project.name}.png`, fullPage: true });
 });

@@ -1,5 +1,33 @@
 # AI Chess Lounge contributor pickup
 
+## October 9 - approved pieces applied to the actual board
+
+Curtis approved the proposed original SVG set, confirmed the knight is recognizable,
+and explicitly renewed the request to apply it to the actual board with the chosen
+single-tap sound, then push. `ChessBoard` and `ChessPiece` now default to the exact
+approved classic set; the promotion picker inherits the same renderer. The SVG
+paths, selected original wood WAV and board colors are unchanged. Previous pieces
+remain available only in the studio's explicit comparison. No Git main merge or
+hosted deployment is authorized or performed.
+
+The existing local match's position, version, status and move history were verified
+unchanged across the frontend rebuild. It was already timed out; it was not reset.
+Actual board: `http://127.0.0.1:8000/games/aa665dea-b888-499a-a4e7-3eabc55bb59a`.
+Refresh an existing tab with Ctrl+Shift+R to load the new built assets. Test sound
+plays the selected single tap; a new match is needed to continue playing after a
+timeout. This remains a local preview, not a hosted beta release.
+
+Production build/typecheck and 67 focused browser checks passed: 65 sound/board/
+piece checks across five viewports plus both-color promotion, underpromotion and
+keyboard cancellation on desktop and phone. A reload-layout assertion initially
+ran before the live connection; it now waits for that readiness state, and the
+entire 65-check suite passed again without retries. Approved SVG and audio bytes
+remain unchanged; desktop board and phone promotion screenshots were inspected.
+
+The preceding review-only commit `5b00edf5bd23263fb56f91f2c5e334ec373184e1`
+passed full Linux CI run138/38000111473. The actual-board adoption commit needs
+its own CI result. Hosted-beta exact-patch recovery is still blocked.
+
 ## October 9 - original piece comparison ready for review
 
 Audio/default/mute and four-board preview commit

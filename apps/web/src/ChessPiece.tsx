@@ -1,7 +1,7 @@
 import type { BoardPiece } from "./chess";
 import { ClassicPiece } from "./ClassicPiece";
 
-export function ChessPiece({ piece, design = "current" }: { piece: BoardPiece; design?: "current" | "classic" }) {
+export function ChessPiece({ piece, design = "classic" }: { piece: BoardPiece; design?: "current" | "classic" }) {
   if (design === "classic") return <ClassicPiece piece={piece} />;
   return (
     <svg
