@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChessBoard } from "./ChessBoard";
+import { PieceComparison } from "./PieceComparison";
 
 const looks = [
   { id: "club", number: 1, name: "Current club", description: "The existing ivory and green board, kept as the baseline." },
@@ -11,6 +12,7 @@ const start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const middle = "r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 6";
 
 export function BoardStudio() {
+  const [comparePieces, setComparePieces] = useState(() => new URLSearchParams(location.search).has("pieces"));
   const [flipped, setFlipped] = useState(false);
   const [position, setPosition] = useState("middle");
   const [highlights, setHighlights] = useState(true);
@@ -21,6 +23,11 @@ export function BoardStudio() {
         <p>Four finishes. The same pieces, position and size in every preview.</p></div>
       <a className="ghost-button" href="/">Back to the board</a>
     </header>
+    <nav className="board-studio-controls" aria-label="Comparison category">
+      <button className="ghost-button" aria-pressed={!comparePieces} onClick={() => setComparePieces(false)}>Board finishes</button>
+      <button className="ghost-button" aria-pressed={comparePieces} onClick={() => setComparePieces(true)}>Current vs proposed pieces</button>
+    </nav>
+    {comparePieces ? <PieceComparison /> : <>
     <section className="board-studio-controls" aria-label="Visual comparison controls">
       <label>Position <select aria-label="Comparison position" value={position} onChange={event => setPosition(event.target.value)}>
         <option value="middle">Middlegame</option><option value="start">Starting position</option>
@@ -41,6 +48,7 @@ export function BoardStudio() {
           inCheck={false} disabled={true} onSquareClick={() => {}} onMoveDrop={() => {}} />
       </section>)}
     </div>
+    </>}
     <p className="sound-lab-note">The selected original wood tap stays the same for every look. These previews do not start games or change your audio device.</p>
     <a className="sound-lab-link" href="/sound-lab">Open sound comparison</a>
   </main>;

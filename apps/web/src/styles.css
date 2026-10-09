@@ -2193,3 +2193,35 @@ select {
   .leaderboard-table-scroll tr { border-bottom: 1px solid #30463b; padding-block: 0.5rem; }
   .leaderboard-mobile-label { display: block; margin-bottom: 0.5rem; }
 }
+
+/* Original classic set is opt-in in the review studio only. */
+.classic-piece .classic-shape { stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.classic-piece.white .classic-shape { fill: #faf7ef; stroke: #333a38; }
+.classic-piece.black .classic-shape { fill: #343a38; stroke: #111715; }
+.classic-piece .classic-line { fill: none; }
+.classic-piece.black .classic-line { stroke: #bdc6c0; stroke-width: 2.1; }
+.classic-piece.white .classic-eye { fill: #333a38; stroke: none; }
+.classic-piece.black .classic-eye { fill: #eceee8; stroke: none; }
+.piece-boards h3 { margin: 0 0 18px; }
+.piece-comparison > h3 { margin-top: 32px; }
+.piece-specimens { display: grid; gap: 20px; }
+.specimen-size { min-width: 0; padding: 16px; border: 1px solid #34423a; border-radius: 12px; }
+.specimen-size h4 { margin: 0 0 14px; }
+.specimen-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; }
+.specimen-pair { display: grid; gap: 6px; }
+.specimen-pair small { color: #c1cbc4; font-size: 11px; text-transform: capitalize; }
+.specimen-squares { display: flex; }
+.specimen-square { display: grid; place-items: center; padding: 5px; }
+.specimen-square.light { background: #d8d0ad; }
+.specimen-square.dark { background: #356759; }
+.board-look-wood .specimen-square.light { background: #ddc394; }
+.board-look-wood .specimen-square.dark { background: #896243; }
+.board-look-glass .specimen-square.light { background: #c4dbe0; }
+.board-look-glass .specimen-square.dark { background: #648792; }
+.board-look-metal .specimen-square.light { background: #cbd1ce; }
+.board-look-metal .specimen-square.dark { background: #747f7e; }
+.specimen-square span { display: block; }
+.specimen-square .piece-svg { display: block; width: 100%; height: 100%; transform: none; }
+.silhouette-review .classic-line, .silhouette-review .classic-eye { visibility: hidden; }
+.silhouette-review .classic-piece .classic-shape { fill: #111; stroke: #111; }
+.board-studio-controls button[aria-pressed="true"] { outline: 1px solid #dab268; color: #f0d396; }

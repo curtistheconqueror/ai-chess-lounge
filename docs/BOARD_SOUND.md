@@ -42,6 +42,14 @@ the same board component, pieces, size and position. Shared controls flip all
 boards, change the preview position and toggle highlights. These are visual
 previews only; the live game's appearance remains unchanged pending selection.
 
+The studio's **Current vs proposed pieces** tab (direct link:
+`/board-studio?pieces=compare`) compares the existing pieces with an original
+classic SVG set. It includes all 12 pieces on both square colors at 32, 40 and
+64 px, four board finishes and an eye/detail-free silhouette check. The shared
+renderer defaults to the existing set everywhere outside this explicit preview.
+No Figma usage or copied reference assets are claimed. Ten additional board/piece
+checks passed across five viewports; artwork still awaits Curtis's review.
+
 ## Verification
 
 Run npm run build in apps/web. For an existing local server, set

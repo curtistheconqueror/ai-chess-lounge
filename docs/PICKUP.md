@@ -1,5 +1,29 @@
 # AI Chess Lounge contributor pickup
 
+## October 9 - original piece comparison ready for review
+
+Audio/default/mute and four-board preview commit
+`d5ab254196a6e6fc6f7f1b69a9902533c9ca7903` passed full Linux CI run137,
+37999350235. This closes the prior mute failure; both migrations, API/domain,
+performance, SDK, build and responsive browser steps succeeded.
+
+Curtis then requested clearer pieces. The original SVG set in `ClassicPiece.tsx`
+is review-only at `/board-studio?pieces=compare`, alongside the current set.
+The knight has a long side-profile muzzle, single dominant ear and concave throat;
+the full set shares outlines and stepped bases. No proprietary assets were copied
+and no Figma tooling was used. `ChessPiece` and `ChessBoard` accept an optional
+design, defaulting to the existing set; the live game and promotion picker retain
+their current appearance. Audio and board finishes are preserved.
+
+The studio shows all 12 proposed pieces on both square colors at 32, 40 and 64 px,
+with all four board finishes and a silhouette toggle. Ten board/piece browser
+checks passed across five viewports, with no skips/failures/retries; production
+build and diff checks passed. Desktop, silhouette and minimum-phone screenshots
+were inspected. This later artwork commit requires its own CI result; do not
+attribute the earlier green run to a different head. Next: Curtis reviews the
+proposed piece set before changing the live game. Exact hosted-beta patch recovery
+remains blocked, independently of these visual changes.
+
 ## October 9 - selected original tap, mute fix and board comparison (in progress)
 
 Curtis selected the supplied original single-tap WAV, Sound 13, as the normal

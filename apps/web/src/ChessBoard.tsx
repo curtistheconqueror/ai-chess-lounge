@@ -14,6 +14,7 @@ interface ChessBoardProps {
   disabled: boolean;
   onSquareClick: (square: string) => void;
   onMoveDrop: (from: string, to: string) => void;
+  pieceDesign?: "current" | "classic";
 }
 
 export function ChessBoard({
@@ -27,6 +28,7 @@ export function ChessBoard({
   disabled,
   onSquareClick,
   onMoveDrop,
+  pieceDesign = "current",
 }: ChessBoardProps) {
   const squares = useMemo(
     () => boardForOrientation(parseFen(fen), flipped),
@@ -84,7 +86,7 @@ export function ChessBoard({
               {showRank && <span className="coordinate rank">{square.rank}</span>}
               {showFile && <span className="coordinate file">{square.file}</span>}
               {square.piece && (
-                <ChessPiece piece={square.piece} />
+                <ChessPiece piece={square.piece} design={pieceDesign} />
               )}
               {isTarget && !square.piece && <span className="target-dot" aria-hidden="true" />}
             </button>
