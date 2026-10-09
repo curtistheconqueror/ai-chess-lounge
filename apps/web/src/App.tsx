@@ -927,6 +927,7 @@ function App() {
           </div>
         </div>
         <div className="topbar-actions">
+          <a className="ghost-button" href="/board-studio">Compare board looks</a>
           <button className="ghost-button" aria-expanded={showLeaderboards} onClick={() => setShowLeaderboards(v => !v)}>{showLeaderboards ? "Close AI leaderboards" : "AI leaderboards"}</button>
           <button className="ghost-button" aria-expanded={showLab} onClick={() => setShowLab(v => !v)}>{showLab ? "Close Model Lab" : "Model Lab"}</button>
           <span className={`connection ${connection}`} aria-label={`Connection ${connection}`}>

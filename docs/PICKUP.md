@@ -1,5 +1,33 @@
 # AI Chess Lounge contributor pickup
 
+## October 9 - selected original tap, mute fix and board comparison (in progress)
+
+Curtis selected the supplied original single-tap WAV, Sound 13, as the normal
+move baseline. It is now the default for moves, captures and Test sound. The
+four-tap demo repeats exactly the same PCM tap four times at identical gain;
+it is not used by the game. Existing candidates 1-12 and completed variants
+14-19 are preserved. Further sound expansion has stopped.
+
+PR36's previous head `d6c84446619b7eedf0703328a8c71557b147e24c` failed the mute
+assertion in Linux CI run 37997688759. The implementation now cancels gain
+automation, sets gain to zero immediately and stops active sources. The original
+assertion remains, with a new native suspended-clock regression test.
+
+The `/board-studio` route compares current, wood, glass-inspired and metallic
+boards with shared position, flip and highlight controls. Live board appearance
+has not changed; Curtis's selection is pending. See `BOARD_SOUND.md` for details.
+
+Local production build and 60 focused Chrome checks passed across five viewports
+with no skips, failures or retries. Desktop and minimum-phone screenshots were
+inspected. Current-head Linux CI must be verified separately from this local
+result and the earlier failed run. Continue on `feat/wooden-move-audio`, draft
+PR36, based on PR35 source `ccef4d7d58edc599995bcece1bf06dec0435adbe`.
+
+Hosted beta remains blocked: exact patch `a766a78` bytes have not been recovered
+and hash-verified. Do not reconstruct or claim hosted completion. No merge,
+deployment, production migration, credential/access changes or spend occurred.
+The entries below record earlier checkpoints and their then-current defaults.
+
 ## October 9 — wooden move audio and audition dashboard
 
 Contributor `feat/wooden-move-audio` starts from verified PR35 source

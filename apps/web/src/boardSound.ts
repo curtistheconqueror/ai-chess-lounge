@@ -20,6 +20,23 @@ export const woodSamples = [
   { id: 12, name: "Table resonance", description: "Broad wooden base · a slightly longer natural tail", pitch: 0.82, decay: 1.6, noise: 1, cutoff: 1600, attack: 0.0022, duration: 0.25, weight: 1.2, second: 0.12 },
 ] as const;
 
+export const originalPrototype = {
+  id: 13,
+  name: "Original wood prototype",
+  description: "Supplied original WAV · one warm, quiet 200 ms placement",
+  url: "/audio/chess-lounge-wood-prototype.wav",
+} as const;
+export const denseSamples = [
+  { id: 14, name: "Dense · compact", description: "Direct solid contact · restrained body, quickly damped", url: "/audio/dense-14-compact.wav" },
+  { id: 15, name: "Dense · felted", description: "Softer contact edge · cushioned, short and dry", url: "/audio/dense-15-felted.wav" },
+  { id: 16, name: "Dense · firm", description: "Firmer placement · tight midrange impact", url: "/audio/dense-16-firm.wav" },
+  { id: 17, name: "Dense · weighted", description: "Lower solid body · weight without a long ring", url: "/audio/dense-17-weighted.wav" },
+  { id: 18, name: "Dense · dry block", description: "Shortest, driest finish · heavily damped contact", url: "/audio/dense-18-dry.wav" },
+  { id: 19, name: "Dense · padded", description: "Rounded contact · muted surface and soft finish", url: "/audio/dense-19-padded.wav" },
+] as const;
+const audioAssets = [originalPrototype, ...denseSamples];
+export const auditionSamples = [...woodSamples, originalPrototype, ...denseSamples];
+
 export function readSoundSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(soundStorageKey) ?? "null");
@@ -85,15 +102,62 @@ export class BoardAudio {
   private muted = false;
   private volume = 40;
   private disposed = false;
+  private assetData = new Map<number, Promise<ArrayBuffer>>();
+  private assetDecode = new Map<number, Promise<void>>();
 
   constructor(private onStatus: (status: AudioStatus) => void) {}
+
+  preloadPrototype(): Promise<ArrayBuffer> {
+    return this.preloadAsset(originalPrototype);
+  }
+
+  private preloadAsset(asset: (typeof audioAssets)[number]): Promise<ArrayBuffer> {
+    let pending = this.assetData.get(asset.id);
+    if (!pending) {
+      pending = fetch(asset.url).then(response => {
+        if (!response.ok) throw new Error("Audio candidate unavailable");
+        return response.arrayBuffer();
+      }).catch(error => { this.assetData.delete(asset.id); throw error; });
+      this.assetData.set(asset.id, pending);
+    }
+    return pending;
+  }
+
+  async prepareSample(sampleId: number): Promise<boolean> {
+    const asset = audioAssets.find(candidate => candidate.id === sampleId);
+    if (!asset) return true;
+    const context = this.context;
+    if (!context || this.disposed) return false;
+    try {
+      let pending = this.assetDecode.get(sampleId);
+      if (!pending) {
+        pending = this.preloadAsset(asset)
+          .then(bytes => context.decodeAudioData(bytes.slice(0)))
+          .then(buffer => { if (!this.disposed) this.buffers.set(`${sampleId}:move`, buffer); });
+        this.assetDecode.set(sampleId, pending);
+      }
+      await pending;
+      return !this.disposed && this.buffers.has(`${sampleId}:move`);
+    } catch {
+      this.assetDecode.delete(sampleId);
+      return false;
+    }
+  }
 
   settings(muted: boolean, volume: number) {
     this.muted = muted;
     this.volume = volume;
     if (this.gain && this.context) {
       this.gain.gain.cancelScheduledValues(this.context.currentTime);
-      this.gain.gain.setTargetAtTime(muted ? 0 : volume / 100, this.context.currentTime, 0.005);
+      if (muted || volume === 0) {
+        // Mute must work even when the audio clock is suspended or the graph is
+        // idle. A scheduled fade alone can leave gain/voices pending indefinitely.
+        this.gain.gain.value = 0;
+        for (const source of this.sources) { source.stop(); source.disconnect(); }
+        this.sources.clear();
+      } else {
+        this.gain.gain.setTargetAtTime(volume / 100, this.context.currentTime, 0.005);
+      }
     }
   }
 
@@ -120,14 +184,19 @@ export class BoardAudio {
     }
   }
 
-  play(kind: BoardSoundKind, sampleId = 1, exclusive = false): boolean {
+  play(kind: BoardSoundKind, sampleId = originalPrototype.id as number, exclusive = false): boolean {
     const context = this.context;
     if (this.disposed || !context || context.state !== "running" || !this.gain
       || this.muted || this.volume === 0) return false;
     try {
-      const key = `${sampleId}:${kind}`;
+      // The selected original is one placement tap for every committed move,
+      // including captures. No four-tap demo or separate new capture cue.
+      const key = `${sampleId}:${audioAssets.some(asset => asset.id === sampleId) ? "move" : kind}`;
       let buffer = this.buffers.get(key);
       if (!buffer) {
+        // The supplied WAV must decode successfully. Never substitute a generated
+        // sound or the four-tap sequence when this specific candidate is requested.
+        if (audioAssets.some(candidate => candidate.id === sampleId)) return false;
         const samples = woodenSamples(context.sampleRate, kind, sampleId);
         buffer = context.createBuffer(1, samples.length, context.sampleRate);
         buffer.getChannelData(0).set(samples);

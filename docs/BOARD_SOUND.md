@@ -1,56 +1,65 @@
-# Wooden board audio and audition studio
+# Board audio and appearance comparisons
 
-Open `/sound-lab` on the running Lounge to compare twelve numbered, original
-synthesized piece-on-board sounds. Sound 1 (Wood) remains the game default. The
-other eleven are new candidates, not claimed copies of a reference app or an
-unidentified earlier sound. Auditioning does not select a replacement game sound.
+Curtis selected the supplied original single-tap prototype (Sound 13) as the
+game default. Every newly committed live move, including captures, plays this
+same 200 ms WAV once. Test sound also uses it. Auditioning another candidate
+does not change the selection. There is no substitute if the asset fails to load.
 
-Click **Replay Sound N** to listen. Nothing autoplays. Each audition stops the
-previous sample. Shared volume starts at 40%; mute and volume persist locally.
-The board also has **Test sound**, mute, volume, and a link to the studio.
-Keyboard activation works. At volume zero or while muted, replay buttons disable.
-If the test reports it sent audio but the device stays silent, check the browser
-tab/site sound permission, device output selection, and system volume.
+The supplied originals are preserved byte-for-byte in apps/web/public/audio:
 
-The earlier web app had no audio implementation or sound setting. Browser audio
-now initializes only after a trusted pointer/keyboard gesture or explicit test
-click. Suspended contexts resume on later interaction; pre-gesture moves are
-dropped rather than queued. Unavailable audio does not block chess play.
+- chess-lounge-wood-prototype.wav: SHA-256
+  45bea7b0a9c90b28ea4e07d12621cb3173e3f1cf7ecace0218cb6a69459cbc00.
+- chess-lounge-wood-four-taps.wav: SHA-256
+  1b17438248aa6f71bb27dcf75ad7f9e926da61603941cffd75c34aa79a912b1e.
 
-Only newly committed adjacent live plies produce board sounds. Captures have a
-slightly heavier, longer contact. Duplicate HTTP/socket responses, initial loads,
-socket reconnect baselines, history gaps, resets and local replay stay silent.
-The default remains Sound 1 irrespective of the last auditioned candidate.
+Both are mono, 48 kHz, 16-bit PCM. The four-tap clip contains four identical
+copies of the single tap, with identical gain and zero-filled gaps. It is a
+2.8-second listening demo only, available at /original-wood-player.html;
+the game never uses it as a move sound. No proprietary reference recordings
+are included. These are the user's original procedural prototype files.
 
-## Signal and implementation
+/sound-lab preserves candidates 1-12 and the six already-completed dense
+variants 14-19 alongside selected Sound 13. Sound expansion has stopped.
+The dense variants derive only from the original prototype; their generator
+and hash/parameter manifest are in scripts/audio/generate_dense_candidates.py
+and apps/web/public/audio/dense-provenance.json. Descriptions describe intent,
+not a claim of subjective realism. Each audition stops the previous sample.
 
-`boardSound.ts` generates short noise contacts and damped inharmonic resonances
-into cached Web Audio buffers. No audio downloads, proprietary samples, provider
-calls or paid service are used. Audition durations span 100–250 ms. Variants are
-energy-matched with peak headroom, while Sound 1's initial waveform is preserved.
-Descriptions express synthesis intent; subjective realism awaits user listening.
+Volume starts at 40%; mute and volume persist locally. Audio initializes after
+a trusted pointer/keyboard gesture. The original asset preloads without playing.
+Moves before unlocking are dropped, not queued. Initial loads, duplicate HTTP/
+socket responses, reconnect baselines, history gaps, resets and replay are quiet.
+Unavailable audio does not block chess play.
 
-`BoardSoundControls.tsx` owns browser unlocking and persisted controls.
-`SoundLab.tsx` serves the standalone `/sound-lab` route. The game default is not
-stored as an audition choice. No board themes or hosted account changes are included.
+Mute and zero volume cancel gain automation, set gain immediately to zero and
+stop/disconnect active sources. A scheduled fade alone can leave gain pending
+when the audio clock is suspended; the regression test holds the native context
+suspended and verifies zero gain and no active voices. The previous CI mute
+assertion remains intact.
+
+/board-studio compares current, wood, glass-inspired and metallic looks using
+the same board component, pieces, size and position. Shared controls flip all
+boards, change the preview position and toggle highlights. These are visual
+previews only; the live game's appearance remains unchanged pending selection.
 
 ## Verification
 
-Build/typecheck: `npm run build` in `apps/web`.
+Run npm run build in apps/web. For an existing local server, set
+LOUNGE_E2E_BASE_URL=http://127.0.0.1:8000 and optionally
+LOUNGE_E2E_CHANNEL=chrome, then run:
 
-For an already-running local server, run the sound suite with
-`LOUNGE_E2E_BASE_URL=http://127.0.0.1:8000` and optionally
-`LOUNGE_E2E_CHANNEL=chrome`, then `npx playwright test e2e/sound.spec.ts --workers=1`.
-Omit those variables for the repository's usual CI server/bundled browser path.
+    npx playwright test e2e/sound.spec.ts e2e/board-studio.spec.ts --workers=1
 
-The suite observes native AudioContext rendering with an analyser, source buffers
-and gain values. It checks nonzero output, bounded peaks, twelve distinct signals,
-comparable sample energy, gesture/suspension behavior, live moves/captures,
-duplicate/reconnect/replay suppression, mute/zero volume, persistence, keyboard
-input, unavailable audio and five viewport widths (320–1440 px).
-These are automated browser signal checks, not a claim of audible output on the
-owner's speakers or a subjective listening review.
+Omit those variables for the usual CI server/bundled browser path.
 
-Hosted-private-beta recovery remains separate: the exact `a766a78` patch must be
-recovered and SHA-256 verified before that implementation resumes. No merge,
-production migration, live deployment, credentials/access change or spend is made.
+The focused suite passed 60 checks across five widths (320-1440 px): native
+audio rendering, exact original asset hash, first-move selection, mute/zero,
+suspended clocks, persisted settings, keyboard/pointer unlock, capture and
+duplicate/reconnect/replay handling, loading failure and slow-decode races;
+four comparable boards, coordinates, flip/position/highlight controls and no
+horizontal overflow or game writes from the studio. Production build passed.
+Screenshots were inspected. These checks measure browser signals, not actual
+speaker output or subjective listening. Published-head CI is a separate gate.
+
+Hosted beta remains blocked on recovering and verifying the exact a766a78
+patch. No hosted readiness, merge, production migration or deployment is claimed.

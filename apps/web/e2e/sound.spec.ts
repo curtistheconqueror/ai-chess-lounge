@@ -1,4 +1,5 @@
 import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
+import { createHash } from "node:crypto";
 
 type Probe = {
   starts: { duration: number; peak: number; rms: number; gain: number }[];
@@ -7,13 +8,14 @@ type Probe = {
   outputPeak: number;
   active: number;
   maxActive: number;
+  decoded: number;
 };
 declare global { interface Window { soundProbe: Probe } }
 
 async function probe(page: Page) {
   await page.addInitScript(() => {
     // Observe native Web Audio; do not replace rendering with a fake player.
-    const result: Probe = { starts: [], contexts: [], gains: [], outputPeak: 0, active: 0, maxActive: 0 };
+    const result: Probe = { starts: [], contexts: [], gains: [], outputPeak: 0, active: 0, maxActive: 0, decoded: 0 };
     const playing = new Set<AudioBufferSourceNode>();
     window.soundProbe = result;
     const NativeContext = window.AudioContext;
@@ -21,14 +23,19 @@ async function probe(page: Page) {
       constructor(options?: AudioContextOptions) {
         super(options);
         result.contexts.push(this);
+        const decode = this.decodeAudioData.bind(this);
+        this.decodeAudioData = (...args: Parameters<AudioContext["decodeAudioData"]>) => decode(...args).then(buffer => {
+          result.decoded += 1;
+          return buffer;
+        });
       }
       createGain() {
         const gain = super.createGain();
         result.gains.push(gain);
         const analyser = this.createAnalyser();
-        analyser.fftSize = 256;
+        analyser.fftSize = 2048;
         gain.connect(analyser);
-        const data = new Float32Array(256);
+        const data = new Float32Array(2048);
         const timer = setInterval(() => {
           if (this.state === "closed") { clearInterval(timer); return; }
           analyser.getFloatTimeDomainData(data);
@@ -70,7 +77,7 @@ async function createBoard(page: Page) {
   return game;
 }
 
-test("native audio unlock, wooden signal, one sound per move and fuller capture", async ({ page }) => {
+test("native audio unlock and one selected original tap per move or capture", async ({ page }) => {
   await probe(page);
   const game = await createBoard(page);
   expect(await page.evaluate(() => window.soundProbe.contexts.length)).toBe(0);
@@ -80,10 +87,10 @@ test("native audio unlock, wooden signal, one sound per move and fuller capture"
   await expect.poll(() => page.evaluate(() => window.soundProbe.outputPeak)).toBeGreaterThan(0.01);
   expect(await page.evaluate(() => window.soundProbe.contexts[0].state)).toBe("running");
   const sound = await page.evaluate(() => window.soundProbe.starts[0]);
-  expect(sound.duration).toBeCloseTo(0.16, 3);
+  expect(sound.duration).toBeCloseTo(0.2, 3);
   expect(sound.peak).toBeGreaterThan(0.1);
   expect(sound.peak).toBeLessThan(0.8);
-  expect(sound.rms).toBeGreaterThan(0.02);
+  expect(sound.rms).toBeCloseTo(0.019575078443138067, 4);
   expect(sound.gain).toBeCloseTo(0.4, 2);
 
   await page.getByRole("gridcell", { name: "e2 white pawn" }).click();
@@ -96,7 +103,7 @@ test("native audio unlock, wooden signal, one sound per move and fuller capture"
   current = await (await page.request.get(`/api/games/${game.id}`)).json();
   await page.request.post(`/api/games/${game.id}/moves`, { data: { move: "e4d5", position_version: current.version } });
   await expect.poll(() => count(page)).toBe(4);
-  expect(await page.evaluate(() => window.soundProbe.starts.at(-1)!.duration)).toBeCloseTo(0.19, 3);
+  expect(await page.evaluate(() => window.soundProbe.starts.at(-1)!.duration)).toBeCloseTo(0.2, 3);
   await page.evaluate(() => window.soundProbe.contexts[0].suspend());
   await page.getByRole("button", { name: "Test sound", exact: true }).click();
   await expect.poll(() => count(page)).toBe(5);
@@ -205,7 +212,7 @@ test("sound dashboard renders twelve distinct bounded samples without changing g
   await probe(page);
   await page.goto("/sound-lab");
   await expect(page.getByRole("heading", { name: "Find your wooden sound." })).toBeVisible();
-  await expect(page.locator(".sound-card")).toHaveCount(12);
+  await expect(page.locator(".sound-card")).toHaveCount(19);
   expect(await count(page)).toBe(0);
   const fingerprints: string[] = [];
   for (let id = 1; id <= 12; id++) {
@@ -231,10 +238,92 @@ test("sound dashboard renders twelve distinct bounded samples without changing g
   await page.getByRole("button", { name: "Test sound", exact: true }).click();
   await expect.poll(() => count(page)).toBe(13);
   const defaultReplay = await page.evaluate(() => window.soundProbe.starts.at(-1)!);
-  expect(JSON.stringify({ duration: defaultReplay.duration, peak: defaultReplay.peak, rms: defaultReplay.rms })).toBe(fingerprints[0]);
+  expect(defaultReplay.duration).toBeCloseTo(0.2, 3);
+  expect(defaultReplay.peak).toBeCloseTo(0.29998779296875, 4);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.screenshot({ path: `test-results/sound-dashboard-${test.info().project.name}.png`, fullPage: true });
   await test.info().attach("twelve-sample-signals.json", { body: JSON.stringify(await page.evaluate(() => ({
     starts: window.soundProbe.starts, outputPeak: window.soundProbe.outputPeak,
   }))), contentType: "application/json" });
+});
+
+test("Sound 13 preserves the supplied original single tap selected as default", async ({ page }) => {
+  await probe(page);
+  const asset = await page.request.get("/audio/chess-lounge-wood-prototype.wav");
+  expect(asset.ok()).toBeTruthy();
+  expect(createHash("sha256").update(await asset.body()).digest("hex"))
+    .toBe("45bea7b0a9c90b28ea4e07d12621cb3173e3f1cf7ecace0218cb6a69459cbc00");
+  await page.goto("/sound-lab");
+  expect(await count(page)).toBe(0);
+  expect(await page.evaluate(() => window.soundProbe.contexts.length)).toBe(0);
+  await page.getByRole("button", { name: "Replay Sound 13", exact: true }).click();
+  await expect.poll(() => count(page)).toBe(1);
+  const sample = await page.evaluate(() => window.soundProbe.starts[0]);
+  expect(sample.duration).toBeCloseTo(0.2, 4);
+  expect(sample.peak).toBeCloseTo(0.29998779296875, 4);
+  expect(sample.rms).toBeCloseTo(0.019575078443138067, 4);
+  expect(sample.gain).toBeCloseTo(0.4, 2);
+  await page.getByRole("button", { name: "Replay Sound 13", exact: true }).click();
+  await expect.poll(() => count(page)).toBe(2);
+  expect(await page.evaluate(() => window.soundProbe.decoded)).toBe(1);
+  expect(await page.evaluate(() => window.soundProbe.maxActive)).toBe(1);
+  await page.getByRole("button", { name: "Mute board sounds" }).click();
+  await expect(page.getByRole("button", { name: "Replay Sound 13", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Mute board sounds" }).click();
+  await page.getByRole("button", { name: "Test sound", exact: true }).click();
+  await expect.poll(() => count(page)).toBe(3);
+  expect(await page.evaluate(() => window.soundProbe.starts.at(-1)!.duration)).toBeCloseTo(0.2, 3);
+});
+
+test("failed prototype loading does not substitute another sound or break other candidates", async ({ page }) => {
+  await probe(page);
+  await page.route("**/audio/chess-lounge-wood-prototype.wav", route => route.fulfill({ status: 404, body: "" }));
+  await page.goto("/sound-lab");
+  await page.getByRole("button", { name: "Replay Sound 13", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "This sample could not play" })).toBeVisible();
+  expect(await count(page)).toBe(0);
+  await page.getByRole("button", { name: "Replay Sound 1", exact: true }).click();
+  await expect.poll(() => count(page)).toBe(1);
+});
+
+test("a slow prototype decode cannot play over a newer audition", async ({ page }) => {
+  await probe(page);
+  let release: () => void = () => {};
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/audio/chess-lounge-wood-prototype.wav", async route => { await gate; await route.continue(); });
+  await page.goto("/sound-lab");
+  await page.getByRole("button", { name: "Replay Sound 13", exact: true }).click();
+  await page.getByRole("button", { name: "Replay Sound 2", exact: true }).click();
+  await expect.poll(() => count(page)).toBe(1);
+  release();
+  await expect.poll(() => page.evaluate(() => window.soundProbe.decoded)).toBe(1);
+  expect(await count(page)).toBe(1);
+  await expect(page.getByText("Last requested: Sound 2.", { exact: false })).toBeVisible();
+});
+
+test("muting stops native voices even with a suspended audio clock", async ({ page }) => {
+  await probe(page);
+  await createBoard(page);
+  await page.getByRole("button", { name: "Test sound", exact: true }).click();
+  await expect.poll(() => count(page)).toBe(1);
+  await page.evaluate(async () => {
+    const context = window.soundProbe.contexts[0];
+    await context.suspend();
+    context.resume = () => Promise.reject(new Error("Suspended device fixture"));
+  });
+  await page.getByRole("button", { name: "Mute board sounds" }).click();
+  await expect.poll(() => page.evaluate(() => window.soundProbe.gains[0].gain.value)).toBe(0);
+  expect(await page.evaluate(() => window.soundProbe.active)).toBe(0);
+  expect(await page.evaluate(() => window.soundProbe.contexts[0].state)).toBe("suspended");
+});
+
+test("the first committed move plays the chosen single tap without a test click", async ({ page }) => {
+  await probe(page);
+  await createBoard(page);
+  await page.getByRole("gridcell", { name: "e2 white pawn" }).click();
+  await page.getByRole("gridcell", { name: "e4 empty" }).click();
+  await expect.poll(() => count(page)).toBe(1);
+  const played = await page.evaluate(() => window.soundProbe.starts[0]);
+  expect(played.duration).toBeCloseTo(0.2, 3);
+  expect(played.peak).toBeCloseTo(0.29998779296875, 4);
 });
