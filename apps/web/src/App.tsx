@@ -31,6 +31,8 @@ import { SeatTakeoverDialog } from "./SeatTakeoverDialog";
 import { HumanActionDialog } from "./HumanActionDialog";
 import { MatchActionDialog, type AdjudicatedResult, type MatchAction } from "./MatchActionDialog";
 import { ChessBoard } from "./ChessBoard";
+import { BoardSoundControls, useBoardSound } from "./BoardSoundControls";
+import { newMoveSound } from "./boardSound";
 import { EvaluationChart } from "./EvaluationChart";
 import { PromotionPicker, type PromotionPiece } from "./PromotionPicker";
 import type {
@@ -114,6 +116,8 @@ const providerDetails: Record<AgentProviderChoice, { label: string; provider: st
 };
 
 function App() {
+  const boardSound = useBoardSound();
+  const playMoveSound = boardSound.playMove;
   const [showLab, setShowLab] = useState(false);
   const [showLeaderboards, setShowLeaderboards] = useState(false);
   const [whiteIdentity, setWhiteIdentity] = useState<IdentityDeclaration>({});
@@ -147,6 +151,8 @@ function App() {
   const [timeControl, setTimeControl] = useState<TimeControlKey>("5+2");
   const [panelTab, setPanelTab] = useState<PanelTab>("moves");
   const [replayPly, setReplayPly] = useState<number | null>(null);
+  const replayPlyRef = useRef(replayPly);
+  replayPlyRef.current = replayPly;
   const [replayRunning, setReplayRunning] = useState(false);
   const [takeover, setTakeover] = useState<{ gameId: string; revision: number; color: Color; player: PlayerConfiguration } | null>(null);
   const [matchControlBusy, setMatchControlBusy] = useState(false);
@@ -246,7 +252,7 @@ function App() {
     whiteSeat,
   ]);
 
-  const acceptSnapshot = useCallback((snapshot: GameSnapshot) => {
+  const acceptSnapshot = useCallback((snapshot: GameSnapshot, announceMove = true) => {
     const current = gameRef.current;
     const currentServerTime = current ? Date.parse(current.clock.server_time) : Number.NaN;
     const incomingServerTime = Date.parse(snapshot.clock.server_time);
@@ -263,6 +269,8 @@ function App() {
       return;
     }
     if (current?.id !== snapshot.id || current.revision !== snapshot.revision) setTakeover(null);
+    const sound = newMoveSound(current, snapshot);
+    if (announceMove && sound && replayPlyRef.current === null) playMoveSound(sound);
     const receivedAt = Date.now();
     gameRef.current = snapshot;
     clockSyncRef.current = {
@@ -290,7 +298,7 @@ function App() {
     localStorage.setItem(savedGameKey, snapshot.id);
     const path = `/games/${snapshot.id}`;
     if (window.location.pathname !== path) window.history.replaceState(null, "", path);
-  }, []);
+  }, [playMoveSound]);
 
   const startNewGame = useCallback(async () => {
     setBusy(true);
@@ -422,6 +430,7 @@ function App() {
       if (stopped) return;
       setConnection("connecting");
       const socket = new WebSocket(websocketUrl(gameId));
+      let receivedSnapshot = false;
       socketRef.current = socket;
       socket.addEventListener("open", () => {
         retryCount = 0;
@@ -439,7 +448,8 @@ function App() {
         try {
           const message = JSON.parse(event.data) as { type: string; payload: GameSnapshot };
           if (message.type === "snapshot") {
-            acceptSnapshot(message.payload);
+            acceptSnapshot(message.payload, receivedSnapshot);
+            receivedSnapshot = true;
             setConnection("live");
           }
         } catch {
@@ -969,6 +979,8 @@ function App() {
               onMoveDrop={(from, to) => void onMoveDrop(from, to)}
             />
           </div>
+
+          <BoardSoundControls sound={boardSound} />
 
           <PlayerCard {...(flipped ? blackPlayer : whitePlayer)} />
 

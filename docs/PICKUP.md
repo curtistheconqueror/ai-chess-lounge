@@ -1,5 +1,24 @@
 # AI Chess Lounge contributor pickup
 
+## October 9 — wooden move audio and audition dashboard
+
+Contributor `feat/wooden-move-audio` starts from verified PR35 source
+`ccef4d7d58edc599995bcece1bf06dec0435adbe`. Curtis prioritized local sound and
+then requested twelve numbered wood-contact auditions. Existing code had no audio.
+The branch adds original live move/capture audio, gesture unlock, mute/volume,
+an explicit test button and `/sound-lab`; Sound 1 remains the board default.
+Auditioning does not change that default. Other candidates are new original
+variants, not copies or claimed matches of the unidentified earlier reference.
+See `BOARD_SOUND.md` for behavior, test instructions and boundaries.
+
+Local production build/typecheck and 30 native Chrome audio/browser checks pass
+across all five viewports; desktop and minimum-phone screenshots were inspected.
+Distinguish browser signal measurements from actual owner listening.
+Published-head CI must be checked independently. No merge
+or hosted-beta completion is claimed. Exact beta patch recovery remains pending;
+the local preview uses a fresh SQLite database and is bound to loopback only.
+Keep the external/non-OpenAI hosting requirement and all live-release approvals.
+
 ## Current integration checkpoint — October 8, 2026
 
 GitHub `main` is `3b2cb0bd9bf02e130f56d19e6a2995cbf52424dc`. The
