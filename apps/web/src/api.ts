@@ -24,6 +24,7 @@ export class ApiRequestError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       ...init?.headers,
@@ -94,7 +95,7 @@ export function suggestToAgent(game: GameSnapshot, move: string | null): Promise
 
 /** The newest running or paused match, or null when nothing is live. */
 export async function fetchLiveMatch(): Promise<GameSnapshot | null> {
-  const response = await fetch(`${apiBase}/api/live-match`);
+  const response = await fetch(`${apiBase}/api/live-match`, { cache: "no-store" });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   return (await response.json()) as GameSnapshot;

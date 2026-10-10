@@ -4,6 +4,20 @@ October 10, 2026: phone support is implemented for local/private practice.
 This is browser-emulation acceptance, not physical iPhone/Android certification.
 Public hosted startup remains blocked; private access follows PRIVATE_TAILSCALE.md.
 
+Curtis clarified that the physical device is an iPad. Use the private origin's
+root URL (`/`) for a fresh connection or home-screen launch. Root entry checks
+the server's current running/paused table and ignores old saved-game storage.
+If nothing is live it shows Ready to start with an explicit Play a new match
+button. Opening `/games/<id>` intentionally preserves review of that game;
+finished games offer both Play a new match and Open current table. A concurrent
+new-match conflict opens the current table without aborting or resetting it.
+Neither entry nor reconnect automatically starts agents or resumes a paused game.
+API reads and service-worker navigations bypass the browser's HTTP cache.
+
+Run `npm run e2e:tablet` for touch-enabled iPad portrait (820x1180) and landscape
+(1180x820) profiles in Chromium/WebKit. Entry tests also run in the phone matrix
+and existing responsive CI. Physical iPad acceptance remains a manual gate.
+
 The follow-up iPhone report was traced to a paused practice game, then a successful
 Abort retaining its saved final position. Board-adjacent Resume play / Play a new
 match controls now explain how to continue; an aborted game itself cannot move.

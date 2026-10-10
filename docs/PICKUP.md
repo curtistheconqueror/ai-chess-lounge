@@ -1,5 +1,44 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - fresh connections and iPad entry
+
+Continues from `687101c6f7fc1aed2ff236ec5b698b5db1695b4d`, verified green
+[CI146](https://github.com/curtistheconqueror/ai-chess-lounge/actions/runs/38026332867).
+Curtis clarified the device is an iPad and requested reliable entry on every
+connection. Root entry previously preferred a locally remembered game over the
+server's current table, including old terminal games. Root now discovers only
+the server's running/paused table, ignores stale saved-game storage, and shows
+an explicit start button when the table is empty. Deliberate game deep links
+still preserve archive review. Missing links offer the current table; a new-game
+409 opens and explains the existing table without ending it. Blocked storage
+does not break snapshot acceptance. API requests and service-worker navigation
+bypass HTTP cache; the worker still only serves generic offline content offline.
+
+No connection automatically starts or resumes any game or agent. Paused games
+need Resume play, finished games remain archived, and reconnect waits for a fresh
+snapshot. Use the private origin root `/` for a new connection or home-screen
+launch; do not distribute the old aborted game's deep link as the start URL.
+
+Tablet Chromium/WebKit at820x1180 and1180x820:66 passed, two existing Windows
+native-audio skips. Eight entry cases cover fresh/empty tables, stale saved IDs
+and cache data, paused and active tables, touch moves after rotation, intentional
+terminal review, concurrent new-game conflict, unavailable deep links, background
+pause/abort, blocked storage and failed-lookup recovery. Existing tap/drag,
+large controls, audio, foreground and offline tests also run in the tablet config.
+Use `npm run e2e:tablet`; no workflow changes are included.
+
+Phone matrix:99 passed, three Windows native-audio skips. Desktop regression:
+54 passed and one obsolete saved-ID storage assertion failed; that assertion now
+checks the selected match displayed on screen. After the final loading/empty-table
+label correction,32 tablet entry checks, six phone entry/label checks and ten
+desktop entry/navigation checks passed. Build/typecheck and diff checks passed.
+
+Real private HTTPS checks passed in all four tablet profiles with zero mutation
+requests and no page errors. The original game was verified unchanged. The
+private frontend is refreshed; server and access rules are unchanged. This is
+browser emulation, not physical iPad acceptance. Curtis must confirm the start
+URL on his iPad. PR36 remains draft; no merge or public deployment.
+
 ## October 10 - phone paused/aborted board recovery
 
 Baseline `327b19b6c83c2821cb336a961dccd2fcb06a1206` passed

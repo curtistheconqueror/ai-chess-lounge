@@ -104,7 +104,6 @@ const promotionCodes: Record<PromotionPiece, string> = {
   knight: "n",
 };
 
-const savedGameKey = "ai-chess-lounge:active-game";
 const loungeEffortLevels: EffortLevel[] = ["fast", "balanced", "deep", "maximum"];
 const providerPublicSettings = {
   move_timeout_ms: 20_000,
@@ -175,7 +174,7 @@ function App() {
   const [startPaused, setStartPaused] = useState(false);
   const cancelPromotion = useCallback(() => setPromotion(null), []);
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const boardControlsRef = useRef<HTMLElement | null>(null);
   const [clockTick, setClockTick] = useState(Date.now());
@@ -315,7 +314,6 @@ function App() {
     setReplayPly((currentPly) =>
       currentPly === null ? null : Math.min(currentPly, snapshot.moves.length),
     );
-    localStorage.setItem(savedGameKey, snapshot.id);
     const path = `/games/${snapshot.id}`;
     if (window.location.pathname !== path) window.history.replaceState(null, "", path);
   }, [playMoveSound]);
@@ -363,6 +361,16 @@ function App() {
       setReplayPly(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to create game.");
+      if (error instanceof ApiRequestError && error.status === 409) {
+        try {
+          const live = await fetchLiveMatch();
+          if (live) {
+            acceptSnapshot(live, false, true);
+            setReplayPly(null);
+            setNotice("A match is already on the table. It is shown here; continue it, or explicitly end it before starting another.");
+          }
+        } catch { /* Preserve the creation error and the selected game. */ }
+      }
     } finally {
       setBusy(false);
       boardControlsRef.current?.scrollIntoView({ block: "start" });
@@ -390,19 +398,17 @@ function App() {
     let cancelled = false;
     async function restore() {
       const routeGame = window.location.pathname.match(/^\/games\/([A-Za-z0-9-]+)\/?$/)?.[1];
-      const stored = routeGame ?? localStorage.getItem(savedGameKey);
-      if (stored) {
+      // The start URL always discovers the server's current table. Only an
+      // intentional deep link restores a particular (possibly finished) game.
+      if (routeGame) {
         setBusy(true);
         try {
-          const snapshot = await fetchGame(stored);
+          const snapshot = await fetchGame(routeGame);
           if (!cancelled) acceptSnapshot(snapshot);
           return;
         } catch {
-          if (routeGame) {
-            if (!cancelled) setNotice("That shared match is unavailable or no longer exists.");
-            return;
-          }
-          localStorage.removeItem(savedGameKey);
+          if (!cancelled) setNotice("That shared match is unavailable or no longer exists. Open the current table or start a new match below.");
+          return;
         } finally {
           if (!cancelled) setBusy(false);
         }
@@ -986,7 +992,7 @@ function App() {
     || (whiteSeat === "remote_runner" && !whiteRunnerId)
     || (blackSeat === "remote_runner" && !blackRunnerId);
   const matchEnded = Boolean(game && ["completed", "aborted", "adjudicated"].includes(game.lifecycle));
-  const broadcastLabel = game?.status === "active"
+  const broadcastLabel = !game ? (busy ? "CHECKING TABLE" : "READY TO START") : game.status === "active"
     ? "LIVE EXHIBITION"
     : game?.lifecycle === "paused"
       ? "RECOVERY PAUSED"
@@ -1006,8 +1012,8 @@ function App() {
           <a className="ghost-button" href="/board-studio">Compare board looks</a>
           <button className="ghost-button" aria-expanded={showLeaderboards} onClick={() => setShowLeaderboards(v => !v)}>{showLeaderboards ? "Close AI leaderboards" : "AI leaderboards"}</button>
           <button className="ghost-button" aria-expanded={showLab} onClick={() => setShowLab(v => !v)}>{showLab ? "Close Model Lab" : "Model Lab"}</button>
-          <span className={`connection ${connection}`} aria-label={`Connection ${connection}`}>
-            <span className="connection-dot" /> {connection}
+          <span className={`connection ${connection}`} aria-label={`Connection ${game ? connection : busy ? "checking" : "ready"}`}>
+            <span className="connection-dot" /> {game ? connection : busy ? "checking" : "ready"}
           </span>
           <button className="ghost-button" onClick={() => setFlipped((value) => !value)}>Flip board</button>
           <button className="gold-ghost-button" onClick={() => void shareMatch()} disabled={!game}>Share match</button>
@@ -1029,13 +1035,20 @@ function App() {
       <section className="arena-layout">
         <div className="match-stage">
           <section ref={boardControlsRef} className="board-play-controls" aria-label="Board play controls">
-            {!game ? <><strong>No match selected</strong><p>Choose your seats below, then start a match.</p></>
+            {!game ? <>
+                <strong>{busy ? "Checking the table" : "Ready to start"}</strong>
+                <p>Choose your seats below, then start a match. Nothing starts until you choose to play.</p>
+                <button className="primary-button" disabled={newMatchDisabled} onClick={() => void startNewGame()}>Play a new match</button>
+                <small>Next match: {seatChoiceLabel(whiteSeat)} vs {seatChoiceLabel(blackSeat)}. Change seats below.</small>
+                <a href="/">Open current table</a>
+              </>
               : connection !== "live" ? <><strong>Reconnecting to the board</strong><p>Moves are disabled until the current position arrives.</p></>
               : matchEnded ? <>
                 <strong>{game.status === "aborted" ? "Match aborted" : "Match finished"}</strong>
                 <p>This match has ended. Its final position and history are saved. Start a new match to play.</p>
                 <button className="primary-button" disabled={newMatchDisabled} onClick={() => void startNewGame()}>Play a new match</button>
                 <small>Next match: {seatChoiceLabel(whiteSeat)} vs {seatChoiceLabel(blackSeat)}. Change seats below.</small>
+                <a href="/">Open current table</a>
               </> : !followingLive ? <>
                 <strong>Viewing replay</strong><p>Return to the current position before playing.</p>
                 <button onClick={() => { setReplayRunning(false); setReplayPly(null); }}>Return to live board</button>
@@ -1111,7 +1124,7 @@ function App() {
               <h2>{game?.white_player.display_name ?? seatChoiceLabel(whiteSeat)} <span>vs</span> {game?.black_player.display_name ?? seatChoiceLabel(blackSeat)}</h2>
               <small>{game?.id ? `Match ${game.id.slice(0, 8).toUpperCase()}${game.termination_reason ? ` · ${terminationLabel(game.termination_reason)}` : ""}` : "No match loaded"}</small>
             </div>
-            <span className={`result-badge ${game?.status ?? "loading"}`}>{game?.status === "active" ? "LIVE" : game?.status === "paused" ? "PAUSED" : game?.status === "aborted" ? "ABORTED" : game?.result ?? "LOADING"}</span>
+            <span className={`result-badge ${game?.status ?? "loading"}`}>{game?.status === "active" ? "LIVE" : game?.status === "paused" ? "PAUSED" : game?.status === "aborted" ? "ABORTED" : game?.result ?? (busy ? "CHECKING" : "READY")}</span>
           </div>
 
           <p>One game at a time. Select each seat independently: Human to play, or two agents to watch. Effort choices come from each model's supported capabilities. API access is separate from ordinary consumer subscriptions.</p>

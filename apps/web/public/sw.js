@@ -12,5 +12,5 @@ self.addEventListener("fetch", event => {
   const url = new URL(event.request.url);
   if (event.request.mode !== "navigate" || event.request.method !== "GET" || url.origin !== self.location.origin
     || url.pathname.startsWith("/api/") || url.pathname.startsWith("/ws/")) return;
-  event.respondWith(fetch(event.request).catch(() => caches.match("/offline.html")));
+  event.respondWith(fetch(event.request, { cache: "no-store" }).catch(() => caches.match("/offline.html")));
 });

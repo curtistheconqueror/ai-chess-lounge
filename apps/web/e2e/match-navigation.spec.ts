@@ -59,7 +59,7 @@ test("late updates from the previous match cannot replace a new match", async ({
     oldSocket.dispatchEvent(new Event("error"));
   }, { previousId: previous.id, snapshot: previous });
   await expect(page).toHaveURL(new RegExp(`/games/${next.id}$`));
-  expect(await page.evaluate(() => localStorage.getItem("ai-chess-lounge:active-game"))).toBe(next.id);
+  await expect(page.locator(".match-header small")).toContainText(next.id.slice(0, 8).toUpperCase());
   // The new socket and move path must still work after rejecting the old events.
   await page.getByRole("gridcell", { name: "e2 white pawn" }).click();
   await page.getByRole("gridcell", { name: "e4 empty" }).click();
