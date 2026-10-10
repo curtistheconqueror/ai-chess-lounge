@@ -1,5 +1,37 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - keep new-match navigation stable
+
+Continues from `5edf9b97fc6291cbfef71292a403ae5ef8adb478` on
+`feat/wooden-move-audio`, draft PR36. CI142 (run38007377223) passed Linux
+backend (443 passed, six skipped), SQLite/PostgreSQL migrations, performance,
+TypeScript SDK and web build, but failed responsive browser setup: a late
+snapshot from the previous match restored its URL after New match succeeded.
+
+Snapshot acceptance now permits a different match only for explicit creation;
+ordinary HTTP/socket updates remain bound to the selected match. Socket handlers
+also check current socket identity, selected match and effect cleanup, and the
+new match waits for its own authoritative socket snapshot before enabling moves.
+Generation/revision checks, public-file containment and hosted startup guards
+remain in force. No browser assertion, timeout or retry was weakened.
+
+The deterministic regression retained the previous real socket, delivered a late
+snapshot/error after switching, and reproduced the old URL failure before the fix.
+It now passes at all five viewports, checking URL, saved selection and a legal move
+in the new match. A second regression holds the socket pending and checks disabled
+moves and viewport containment. It reproduced a 21px tablet overflow from the
+longer connecting label; the toolbar now wraps to its available width. The remote
+pairing fixture explicitly selects its newly created runner so retained runners
+from a previous run/retry cannot change its payload. Credential-exclusion checks
+are preserved. Typecheck/build and diff checks passed. The full Windows/Chrome run
+passed 124 tests, skipped 95 and exposed that one retained-runner fixture failure;
+after its correction the final focused run passed 16 with four viewport skips,
+covering both regressions, the original viewport gate and runner credential
+exclusion. No application failure remains from those runs. An earlier run also
+had a Windows worker exit (3221226505); it did not recur in the full rerun.
+Next gate: verify the corrected head's CI before review/merge. Hosted readiness
+and the exact Auth patch transfer blockers below remain unchanged.
+
 ## October 10 - public-file containment and hosted startup safeguards
 
 Continues from `cdf8abb62256e3911ce56a6cdfd9fb3b5d70f01f` on the same PR36 branch.

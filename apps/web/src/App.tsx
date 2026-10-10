@@ -263,8 +263,11 @@ function App() {
     whiteSeat,
   ]);
 
-  const acceptSnapshot = useCallback((snapshot: GameSnapshot, announceMove = true) => {
+  const acceptSnapshot = useCallback((snapshot: GameSnapshot, announceMove = true, selectMatch = false) => {
     const current = gameRef.current;
+    // Only explicit match creation may switch away from the selected match.
+    // Old HTTP/socket callbacks can finish before React cleans up their effects.
+    if (current && current.id !== snapshot.id && !selectMatch) return;
     const currentServerTime = current ? Date.parse(current.clock.server_time) : Number.NaN;
     const incomingServerTime = Date.parse(snapshot.clock.server_time);
     if (
@@ -283,6 +286,7 @@ function App() {
     const sound = newMoveSound(current, snapshot);
     if (announceMove && sound && replayPlyRef.current === null) playMoveSound(sound);
     const receivedAt = Date.now();
+    if (current?.id !== snapshot.id) setConnection("connecting");
     gameRef.current = snapshot;
     clockSyncRef.current = {
       gameId: snapshot.id,
@@ -348,6 +352,8 @@ function App() {
             blackIdentity,
           ),
         }),
+        false,
+        true,
       );
       setReplayPly(null);
     } catch (error) {
@@ -446,22 +452,27 @@ function App() {
       const socket = new WebSocket(websocketUrl(gameId));
       let receivedSnapshot = false;
       socketRef.current = socket;
+      const isCurrentSocket = () => !stopped && socketRef.current === socket && gameRef.current?.id === gameId;
       socket.addEventListener("open", () => {
+        if (!isCurrentSocket()) return;
         retryCount = 0;
         // Enable input only after the reconnect delivers an authoritative snapshot.
       });
       socket.addEventListener("close", () => {
-        if (stopped) return;
+        if (!isCurrentSocket()) return;
         setConnection("offline");
         const delay = Math.min(10_000, 500 * 2 ** retryCount);
         retryCount += 1;
         retryTimer = window.setTimeout(connect, delay);
       });
-      socket.addEventListener("error", () => setConnection("offline"));
+      socket.addEventListener("error", () => {
+        if (isCurrentSocket()) setConnection("offline");
+      });
       socket.addEventListener("message", (event) => {
+        if (!isCurrentSocket()) return;
         try {
           const message = JSON.parse(event.data) as { type: string; payload: GameSnapshot };
-          if (message.type === "snapshot") {
+          if (message.type === "snapshot" && message.payload.id === gameId) {
             acceptSnapshot(message.payload, receivedSnapshot);
             receivedSnapshot = true;
             setConnection("live");

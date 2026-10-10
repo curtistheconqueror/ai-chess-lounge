@@ -199,6 +199,9 @@ test("a remote agent pairs once and becomes a selectable seat", async ({ page },
   await expect(page.getByLabel("White seat").locator('option[value="remote_runner"]')).toBeEnabled();
   await page.getByLabel("White seat").selectOption("remote_runner");
   await expect(page.getByLabel("White paired agent")).toContainText("Lounge Remote Bot");
+  // Other fixture runners can survive a prior run/retry; choose this pairing explicitly.
+  await page.getByLabel("White paired agent").selectOption(pairing.player.player_id);
+  await expect(page.getByLabel("White paired agent")).toHaveValue(pairing.player.player_id);
 
   let submitted: Record<string, unknown> | undefined;
   await page.route("**/api/games", async (route) => {
