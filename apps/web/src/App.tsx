@@ -1028,9 +1028,14 @@ function App() {
           </div>
         </div>
         <div className="topbar-actions">
+          <details className="lounge-tools">
+          <summary>Lounge tools</summary>
+          <div>
           <a className="ghost-button" href="/board-studio">Compare board looks</a>
           <button className="ghost-button" aria-expanded={showLeaderboards} onClick={() => setShowLeaderboards(v => !v)}>{showLeaderboards ? "Close AI leaderboards" : "AI leaderboards"}</button>
           <button className="ghost-button" aria-expanded={showLab} onClick={() => setShowLab(v => !v)}>{showLab ? "Close Model Lab" : "Model Lab"}</button>
+          </div>
+          </details>
           <span className={`connection ${connection}`} aria-label={`Connection ${game ? connection : busy ? "checking" : "ready"}`}>
             <span className="connection-dot" /> {game ? connection : busy ? "checking" : "ready"}
           </span>
@@ -1038,9 +1043,6 @@ function App() {
           <button className="gold-ghost-button" onClick={() => void shareMatch()} disabled={!game}>Share match</button>
         </div>
       </header>
-
-      {showLab && <ModelLab catalog={playerAdapters} />}
-      {showLeaderboards && <><section className="model-lab" aria-label="Next match identity"><h2>Next match identity</h2><p>Optional declarations are saved when a new match starts. Existing game identities remain unchanged. Remote seats use the declarations saved during pairing.</p>{whiteSeat !== "remote_runner" && <IdentityEditor label="White next match" value={whiteIdentity} onChange={setWhiteIdentity} />}{blackSeat !== "remote_runner" && <IdentityEditor label="Black next match" value={blackIdentity} onChange={setBlackIdentity} />}</section><Leaderboards /></>}
 
       <section className="broadcast-ribbon" aria-label="Match broadcast status">
         <span className={game?.status === "active" ? "live-pulse" : "result-pulse"} />
@@ -1057,9 +1059,9 @@ function App() {
             {game && <small>Viewing match {game.id.slice(0, 8).toUpperCase()} · {game.white_player.display_name} vs {game.black_player.display_name}</small>}
             {!game ? <>
                 <strong>{busy ? "Checking the table" : "Ready to start"}</strong>
-                <p>Choose your seats below, then start a match. Nothing starts until you choose to play.</p>
+                <p>Choose Seats & game setup, then start a match. Nothing starts until you choose to play.</p>
                 <button className="primary-button" disabled={newMatchDisabled} onClick={() => void startNewGame()}>Play a new match</button>
-                <small>Next match: {seatChoiceLabel(whiteSeat)} vs {seatChoiceLabel(blackSeat)}. Change seats below.</small>
+                <small>Next match: {seatChoiceLabel(whiteSeat)} vs {seatChoiceLabel(blackSeat)}. Change players in Seats & game setup.</small>
                 <a href="/">Open current table</a>
               </>
               : connection !== "live" ? <><strong>Reconnecting to the board</strong><p>Moves are disabled until the current position arrives.</p></>
@@ -1067,7 +1069,7 @@ function App() {
                 <strong>{game.status === "aborted" ? "Match aborted" : "Match finished"}</strong>
                 <p>This match has ended. Its final position and history are saved. Start a new match to play.</p>
                 <button className="primary-button" disabled={newMatchDisabled} onClick={() => void startNewGame()}>Play a new match</button>
-                <small>Next match: {seatChoiceLabel(whiteSeat)} vs {seatChoiceLabel(blackSeat)}. Change seats below.</small>
+                <small>Next match: {seatChoiceLabel(whiteSeat)} vs {seatChoiceLabel(blackSeat)}. Change players in Seats & game setup.</small>
                 <a href="/">Open current table</a>
               </> : !followingLive ? <>
                 <strong>Viewing replay</strong><p>Return to the current position before playing.</p>
@@ -1085,17 +1087,14 @@ function App() {
               <button disabled={busy || matchControlBusy || !followingLive || connection !== "live"} onClick={() => openMatchAction("abort")}>End match…</button>
               <button disabled={newMatchDisabled || !followingLive || connection !== "live"} onClick={() => openMatchAction("restart")}>End and start new…</button>
             </div>}
+            <button className="setup-shortcut" onClick={() => {
+              const section = document.getElementById("seats-setup") as HTMLDetailsElement;
+              section.open = true; section.querySelector("summary")?.focus(); section.scrollIntoView({ block: "nearest" });
+            }}>Seats &amp; game setup</button>
+            {game?.lifecycle === "running" && <button disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => void onMatchControl("pause")}>Pause play</button>}
             {notice && <p className="board-notice" role="alert">{notice}</p>}
           </section>
           <PlayerCard {...(flipped ? whitePlayer : blackPlayer)} />
-
-          <StrategyChannel
-            white={whiteStrategy}
-            black={blackStrategy}
-            activeSide={game?.turn ?? "white"}
-            pv={selectedPoint?.pv_san ?? []}
-            depth={selectedPoint?.depth ?? null}
-          />
 
           <div className="board-broadcast-frame">
             <div className={`evaluation-bar ${flipped ? "flipped" : ""}`} aria-label={`White evaluation share ${Math.round(evalShare)} percent`}>
@@ -1126,7 +1125,6 @@ function App() {
             {latestHumanSuggestion?.status === "ready" && <button disabled={!canSuggest} onClick={() => void saveHumanSuggestion(null)}>Clear human suggestion</button>}
             <small>Human-AI Team exhibition. Advice is recorded in history and PGN.</small>
           </section>}
-          <BoardSoundControls sound={boardSound} />
 
           <PlayerCard {...(flipped ? blackPlayer : whitePlayer)} />
 
@@ -1151,6 +1149,74 @@ function App() {
             <span className={`result-badge ${game?.status ?? "loading"}`}>{game?.status === "active" ? "LIVE" : game?.status === "paused" ? "PAUSED" : game?.status === "aborted" ? "ABORTED" : game?.result ?? (busy ? "CHECKING" : "READY")}</span>
           </div>
 
+          <div className="telemetry-grid">
+            <Metric label="Position" value={`${displayPly} / ${game?.moves.length ?? 0}`} />
+            <Metric label="Evaluation" value={formatEvaluation(selectedPoint)} accent />
+            <Metric label="Move latency" value={latestAgentMove?.player_metadata ? `${latestAgentMove.player_metadata.latency_ms} ms` : "—"} />
+            <Metric label="Analysis depth" value={selectedPoint?.depth ? `Depth ${selectedPoint.depth}` : analysisLoading ? "CALCULATING" : "—"} />
+            <Metric label="Event sequence" value={String(game?.event_sequence ?? 0)} />
+            <Metric label="Lifecycle" value={(game?.lifecycle ?? "loading").toUpperCase()} accent />
+          </div>
+
+          <div className="panel-tabs" role="tablist" aria-label="Match details">
+            {(["moves", "analysis", "pgn", "fen"] as const).map((tab) => (
+              <button key={tab} id={`detail-tab-${tab}`} role="tab" aria-controls="match-detail-panel" tabIndex={panelTab === tab ? 0 : -1} aria-selected={panelTab === tab} className={panelTab === tab ? "active" : ""} onClick={() => setPanelTab(tab)} onKeyDown={event => {
+                const tabs: PanelTab[] = ["moves", "analysis", "pgn", "fen"];
+                const index = tabs.indexOf(tab);
+                const next = event.key === "ArrowRight" ? (index + 1) % 4 : event.key === "ArrowLeft" ? (index + 3) % 4 : event.key === "Home" ? 0 : event.key === "End" ? 3 : -1;
+                if (next < 0) return;
+                event.preventDefault(); setPanelTab(tabs[next]); document.getElementById(`detail-tab-${tabs[next]}`)?.focus();
+              }}>
+                {tab.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          <div className="panel-content" id="match-detail-panel" role="tabpanel" aria-labelledby={`detail-tab-${panelTab}`} tabIndex={0}>
+            {panelTab === "moves" && (
+              <div className="move-list">
+                {!moveRows.length && <div className="empty-state">The opening position is ready.</div>}
+                {moveRows.map((row) => (
+                  <div className="move-row" key={row.number}>
+                    <span>{row.number}.</span>
+                    <MoveButton san={row.white} ply={row.number * 2 - 1} selected={displayPly === row.number * 2 - 1} classification={currentAnalysis?.points[row.number * 2 - 1]?.classification ?? null} onSelect={selectPly} />
+                    <MoveButton san={row.black} ply={row.number * 2} selected={Boolean(row.black && displayPly === row.number * 2)} classification={currentAnalysis?.points[row.number * 2]?.classification ?? null} onSelect={selectPly} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {panelTab === "analysis" && <AnalysisPanel analysis={currentAnalysis} loading={analysisLoading} error={analysisError} selectedPly={displayPly} selectedPoint={selectedPoint} onSelect={selectPly} />}
+            {panelTab === "pgn" && (
+              <div className="notation-panel">
+                <pre>{game?.pgn ?? "No game loaded."}</pre>
+                <div><button onClick={() => void copyText(game?.pgn ?? "", "PGN")}>Copy PGN</button><button onClick={() => downloadGame("pgn")}>Download .pgn</button></div>
+              </div>
+            )}
+            {panelTab === "fen" && (
+              <div className="notation-panel">
+                <pre>{displayFen}</pre>
+                <div><button onClick={() => void copyText(displayFen, "FEN")}>Copy FEN</button><button onClick={() => downloadGame("json")}>Download match JSON</button></div>
+              </div>
+            )}
+          </div>
+
+          <details className="workspace-section">
+            <summary>Strategy &amp; live telemetry <span>Plans, usage, consultation</span></summary>
+          <StrategyChannel
+            white={whiteStrategy}
+            black={blackStrategy}
+            activeSide={game?.turn ?? "white"}
+            pv={selectedPoint?.pv_san ?? []}
+            depth={selectedPoint?.depth ?? null}
+          />
+
+          {game && <GameUsage game={game} />}
+          {game && <ConsultationPanel key={game.id} game={game} catalog={playerAdapters}
+            enabled={followingLive && connection === "live" && !busy}
+            onSnapshot={snapshot => { if (gameRef.current?.id === snapshot.id) acceptSnapshot(snapshot); }} />}
+          </details>
+          <details className="workspace-section" id="seats-setup">
+            <summary>Seats &amp; game setup <span>Players, models, strength, clock</span></summary>
           <p>One game at a time. Select each seat independently: Human to play, or two agents to watch. Effort choices come from each model's supported capabilities. API access is separate from ordinary consumer subscriptions.</p>
           <div className="match-controls">
             <label>
@@ -1272,11 +1338,12 @@ function App() {
             </details>}
           </section>
 
-          {game && <GameUsage game={game} />}
-          {game && <ConsultationPanel key={game.id} game={game} catalog={playerAdapters}
-            enabled={followingLive && connection === "live" && !busy}
-            onSnapshot={snapshot => { if (gameRef.current?.id === snapshot.id) acceptSnapshot(snapshot); }} />}
+          </details>
 
+          <details className="workspace-section">
+            <summary>Connections &amp; API access <span>Remote runners, provider setup</span></summary>
+            <p>Direct-provider API keys are configured on the server. This browser never collects keys. Choose configured providers, including OpenRouter, in Seats &amp; game setup.</p>
+            {runnerAccessDenied && <p>Runner pairing is unavailable on this private connection. Existing player access is unchanged.</p>}
           {!runnerAccessDenied && <div className="runner-pairing-panel" aria-label="Remote runner pairing">
             <div className="runner-pairing-heading">
               <div>
@@ -1383,51 +1450,13 @@ function App() {
               ))}
             </div>
           </div>}
-          <div className="panel-tabs" role="tablist" aria-label="Match details">
-            {(["moves", "analysis", "pgn", "fen"] as const).map((tab) => (
-              <button key={tab} role="tab" aria-selected={panelTab === tab} className={panelTab === tab ? "active" : ""} onClick={() => setPanelTab(tab)}>
-                {tab.toUpperCase()}
-              </button>
-            ))}
-          </div>
-
-          <div className="panel-content">
-            {panelTab === "moves" && (
-              <div className="move-list">
-                {!moveRows.length && <div className="empty-state">The opening position is ready.</div>}
-                {moveRows.map((row) => (
-                  <div className="move-row" key={row.number}>
-                    <span>{row.number}.</span>
-                    <MoveButton san={row.white} ply={row.number * 2 - 1} selected={displayPly === row.number * 2 - 1} classification={currentAnalysis?.points[row.number * 2 - 1]?.classification ?? null} onSelect={selectPly} />
-                    <MoveButton san={row.black} ply={row.number * 2} selected={Boolean(row.black && displayPly === row.number * 2)} classification={currentAnalysis?.points[row.number * 2]?.classification ?? null} onSelect={selectPly} />
-                  </div>
-                ))}
-              </div>
-            )}
-            {panelTab === "analysis" && <AnalysisPanel analysis={currentAnalysis} loading={analysisLoading} error={analysisError} selectedPly={displayPly} selectedPoint={selectedPoint} onSelect={selectPly} />}
-            {panelTab === "pgn" && (
-              <div className="notation-panel">
-                <pre>{game?.pgn ?? "No game loaded."}</pre>
-                <div><button onClick={() => void copyText(game?.pgn ?? "", "PGN")}>Copy PGN</button><button onClick={() => downloadGame("pgn")}>Download .pgn</button></div>
-              </div>
-            )}
-            {panelTab === "fen" && (
-              <div className="notation-panel">
-                <pre>{displayFen}</pre>
-                <div><button onClick={() => void copyText(displayFen, "FEN")}>Copy FEN</button><button onClick={() => downloadGame("json")}>Download match JSON</button></div>
-              </div>
-            )}
-          </div>
-
-          <div className="telemetry-grid">
-            <Metric label="Position" value={`${displayPly} / ${game?.moves.length ?? 0}`} />
-            <Metric label="Evaluation" value={formatEvaluation(selectedPoint)} accent />
-            <Metric label="Move latency" value={latestAgentMove?.player_metadata ? `${latestAgentMove.player_metadata.latency_ms} ms` : "—"} />
-            <Metric label="Analysis depth" value={selectedPoint?.depth ? `Depth ${selectedPoint.depth}` : analysisLoading ? "CALCULATING" : "—"} />
-            <Metric label="Event sequence" value={String(game?.event_sequence ?? 0)} />
-            <Metric label="Lifecycle" value={(game?.lifecycle ?? "loading").toUpperCase()} accent />
-          </div>
-
+          </details>
+          <details className="workspace-section">
+            <summary>Board preferences <span>Motion, spectator pacing, sound</span></summary>
+            <BoardSoundControls sound={boardSound} />
+          </details>
+          <details className="workspace-section">
+            <summary>Match actions &amp; export <span>Resign, draw, reset, download</span></summary>
           <div className="secondary-actions">
             {canRetryAgent && (
               <button onClick={() => void onRetryAgentTurn()} disabled={busy}>
@@ -1447,12 +1476,17 @@ function App() {
             <button onClick={() => downloadGame("pgn")} disabled={!game}>Export PGN</button>
           </div>
 
+          </details>
+
           <div className="integrity-note">
             <span>BROADCAST INTEGRITY</span>
             Evaluation runs in a separate spectator engine and never chooses the competitor’s move. Public strategy cards contain declared or position-derived summaries—not hidden model reasoning.
           </div>
         </aside>
       </section>
+
+      {showLab && <ModelLab catalog={playerAdapters} />}
+      {showLeaderboards && <><section className="model-lab" aria-label="Next match identity"><h2>Next match identity</h2><p>Optional declarations are saved when a new match starts. Existing game identities remain unchanged. Remote seats use the declarations saved during pairing.</p>{whiteSeat !== "remote_runner" && <IdentityEditor label="White next match" value={whiteIdentity} onChange={setWhiteIdentity} />}{blackSeat !== "remote_runner" && <IdentityEditor label="Black next match" value={blackIdentity} onChange={setBlackIdentity} />}</section><Leaderboards /></>}
 
       <footer className="lounge-footer"><span>AI Chess Lounge</span><span>Provider-neutral broadcast shell</span><span>PGN · FEN · JSON · Replay</span></footer>
       {promotion && <PromotionPicker color={promotion.color} onChoose={choosePromotion} onCancel={cancelPromotion} />}

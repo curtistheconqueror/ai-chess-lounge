@@ -5,6 +5,7 @@ import App from "./App";
 import { SoundLab } from "./SoundLab";
 import { BoardStudio } from "./BoardStudio";
 import "./styles.css";
+import "./workspace.css";
 
 if ("serviceWorker" in navigator && window.isSecureContext && import.meta.env.PROD) {
   window.addEventListener("load", () => {
