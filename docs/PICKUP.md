@@ -2,6 +2,15 @@
 
 ## October 10 - targeted end/restart across tabs
 
+Restart implementation `75d1e370ee57cc4f1282575bdf489df8838cdc61` is live in
+the approved private runtime. CI148 passed migration/lint checks and 476 backend
+tests, but one strength test left multiple live fixtures and hit the new reset
+guard (six tests skipped). This follow-up retires each disposable strength fixture
+and asserts reset success explicitly. All 19 strength/restart checks pass locally;
+the local environment reports one Starlette/httpx deprecation warning, so its
+warnings-as-errors attempt did not collect tests. Verify the follow-up CI result.
+No runtime code, database, frontend assets or workflows change in this follow-up.
+
 Continues from `71654cfd9dab183b1e006ce3c9c883c4c05def42` (CI147 passed).
 The reported screenshot displayed an aborted archive, while read-only server
 and database inspection found one different paused Human/Stockfish match with

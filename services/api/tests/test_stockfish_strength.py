@@ -115,12 +115,16 @@ def test_capabilities_backend_validation_and_active_seat_fence(tmp_path):
             created = client.post("/api/games", json={"stockfish_elo": elo})
             assert created.status_code == 201
             assert created.json()["black_player"]["settings"]["target_elo"] == elo
+            # Retire each strength fixture before exercising the shared-table reset.
+            assert client.post(f"/api/games/{created.json()['id']}/abort").status_code == 200
         full = client.post("/api/games", json={"stockfish_full_strength": True}).json()
         assert full["black_player"]["settings"]["full_strength"] is True
         assert full["engine"]["full_strength"] is True
         player = PlayerConfiguration.stockfish("black", target_elo=3100).model_dump(mode="json")
         route = f"/api/games/{full['id']}"
-        full = client.post(f"{route}/reset").json()
+        reset = client.post(f"{route}/reset")
+        assert reset.status_code == 200
+        full = reset.json()
         assert full["engine"]["full_strength"] is True
         assert full["black_player"]["settings"]["full_strength"] is True
         change = {"player": player, "expected_revision": full["revision"]}
