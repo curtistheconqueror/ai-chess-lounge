@@ -31,9 +31,34 @@ desktop/iPad layouts. No added UI dependency. Approved SVG artwork and audio
 assets are unchanged. Keyboard/disclosure, overflow and screenshot checks are
 recorded in `workspace.spec.ts`. Physical iPad acceptance remains separate.
 
+## Stage 2: motion and spectator pacing
+
+2A uses browser-native Web Animations transforms on the existing SVG wrapper;
+no third-party chess widget or animation dependency replaces the board. Dragging
+follows the pointer. The server owns the accepted move and no motion callback
+submits a move or produces sound. A dragged piece is not animated a second time.
+
+2B provides instant/150/300/500 ms transitions and 0/150/300/600 ms visual buffers
+for automated moves. Preferences use optional local storage. Reduced motion
+snaps immediately, including when toggled during an animation. Clocks, history
+and evaluation update from the current authoritative snapshot without waiting.
+Board input is fenced during the bounded visual transition to avoid acting on a
+piece still in transit. This never delays the server's clock or any agent turn.
+
+There is no accumulating move queue. An update that interrupts a transition
+snaps to the newest position; missed histories and replay jumps also snap.
+Game ID, generation, lifecycle, connection, live/replay mode, board orientation
+and resizing cancel outstanding motion. Consecutive forward replay can animate.
+Castling translates both king and rook; capture/en-passant removal and promotion
+come from the authoritative final position. Promotion shows the promoted piece
+during translation. Original sound deduplication remains unchanged and plays
+on acceptance, independently of visual pacing.
+
+`motion.spec.ts` covers these boundaries on disposable games. The automated
+metadata scenario is a mocked socket fixture, not a live provider call.
+
 ## Remaining checkpoints
 
-2A: piece translation and drag feedback. 2B: bounded visual spectator pacing,
-special moves and interruption handling. 3A: full feature/lifecycle/accessibility
+3A: full feature/lifecycle/accessibility
 regression. 3B: visual/performance inspection and private-serving byte identity.
 Test counts alone do not establish chess.com experience parity.

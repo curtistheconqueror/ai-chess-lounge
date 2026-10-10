@@ -37,6 +37,7 @@ import { GameUsage } from "./GameUsage";
 import { ChessBoard } from "./ChessBoard";
 import { BoardSoundControls, useBoardSound } from "./BoardSoundControls";
 import { newMoveSound } from "./boardSound";
+import { motionStorageKey, readMotionSettings } from "./boardMotion";
 import { EvaluationChart } from "./EvaluationChart";
 import { PromotionPicker, type PromotionPiece } from "./PromotionPicker";
 import type {
@@ -120,9 +121,19 @@ const providerDetails: Record<AgentProviderChoice, { label: string; provider: st
 
 function App() {
   const boardSound = useBoardSound();
+  const [motion, setMotion] = useState(readMotionSettings);
+  useEffect(() => {
+    try { localStorage.setItem(motionStorageKey, JSON.stringify(motion)); } catch { /* Optional storage. */ }
+  }, [motion]);
   const playMoveSound = boardSound.playMove;
   const [showLab, setShowLab] = useState(false);
   const [showLeaderboards, setShowLeaderboards] = useState(false);
+  useEffect(() => {
+    if (showLab) document.getElementById("model-lab-workspace")?.focus();
+  }, [showLab]);
+  useEffect(() => {
+    if (showLeaderboards) document.getElementById("leaderboards-workspace")?.focus();
+  }, [showLeaderboards]);
   const [whiteIdentity, setWhiteIdentity] = useState<IdentityDeclaration>({});
   const [blackIdentity, setBlackIdentity] = useState<IdentityDeclaration>({});
   const [runnerIdentity, setRunnerIdentity] = useState<IdentityDeclaration>({});
@@ -1028,7 +1039,9 @@ function App() {
           </div>
         </div>
         <div className="topbar-actions">
-          <details className="lounge-tools">
+          <details className="lounge-tools" onKeyDown={event => {
+            if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); }
+          }}>
           <summary>Lounge tools</summary>
           <div>
           <a className="ghost-button" href="/board-studio">Compare board looks</a>
@@ -1102,6 +1115,9 @@ function App() {
               <span>{formatEvaluation(selectedPoint)}</span>
             </div>
             <ChessBoard
+              motionContext={`${game?.id}:${game?.generation}:${game?.lifecycle}:${connection}:${followingLive ? "live" : "replay"}`}
+              transitionMs={motion.duration}
+              bufferMs={followingLive && game?.moves.at(-1)?.player_metadata?.adapter_id !== "human" && game?.moves.at(-1)?.player_metadata ? motion.buffer : 0}
               showSquareEntry
               fen={displayFen || "8/8/8/8/8/8/8/8 w - - 0 1"}
               positionKey={`${game?.id}:${game?.version}:${game?.revision}`}
@@ -1453,6 +1469,15 @@ function App() {
           </details>
           <details className="workspace-section">
             <summary>Board preferences <span>Motion, spectator pacing, sound</span></summary>
+            <div className="motion-preferences">
+              <label>Piece transition<select aria-label="Piece transition" value={motion.duration} onChange={e => setMotion(v => ({ ...v, duration: Number(e.target.value) }))}>
+                <option value={0}>Instant</option><option value={150}>Quick · 150 ms</option><option value={300}>Smooth · 300 ms</option><option value={500}>Relaxed · 500 ms</option>
+              </select></label>
+              <label>Automated move buffer<select aria-label="Automated move buffer" value={motion.buffer} onChange={e => setMotion(v => ({ ...v, buffer: Number(e.target.value) }))}>
+                <option value={0}>None</option><option value={150}>150 ms</option><option value={300}>300 ms</option><option value={600}>600 ms</option>
+              </select></label>
+              <p>Visual pacing only. Clocks, evaluation and move history stay live. Rapid updates catch up immediately; reduced motion uses instant moves.</p>
+            </div>
             <BoardSoundControls sound={boardSound} />
           </details>
           <details className="workspace-section">
@@ -1485,8 +1510,8 @@ function App() {
         </aside>
       </section>
 
-      {showLab && <ModelLab catalog={playerAdapters} />}
-      {showLeaderboards && <><section className="model-lab" aria-label="Next match identity"><h2>Next match identity</h2><p>Optional declarations are saved when a new match starts. Existing game identities remain unchanged. Remote seats use the declarations saved during pairing.</p>{whiteSeat !== "remote_runner" && <IdentityEditor label="White next match" value={whiteIdentity} onChange={setWhiteIdentity} />}{blackSeat !== "remote_runner" && <IdentityEditor label="Black next match" value={blackIdentity} onChange={setBlackIdentity} />}</section><Leaderboards /></>}
+      {showLab && <section id="model-lab-workspace" tabIndex={-1} aria-label="Model Lab workspace"><ModelLab catalog={playerAdapters} /></section>}
+      {showLeaderboards && <section id="leaderboards-workspace" tabIndex={-1} aria-label="Leaderboards workspace"><section className="model-lab" aria-label="Next match identity"><h2>Next match identity</h2><p>Optional declarations are saved when a new match starts. Existing game identities remain unchanged. Remote seats use the declarations saved during pairing.</p>{whiteSeat !== "remote_runner" && <IdentityEditor label="White next match" value={whiteIdentity} onChange={setWhiteIdentity} />}{blackSeat !== "remote_runner" && <IdentityEditor label="Black next match" value={blackIdentity} onChange={setBlackIdentity} />}</section><Leaderboards /></section>}
 
       <footer className="lounge-footer"><span>AI Chess Lounge</span><span>Provider-neutral broadcast shell</span><span>PGN · FEN · JSON · Replay</span></footer>
       {promotion && <PromotionPicker color={promotion.color} onChoose={choosePromotion} onCancel={cancelPromotion} />}
