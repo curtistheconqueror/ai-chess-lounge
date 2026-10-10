@@ -30,6 +30,11 @@ board, arrow/Home/End detail-tab navigation, large touch targets and responsive
 desktop/iPad layouts. No added UI dependency. Approved SVG artwork and audio
 assets are unchanged. Keyboard/disclosure, overflow and screenshot checks are
 recorded in `workspace.spec.ts`. Physical iPad acceptance remains separate.
+Expanded Lounge tools occupy header layout space rather than overlaying content.
+`controls-scroll.spec.ts` verifies real start/pause/resume/end hit targets after
+scrolling from setup with the menu open, including phones and iPads. This fixes
+the actual pointer interception exposed by CI151; the original entry test stays
+unchanged and no forced clicks are used.
 
 ## Stage 2: motion and spectator pacing
 

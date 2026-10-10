@@ -1,5 +1,17 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - header tools preserve board hit targets
+
+CI151 on `13c19fec2f5e56d3c0cf362a6bf94052c3301f29` found an actual phone
+pointer interception: the open header tools panel used absolute positioning and
+covered Play a new match after scrolling back from seat setup. The unchanged
+entry regression reproduced locally with the same30-second timeout. Expanded
+tools now occupy normal header layout space, so they cannot overlay board actions.
+No click is forced and no existing assertion is weakened. The regression opens
+tools through their native summary, scrolls from setup to start/pause/resume/end,
+checks each actual center hit target, and cancels the named restart dialog.
+Check the latest PR36 CI; local evidence is in handoff/HEADER_OVERLAP_HANDOFF.md.
+
 ## October 10 - board-first workspace and bounded visual motion
 
 Continues from `8591fb92b1b5fd8b6b971e9bacd24717ff0286b0` on draft PR36.

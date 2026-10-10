@@ -44,8 +44,12 @@ summary:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid
 .motion-preferences label { display: grid; gap: 8px; color: #c5d2c8; font-size: .8rem; }
 .motion-preferences select { width: 100%; min-height: 44px; background: #101a14; color: inherit; border: 1px solid var(--line); border-radius: 7px; padding: 8px; }
 .lounge-tools { position: relative; }
+.lounge-tools[open] { flex: 1 1 100%; min-width: 0; }
 .lounge-tools > summary { cursor: pointer; padding: 12px; font-size: .8rem; }
-.lounge-tools > div { position: absolute; right: 0; top: 100%; z-index: 15; width: 235px; padding: 12px; background: #17201b; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px #0008; display: grid; gap: 8px; }
+/* The expanded tools occupy header space. An overlay here can intercept board
+   actions when narrow screens scroll back from the setup panel. */
+.lounge-tools > div { position: static; width: 100%; padding: 12px; background: #17201b; border: 1px solid var(--line); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+.lounge-tools > div > * { max-width: 100%; }
 .integrity-note { margin-top: 20px; }
 @media (max-width: 1000px) {
   .app-shell { padding: 16px; }
@@ -66,8 +70,6 @@ summary:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid
   .topbar-actions { gap: 6px; }
   .topbar-actions .ghost-button, .topbar-actions .gold-ghost-button { padding: 9px; font-size: .62rem; }
   .topbar-actions .connection { margin-left: auto; }
-  .lounge-tools { position: static; }
-  .lounge-tools > div { left: 0; right: auto; width: min(235px, calc(100vw - 32px)); }
   .board-play-controls { gap: 6px; }
   .player-card { padding: 8px; }
   .telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
