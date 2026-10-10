@@ -1,5 +1,41 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - motion gaps closed and phone/iPad suites restored to CI
+
+Continues from `e3b1393` (CI154 green). Closes the three motion gaps recorded in
+`MOTION_AND_RATING_AUDIT.md`:
+
+- **Rapid updates resume instead of snapping.** When a new consecutive position
+  arrives mid-flight, the earlier piece finishes its remaining path from where it
+  was drawn (same easing, remaining time), and the new move animates too.
+  Previously the earlier piece snapped and the new move didn't animate.
+  Missed/non-adjacent snapshots, flips, context changes, resize and reduced motion
+  still snap. `boardMotion.ts` holds the shared easing and `remainingFlight` math.
+- **Input is never blocked by animation.** Board squares, square-entry selects and
+  Play move no longer disable while pieces translate. Any pointer down, click or
+  square-entry submit finishes live flights immediately and proceeds. `settle()`
+  only finishes running/paused flights, because `finish()` on a cancelled animation
+  revives it as a lingering frame (found by the new test).
+- **Drag tracks the pointer synchronously.** Pointer moves write the sprite
+  transform directly instead of waiting for a React render. That render lag was
+  the source of the intermittent 5px drag assertion. Release/cancel clears the
+  direct style and React's release hold takes over.
+
+New regression: "a reply mid-flight animates too, resumes the earlier piece where
+it was drawn, and input settles motion". Desktop motion suite: 10 tests x3 repeats,
+30 passed locally.
+
+CI: Codex's unpublished `46813c1` app changes had already landed via `327b19b`.
+The one piece never published was its workflow change (the push lacked `workflow`
+scope). The CI job now installs WebKit and runs `e2e:mobile` and `e2e:tablet`
+after the desktop suite, uploading their result folders. These suites previously
+ran only on Windows, where native-audio WebKit cases skip. Linux WebKit results
+are new evidence, so check the first run.
+
+Owner direction: the target is chess.com-level smoothness. The next candidates are
+an instant local move display (visual only; the server stays authoritative and
+rejection reverts) and premoves.
+
 ## October 10 - native Stockfish Skill Level
 
 Current-match confirmation checkpoint `85acbc93f9cd8a60918fd878a7e0a19cb9419c27`

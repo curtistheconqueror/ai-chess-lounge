@@ -141,6 +141,41 @@ test("automated buffer is visual only, bounded, persisted and respects reduced m
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("lounge.board-motion.v1")!))).toEqual({ duration: 150, buffer: 0 });
 });
 
+test("a reply mid-flight animates too, resumes the earlier piece where it was drawn, and input settles motion", async ({ page }) => {
+  let socket: WebSocketRoute | undefined;
+  await page.routeWebSocket("**/ws/games/**", ws => { socket = ws; });
+  const game = await (await page.request.post("/api/games", { data: { opponent: "human", initial_time_ms: 3600000 } })).json();
+  await page.goto(`/games/${game.id}`);
+  await expect.poll(() => Boolean(socket)).toBe(true);
+  socket!.send(JSON.stringify({ type: "snapshot", payload: game }));
+  await expect(page.getByLabel("Connection live")).toBeVisible();
+  const square = (await page.locator('[data-square="e4"]').boundingBox())!;
+  const first = await move(page, game.id, "e2e4");
+  socket!.send(JSON.stringify({ type: "snapshot", payload: first }));
+  await page.waitForFunction(() => Number(document.querySelector('[data-square="e4"] .piece-motion')?.getAnimations()[0]?.currentTime ?? 0) >= 100);
+  const second = await move(page, game.id, "e7e5");
+  socket!.send(JSON.stringify({ type: "snapshot", payload: second }));
+  await expect(page.getByRole("gridcell", { name: "e5 black pawn" })).toBeVisible();
+  const flights = await page.locator(".piece-motion").evaluateAll(nodes => nodes.flatMap(n => n.getAnimations().map(a => ({
+    square: n.parentElement!.dataset.square,
+    duration: Number(a.effect!.getTiming().duration),
+    start: String((a.effect as KeyframeEffect).getKeyframes()[0].transform),
+  }))));
+  expect(flights.map(f => f.square).sort()).toEqual(["e4", "e5"]);
+  const resumed = flights.find(f => f.square === "e4")!;
+  const startY = Number(/translate\([^,]+,\s*(-?[\d.]+)px\)/.exec(resumed.start)![1]);
+  // Strictly inside the two-square path: it continues from mid-flight instead of restarting or snapping.
+  expect(startY).toBeGreaterThan(0);
+  expect(startY).toBeLessThan(2 * square.height - 1);
+  expect(resumed.duration).toBeLessThan(500);
+  // Touching the board is never blocked by decoration; it lands every piece at once.
+  await expect(moving(page)).toHaveAttribute("data-animating", "true");
+  await page.getByRole("gridcell", { name: "g1 white knight" }).click();
+  await expect(moving(page)).toHaveAttribute("data-animating", "false");
+  await expect(page.getByRole("gridcell", { name: "g1 white knight" })).toHaveClass(/selected/);
+  expect(await page.locator(".piece-motion").evaluateAll(nodes => nodes.flatMap(n => n.getAnimations()).length)).toBe(0);
+});
+
 test("flip, resize and socket reconnection cancel stale visual positions", async ({ page }) => {
   const sockets: WebSocketRoute[] = [];
   await page.routeWebSocket("**/ws/games/**", ws => { sockets.push(ws); });

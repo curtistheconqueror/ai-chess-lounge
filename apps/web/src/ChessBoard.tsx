@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { pieceTranslations } from "./boardMotion";
+import { motionEasingCss, pieceTranslations, remainingFlight } from "./boardMotion";
 
 import { boardForOrientation, parseFen } from "./chess";
 import { ChessPiece } from "./ChessPiece";
@@ -44,7 +44,9 @@ export function ChessBoard({
   const board = useRef<HTMLDivElement>(null);
   const previous = useRef({ fen, motionContext, flipped, motionPly });
   const animations = useRef<Animation[]>([]);
-  const interrupted = useRef(false);
+  const flights = useRef(new Map<Animation, { square: string; x: number; y: number; delay: number; duration: number }>());
+  // Unfinished flights from a superseded position, resumed rather than snapped.
+  const carried = useRef<{ square: string; x: number; y: number; ms: number }[]>([]);
   const dropped = useRef<{ from: string; to: string } | null>(null);
   const [moving, setMoving] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -56,32 +58,49 @@ export function ChessBoard({
   }, []);
   useLayoutEffect(() => {
     const prior = previous.current;
-    const superseded = interrupted.current;
-    interrupted.current = false;
+    const resumable = carried.current;
+    carried.current = [];
     const dragged = dropped.current;
     dropped.current = null;
     previous.current = { fen, motionContext, flipped, motionPly };
     setMoving(false);
-    if (superseded || reducedMotion || !transitionMs || prior.motionContext !== motionContext || prior.flipped !== flipped
+    if (reducedMotion || !transitionMs || prior.motionContext !== motionContext || prior.flipped !== flipped
       || (motionPly !== undefined && motionPly !== (prior.motionPly ?? motionPly) + 1)) return;
     const shifts = pieceTranslations(prior.fen, fen, lastMove);
+    // A missed or non-adjacent position snaps; only one consecutive move may resume older flights.
+    if (!shifts.length) return;
     const raised: HTMLElement[] = [];
+    const fly = (square: string, x: number, y: number, delay: number, duration: number) => {
+      const target = board.current?.querySelector<HTMLElement>(`[data-square="${square}"]`);
+      const sprite = target?.querySelector<HTMLElement>(".piece-motion");
+      if (!target || !sprite) return;
+      target.style.zIndex = "5";
+      raised.push(target);
+      const animation = sprite.animate([
+        { transform: `translate(${x}px, ${y}px)` },
+        { transform: "translate(0, 0)" },
+      ], { duration, delay, easing: motionEasingCss, fill: "both" });
+      flights.current.set(animation, { square, x, y, delay, duration });
+      animations.current.push(animation);
+    };
     for (const shift of shifts) {
       // The pointer already carried this piece to its destination; do not replay it.
       if (dragged?.from === shift.from && dragged.to === shift.to) continue;
       const source = board.current?.querySelector<HTMLElement>(`[data-square="${shift.from}"]`);
       const target = board.current?.querySelector<HTMLElement>(`[data-square="${shift.to}"]`);
-      const sprite = target?.querySelector<HTMLElement>(".piece-motion");
-      if (!source || !target || !sprite) continue;
+      if (!source || !target) continue;
       const a = source.getBoundingClientRect(), b = target.getBoundingClientRect();
-      target.style.zIndex = "5";
-      raised.push(target);
-      animations.current.push(sprite.animate([
-        { transform: `translate(${a.x - b.x}px, ${a.y - b.y}px)` },
-        { transform: "translate(0, 0)" },
-      ], { duration: Math.min(500, transitionMs), delay: Math.min(600, bufferMs), easing: "cubic-bezier(.2,.7,.25,1)", fill: "both" }));
+      fly(shift.to, a.x - b.x, a.y - b.y, Math.min(600, bufferMs), Math.min(500, transitionMs));
     }
-    dropped.current = null;
+    const before = new Map(parseFen(prior.fen).map(s => [s.name, s.piece]));
+    const after = new Map(parseFen(fen).map(s => [s.name, s.piece]));
+    const touched = new Set(shifts.flatMap(s => [s.from, s.to]));
+    for (const flight of resumable) {
+      // Finish the earlier piece's remaining path from where it was drawn, unless this move displaced it.
+      const was = before.get(flight.square), now = after.get(flight.square);
+      if (touched.has(flight.square) || !was || was.type !== now?.type || was.color !== now.color) continue;
+      fly(flight.square, flight.x, flight.y, 0, flight.ms);
+    }
     let cancelled = false;
     let finished = false;
     const pending = animations.current;
@@ -109,13 +128,31 @@ export function ChessBoard({
     if (board.current) resize.observe(board.current);
     return () => {
       cancelled = true;
-      interrupted.current = pending.length > 0 && !finished;
+      if (!finished) {
+        carried.current = pending.flatMap(animation => {
+          const flight = flights.current.get(animation);
+          const elapsed = Number(animation.currentTime ?? 0);
+          if (!flight || animation.playState === "finished") return [];
+          return [{ square: flight.square, ...remainingFlight(flight, elapsed, flight.delay, flight.duration) }];
+        });
+      }
+      pending.forEach(a => flights.current.delete(a));
       resize.disconnect();
       pending.forEach(a => a.cancel());
       animations.current = [];
       raised.forEach(el => { el.style.zIndex = ""; });
     };
   }, [fen, motionContext, flipped, reducedMotion, transitionMs, bufferMs, lastMove, motionPly]);
+  // Input never waits for decoration: touching the board lands every piece immediately.
+  // Only live flights: finish() on a cancelled animation would revive it as a lingering frame.
+  const settle = () => animations.current.forEach(a => {
+    if (a.playState === "running" || a.playState === "paused") a.finish();
+  });
+  // Drag paints the sprite directly; React's own style (release hold or none) takes over afterwards.
+  const clearDrag = (square: HTMLElement) => {
+    const sprite = square.querySelector<HTMLElement>(".piece-motion");
+    if (sprite) sprite.style.transform = "";
+  };
   const pointer = useRef<{ id: number; from: string; key: string; x: number; y: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
   const [dragFrom, setDragFrom] = useState<string | null>(null);
@@ -175,11 +212,14 @@ export function ChessBoard({
               data-square={square.name}
               onClick={() => {
                 if (suppressClick.current) { suppressClick.current = false; return; }
-                if (!moving) onSquareClick(square.name);
+                settle();
+                onSquareClick(square.name);
               }}
               onPointerDown={(event) => {
                 suppressClick.current = false;
-                if (disabled || moving || !event.isPrimary || event.button !== 0 || square.piece?.color !== checkedKingColor) return;
+                if (!event.isPrimary || event.button !== 0) return;
+                settle();
+                if (disabled || square.piece?.color !== checkedKingColor) return;
                 pointer.current = { id: event.pointerId, from: square.name, key: positionKey, x: event.clientX, y: event.clientY, moved: false };
                 event.currentTarget.setPointerCapture(event.pointerId);
               }}
@@ -189,13 +229,18 @@ export function ChessBoard({
                 if (Math.hypot(event.clientX - active.x, event.clientY - active.y) > 6) {
                   active.moved = true;
                   setDragFrom(active.from);
-                  setDragOffset({ x: event.clientX - active.x, y: event.clientY - active.y });
+                  const offset = { x: event.clientX - active.x, y: event.clientY - active.y };
+                  // Paint now; waiting for React's render left the piece trailing the pointer.
+                  const sprite = event.currentTarget.querySelector<HTMLElement>(".piece-motion");
+                  if (sprite) sprite.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
+                  setDragOffset(offset);
                 }
               }}
               onPointerUp={(event) => {
                 const active = pointer.current;
                 pointer.current = null;
                 setDragFrom(null);
+                clearDrag(event.currentTarget);
                 if (!active || active.id !== event.pointerId || !active.moved) return;
                 suppressClick.current = true;
                 if (disabled || active.key !== positionKey) return;
@@ -208,14 +253,14 @@ export function ChessBoard({
                   onMoveDrop(active.from, target.dataset.square!);
                 }
               }}
-              onPointerCancel={() => {
-                pointer.current = null; setDragFrom(null); suppressClick.current = true;
+              onPointerCancel={(event) => {
+                pointer.current = null; setDragFrom(null); clearDrag(event.currentTarget); suppressClick.current = true;
               }}
-              onLostPointerCapture={() => {
-                pointer.current = null; setDragFrom(null);
+              onLostPointerCapture={(event) => {
+                pointer.current = null; setDragFrom(null); clearDrag(event.currentTarget);
               }}
               style={dragFrom === square.name || (released?.key === positionKey && released.from === square.name) ? { zIndex: 6 } : undefined}
-              disabled={disabled || moving}
+              disabled={disabled}
               aria-label={`${square.name}${square.piece ? ` ${square.piece.color} ${square.piece.type}` : " empty"}`}
             >
               {showRank && <span className="coordinate rank" aria-hidden="true">{square.rank}</span>}
@@ -236,17 +281,17 @@ export function ChessBoard({
       <summary>Move by square</summary>
       <p>Tap two squares, drag a piece, or use these larger controls.</p>
       <div>
-        <label>From<select aria-label="Move from square" disabled={disabled || moving} value={moveFrom}
+        <label>From<select aria-label="Move from square" disabled={disabled} value={moveFrom}
           onChange={event => { setMoveFrom(event.target.value); setMoveTo(""); }}>
           <option value="">Choose</option>
           {[...new Set(legalMoves.map(move => move.slice(0, 2)))].sort().map(from => <option key={from}>{from}</option>)}
         </select></label>
-        <label>To<select aria-label="Move to square" disabled={disabled || moving || !moveFrom} value={moveTo}
+        <label>To<select aria-label="Move to square" disabled={disabled || !moveFrom} value={moveTo}
           onChange={event => setMoveTo(event.target.value)}>
           <option value="">Choose</option>
           {[...new Set(legalMoves.filter(move => move.startsWith(moveFrom)).map(move => move.slice(2, 4)))].sort().map(to => <option key={to}>{to}</option>)}
         </select></label>
-        <button type="button" disabled={disabled || moving || !moveFrom || !moveTo} onClick={() => onMoveDrop(moveFrom, moveTo)}>Play move</button>
+        <button type="button" disabled={disabled || !moveFrom || !moveTo} onClick={() => { settle(); onMoveDrop(moveFrom, moveTo); }}>Play move</button>
       </div>
     </details>}
     </div>
