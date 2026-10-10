@@ -89,6 +89,12 @@ def dispatch(settings, peer, path="/api/games/id", origin=None, extra=(), kind="
     return asyncio.run(run())
 
 
+def test_trusted_peer_reaches_shared_table_settings_but_others_do_not(direct):
+    assert dispatch(direct, "100.100.10.2", path="/api/table-settings")["status"] == 200
+    assert dispatch(direct, "100.100.10.3", path="/api/table-settings")["status"] == 403
+    assert dispatch(direct, "100.100.10.2", path="/api/table-settings/x")["status"] == 403
+
+
 def test_direct_peer_host_and_origin_are_independent(direct):
     assert dispatch(direct, "100.100.10.2")["status"] == 200
     for peer in ("127.0.0.1", "192.168.1.2", "8.8.8.8", "100.100.10.3"):

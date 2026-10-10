@@ -22,7 +22,7 @@ from sqlalchemy import (
     text,
     update,
 )
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -48,9 +48,11 @@ from .models import (
     TurnLease,
 )
 from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
+from .table_settings import TableSettings, TableSettingsConflict
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0012_comparison_games"
+SCHEMA_REVISION = "0013_table_settings"
+TABLE_SETTINGS_ID = "default"
 
 
 class ConcurrentGameUpdate(RuntimeError):
@@ -160,6 +162,15 @@ class ComparisonGameRow(Base):
     generation: Mapped[int] = mapped_column(Integer, primary_key=True)
     identity: Mapped[dict] = mapped_column(JSON, nullable=False)
     outcome: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class TableSettingsRow(Base):
+    __tablename__ = "table_settings"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    settings: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class MoveRow(Base):
@@ -1090,6 +1101,62 @@ class DatabaseStore:
             for row in rows
         ]
 
+    async def load_table_settings(self) -> tuple[int, TableSettings, datetime] | None:
+        await self.initialize()
+        async with self.sessions() as session:
+            row = await session.get(TableSettingsRow, TABLE_SETTINGS_ID)
+            if row is None:
+                return None
+            return (
+                row.revision,
+                TableSettings.model_validate(row.settings),
+                _utc(row.updated_at),
+            )
+
+    async def save_table_settings(
+        self, settings: TableSettings, *, expected_revision: int
+    ) -> tuple[int, datetime]:
+        """Compare-and-swap the shared table settings.
+
+        Revision 0 means "nothing saved"; it is claimed by inserting the single row, so
+        the primary key makes concurrent first saves race safely. Later saves update only
+        while the stored revision still equals ``expected_revision``.
+        """
+        await self.initialize()
+        now = datetime.now(UTC)
+        document = settings.model_dump(mode="json")
+        try:
+            async with self.sessions.begin() as session:
+                if expected_revision == 0:
+                    session.add(
+                        TableSettingsRow(
+                            id=TABLE_SETTINGS_ID,
+                            revision=1,
+                            settings=document,
+                            updated_at=now,
+                        )
+                    )
+                    await session.flush()
+                else:
+                    result = await session.execute(
+                        update(TableSettingsRow)
+                        .where(
+                            TableSettingsRow.id == TABLE_SETTINGS_ID,
+                            TableSettingsRow.revision == expected_revision,
+                        )
+                        .values(
+                            revision=expected_revision + 1,
+                            settings=document,
+                            updated_at=now,
+                        )
+                    )
+                    if result.rowcount != 1:
+                        raise TableSettingsConflict(expected_revision)
+        except IntegrityError:
+            # A row already exists, so revision 0 is stale.
+            raise TableSettingsConflict(expected_revision) from None
+        return expected_revision + 1, now
+
     async def clear(self) -> None:
         """Delete test data while preserving the schema."""
         await self.initialize()
@@ -1103,6 +1170,7 @@ class DatabaseStore:
             await session.execute(delete(MoveRow))
             await session.execute(delete(ComparisonGameRow))
             await session.execute(delete(MatchRow))
+            await session.execute(delete(TableSettingsRow))
 
     async def _record_comparison(self, session: AsyncSession, game: GameSession) -> None:
         row = await session.get(ComparisonGameRow, (game.id, game.generation))

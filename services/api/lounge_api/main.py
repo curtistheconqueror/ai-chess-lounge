@@ -60,6 +60,13 @@ from .remote_runner import (
     RunnerSubmissionError,
     bearer_token,
 )
+from .table_settings import (
+    UNSAVED_UPDATED_AT,
+    TableSettings,
+    TableSettingsConflict,
+    TableSettingsResponse,
+    TableSettingsUpdate,
+)
 
 web_dist = Path(__file__).resolve().parents[3] / "apps" / "web" / "dist"
 repository_root = Path(__file__).resolve().parents[3]
@@ -262,6 +269,31 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             return await active_manager.engine.strength_capabilities()
         except EngineFailure as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @application.get("/api/table-settings", response_model=TableSettingsResponse)
+    async def get_table_settings() -> TableSettingsResponse:
+        stored = await active_manager.store.load_table_settings()
+        if stored is None:
+            return TableSettingsResponse(
+                revision=0, updated_at=UNSAVED_UPDATED_AT, settings=TableSettings.defaults()
+            )
+        revision, settings, updated_at = stored
+        return TableSettingsResponse(revision=revision, updated_at=updated_at, settings=settings)
+
+    @application.put("/api/table-settings", response_model=TableSettingsResponse)
+    async def put_table_settings(request: TableSettingsUpdate) -> TableSettingsResponse:
+        try:
+            revision, updated_at = await active_manager.store.save_table_settings(
+                request.settings, expected_revision=request.revision
+            )
+        except TableSettingsConflict:
+            raise HTTPException(
+                status_code=409,
+                detail="Table settings changed on another device; reload and try again.",
+            ) from None
+        return TableSettingsResponse(
+            revision=revision, updated_at=updated_at, settings=request.settings
+        )
 
     @application.get("/api/player-adapters")
     async def player_adapters() -> dict[str, object]:

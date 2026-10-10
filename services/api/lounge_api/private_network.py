@@ -115,6 +115,7 @@ class PrivateNetworkMiddleware:
             "/api/health",
             "/api/engine/strength",
             "/api/player-adapters",
+            "/api/table-settings",
             "/api/live-match",
             "/api/games",
         } or path.startswith(("/api/games/", "/ws/games/"))
