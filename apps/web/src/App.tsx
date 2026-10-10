@@ -1,4 +1,4 @@
-import { StockfishStrength, readStockfishChoice, stockfishChoiceKey, useStockfishCapabilities, validStrength, type StockfishChoice } from "./StockfishStrength";
+import { StockfishStrength, readStockfishChoice, stockfishChoiceKey, useStockfishCapabilities, validStrength, strengthName, strengthSettings, type StockfishChoice } from "./StockfishStrength";
 import { Leaderboards } from "./Leaderboards";
 import { IdentityEditor } from "./IdentityEditor";
 import type { IdentityDeclaration } from "./types";
@@ -1735,7 +1735,7 @@ function createPlayerConfiguration(
       protocol_version: "1.0",
       player_id: `local-stockfish-${color}`,
       adapter_id: "stockfish",
-      display_name: stockfishElo === "full" ? "Stockfish full strength" : `Stockfish ${stockfishElo}`,
+      display_name: strengthName(stockfishElo),
       provider: "Local UCI",
       model: "Stockfish",
       connection_mode: "local",
@@ -1743,9 +1743,8 @@ function createPlayerConfiguration(
       division: "engine_assisted",
       settings: {
         color,
-        target_elo: stockfishElo === "full" ? 1600 : stockfishElo,
-        full_strength: stockfishElo === "full",
-        move_time_ms: (stockfishElo === "full" || stockfishElo >= 2500) ? 700 : 400,
+        ...strengthSettings(stockfishElo),
+        move_time_ms: (stockfishElo === "full" || (typeof stockfishElo === "number" && stockfishElo >= 2500)) ? 700 : 400,
         spectator_delay_ms: 80,
       },
     };
@@ -1921,7 +1920,7 @@ function playerCardForSeat(
   const targetElo = player.settings.target_elo;
   const moveTime = player.settings.move_time_ms;
   const configuration = player.adapter_id === "stockfish"
-    ? `${player.settings.full_strength ? "Full strength" : `${typeof targetElo === "number" ? targetElo : "—"} target Elo`} · ${typeof moveTime === "number" ? moveTime : "—"} ms budget`
+    ? `${player.settings.skill_level != null ? `Skill Level ${player.settings.skill_level} · uncalibrated` : player.settings.full_strength ? "Full strength" : `${typeof targetElo === "number" ? targetElo : "—"} target Elo`} · ${typeof moveTime === "number" ? moveTime : "—"} ms budget`
     : player.adapter_id === "human"
       ? "Manual input · server validated"
       : `${player.model} · protocol v1.0`;

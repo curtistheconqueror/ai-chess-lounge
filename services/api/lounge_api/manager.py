@@ -185,6 +185,7 @@ class GameManager:
                 target_elo=request.stockfish_elo,
                 move_time_ms=request.engine_move_time_ms,
                 full_strength=request.stockfish_full_strength,
+                skill_level=request.stockfish_skill_level,
             )
             if request.opponent is OpponentKind.STOCKFISH
             else PlayerConfiguration.human("black")
@@ -196,6 +197,11 @@ class GameManager:
                 await self.engine.validate_strength(
                     player.settings.get("target_elo", 1600),
                     player.settings.get("full_strength", False),
+                    **(
+                        {"skill_level": player.settings["skill_level"]}
+                        if "skill_level" in player.settings
+                        else {}
+                    ),
                 )
         remote_players = [
             p for p in (white_player, black_player) if p.adapter_id == "remote_runner"
@@ -247,6 +253,7 @@ class GameManager:
             game.engine_summary.full_strength = stockfish_player.settings.get(
                 "full_strength", False
             )
+            game.engine_summary.skill_level = stockfish_player.settings.get("skill_level")
         game.comparison_snapshot = comparison_snapshot(game, self.adapters)
         now = self._clock()
         events = [
@@ -450,6 +457,7 @@ class GameManager:
                     game.stockfish_elo, game.engine_move_time_ms
                 )
                 game.engine_summary.full_strength = stockfish.settings.get("full_strength", False)
+                game.engine_summary.skill_level = stockfish.settings.get("skill_level")
             now = self._clock()
             game.reset(now=now)
             game.comparison_snapshot = comparison_snapshot(game, self.adapters)
@@ -558,6 +566,11 @@ class GameManager:
                 await self.engine.validate_strength(
                     player.settings.get("target_elo", 1600),
                     player.settings.get("full_strength", False),
+                    **(
+                        {"skill_level": player.settings["skill_level"]}
+                        if "skill_level" in player.settings
+                        else {}
+                    ),
                 )
             if player.adapter_id == "remote_runner":
                 other = game.player_for_color("black" if color == "white" else "white")
@@ -578,6 +591,7 @@ class GameManager:
                     game.stockfish_elo, game.engine_move_time_ms
                 )
                 game.engine_summary.full_strength = stockfish.settings.get("full_strength", False)
+                game.engine_summary.skill_level = stockfish.settings.get("skill_level")
             else:
                 game.engine_summary = None
             event = game.event("seat.changed", change.model_dump(mode="json"), now=game.updated_at)

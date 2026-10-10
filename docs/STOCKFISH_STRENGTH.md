@@ -11,8 +11,9 @@ are preserved, remaining time is settled at pause, and the normal seat event
 updates every connected viewer. The next engine search uses the saved setting.
 Human and agentic AI seats do not receive these configurable Stockfish controls.
 
-The board's strength controls configure the **next match**. Choose Stockfish for
-one or both seats, choose a target Elo or Full strength, then click New match.
+The separate **Stockfish strength for next match** controls configure the next game.
+Choose Stockfish for one or both seats, choose target Elo, Skill Level, or Full
+strength, then click New match.
 The chosen value survives browser reloads. The separate Current match line shows
 the match's saved settings, so changing the control cannot silently relabel or
 alter an ongoing game. For an existing game, pause it and use the explicit Apply
@@ -25,6 +26,14 @@ of the chosen slider increments. Elo is Stockfish's target under its native
 strength limiter, not a guaranteed rating. Search time and hardware still matter.
 
 ## Runtime capabilities and execution
+
+Native **Skill Level** is a separate mode, from 0 through 20 on Stockfish 19.
+It disables UCI_LimitStrength and sets Skill Level directly. These levels have no
+claimed Elo equivalents. Skill 0 is not guaranteed to match beginner play.
+Full strength and target Elo reset Skill Level to its advertised maximum before
+setting the Elo limiter. The UI, saved seat, engine summary, and comparison
+conditions distinguish all three modes. Skill mode's inactive legacy Elo field
+is not displayed as a rating. See ADR0039 for compatibility and current-seat races.
 
 `GET /api/engine/strength` reads the installed engine's UCI options and reports its
 version, availability, Elo minimum/maximum and full-strength availability. It

@@ -1,5 +1,17 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - native Stockfish Skill Level
+
+Current-match confirmation checkpoint `85acbc93f9cd8a60918fd878a7e0a19cb9419c27`
+passed build/Ruff, 22 backend strength/seat tests and desktop/phone multi-view
+checks before skill work began. This follow-up adds native Skill Level 0-20 as
+a separate uncalibrated mode. Existing Elo/full choices remain. Current controls
+apply to one Stockfish seat only; model/effort controls for agentic seats are unchanged.
+Persistence and comparison conditions distinguish skill levels, and actual UCI
+tests verify the Elo limiter is off in skill mode and all mode switches reset
+conflicting options. See ADR0039 and docs/STOCKFISH_STRENGTH.md. Check the exact
+PR36 head's CI and local strength handoff for final private runtime evidence.
+
 ## October 10 - confirmed current-match Stockfish strength
 
 Continues from verified `9079ff379124d5572d615cb92eb0db3964fdbe76` / CI152.

@@ -51,6 +51,8 @@ summary:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid
 .lounge-tools > div { position: static; width: 100%; padding: 12px; background: #17201b; border: 1px solid var(--line); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
 .lounge-tools > div > * { max-width: 100%; }
 .integrity-note { margin-top: 20px; }
+.current-stockfish-panel { grid-column: 1 / -1; display: grid; gap: 12px; min-width: 0; }
+.current-stockfish-panel h3 { margin: 0; }
 @media (max-width: 1000px) {
   .app-shell { padding: 16px; }
   .arena-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }

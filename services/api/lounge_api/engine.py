@@ -131,7 +131,13 @@ class StockfishService:
                 raise EngineFailure("Stockfish analysis could not be completed.") from exc
 
     async def choose_move(
-        self, board: chess.Board, *, target_elo: int, move_time_ms: int, full_strength: bool = False
+        self,
+        board: chess.Board,
+        *,
+        target_elo: int,
+        move_time_ms: int,
+        full_strength: bool = False,
+        skill_level: int | None = None,
     ) -> EngineMove:
         if not self.available:
             raise EngineFailure(
@@ -148,6 +154,7 @@ class StockfishService:
                     target_elo,
                     move_time_ms,
                     full_strength,
+                    skill_level,
                     on_cancelled_error=self._discard_failed_engine,
                 )
             except (chess.engine.EngineError, OSError, TimeoutError) as exc:
@@ -172,21 +179,41 @@ class StockfishService:
                 "elo_min": elo.min if elo else None,
                 "elo_max": elo.max if elo else None,
                 "full_strength_available": self._engine is not None,
+                "skill_min": options["Skill Level"].min if "Skill Level" in options else None,
+                "skill_max": options["Skill Level"].max if "Skill Level" in options else None,
             }
 
-    async def validate_strength(self, target_elo: int, full_strength: bool = False) -> None:
+    async def validate_strength(
+        self, target_elo: int, full_strength: bool = False, skill_level: int | None = None
+    ) -> None:
         await self.strength_capabilities()
         # Preserve unavailable-engine recovery behavior; never invent a rated range.
         if self._engine is not None:
-            self._strength_configuration(target_elo, full_strength)
+            self._strength_configuration(target_elo, full_strength, skill_level)
 
-    def _strength_configuration(self, target_elo: int, full_strength: bool) -> dict[str, object]:
+    def _strength_configuration(
+        self, target_elo: int, full_strength: bool, skill_level: int | None = None
+    ) -> dict[str, object]:
         assert self._engine is not None
         options = self._engine.options
         configuration: dict[str, object] = {}
         if "Skill Level" in options:
             configuration["Skill Level"] = options["Skill Level"].max
-        if full_strength:
+        if skill_level is not None:
+            skill = options.get("Skill Level")
+            if full_strength or type(skill_level) is not int or not 0 <= skill_level <= 20:
+                raise ValueError("Choose an integer Skill Level 0-20 without full strength.")
+            if (
+                skill is None
+                or skill.min is None
+                or skill.max is None
+                or not skill.min <= skill_level <= skill.max
+            ):
+                raise ValueError("This engine does not advertise the requested Skill Level.")
+            configuration["Skill Level"] = skill_level
+            if "UCI_LimitStrength" in options:
+                configuration["UCI_LimitStrength"] = False
+        elif full_strength:
             if "UCI_LimitStrength" in options:
                 configuration["UCI_LimitStrength"] = False
         elif "UCI_LimitStrength" in options and "UCI_Elo" in options:
@@ -199,10 +226,15 @@ class StockfishService:
         return configuration
 
     def _play_sync(
-        self, board: chess.Board, target_elo: int, move_time_ms: int, full_strength: bool = False
+        self,
+        board: chess.Board,
+        target_elo: int,
+        move_time_ms: int,
+        full_strength: bool = False,
+        skill_level: int | None = None,
     ) -> chess.Move:
         assert self._engine is not None
-        configuration = self._strength_configuration(target_elo, full_strength)
+        configuration = self._strength_configuration(target_elo, full_strength, skill_level)
         if configuration:
             self._engine.configure(configuration)
         result = self._engine.play(

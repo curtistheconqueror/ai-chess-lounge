@@ -1,4 +1,4 @@
-import type { StockfishChoice } from "./StockfishStrength";
+import { skillValue, type StockfishChoice } from "./StockfishStrength";
 import type { IdentityDeclaration, LeaderboardReport } from "./types";
 import type { Consultation } from "./types";
 import type {
@@ -72,9 +72,10 @@ export function createGame({
       start_paused: startPaused,
       single_game: singleGame,
       opponent: "stockfish",
-      stockfish_elo: stockfishElo === "full" ? 1600 : stockfishElo,
+      stockfish_elo: typeof stockfishElo === "number" ? stockfishElo : 1600,
       stockfish_full_strength: stockfishElo === "full",
-      engine_move_time_ms: (stockfishElo === "full" || stockfishElo >= 2500) ? 700 : 400,
+      ...(skillValue(stockfishElo) !== null ? { stockfish_skill_level: skillValue(stockfishElo) } : {}),
+      engine_move_time_ms: (stockfishElo === "full" || (typeof stockfishElo === "number" && stockfishElo >= 2500)) ? 700 : 400,
       initial_time_ms: initialTimeMs,
       increment_ms: incrementMs,
       white_player: whitePlayer,
