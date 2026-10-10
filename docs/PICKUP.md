@@ -27,10 +27,19 @@ it was drawn, and input settles motion". Desktop motion suite: 10 tests x3 repea
 
 CI: Codex's unpublished `46813c1` app changes had already landed via `327b19b`.
 The one piece never published was its workflow change (the push lacked `workflow`
-scope). The CI job now installs WebKit and runs `e2e:mobile` and `e2e:tablet`
-after the desktop suite, uploading their result folders. These suites previously
-ran only on Windows, where native-audio WebKit cases skip. Linux WebKit results
-are new evidence, so check the first run.
+scope). That change is prepared as local branch `ci/phone-ipad-suites`: install
+WebKit, run `e2e:mobile` and `e2e:tablet` after the desktop suite, and upload their
+result folders. Its push was rejected again for the same reason (this machine's
+token lacks `workflow` scope). **Owner action:** publish it from a workflow-capable
+session (`gh auth refresh -s workflow`, or a PAT with the Workflows permission), or
+paste the diff in GitHub's web editor. Until then, CI runs desktop browser tests
+only.
+
+Local run of this head (Windows, fixture server): desktop default config passed 275
+(95 skipped). Phone: 212 passed, 1 WebKit failure. iPad: 139 passed, 3 WebKit
+failures. All four were entry/board-state timeouts with no motion involvement.
+Three passed on rerun. `entry.spec.ts:77` (iPad landscape WebKit) failed once in
+sequence and passed 6/6 alone, consistent with shared-table ordering flakiness.
 
 Owner direction: the target is chess.com-level smoothness. The next candidates are
 an instant local move display (visual only; the server stays authoritative and
