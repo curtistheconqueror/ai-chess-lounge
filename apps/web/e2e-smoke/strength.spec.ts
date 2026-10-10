@@ -20,34 +20,27 @@ test("[S20] 'New match' is not offered while a match is live (otherwise it 409s 
   await page.locator(".board").waitFor();
   await expect(page.getByLabel(/^Connection live/)).toBeVisible();
   await openSetup(page);
-  await nextElo(page).fill("1400");
   const statuses: number[] = [];
   page.on("response", r => { if (r.url().endsWith("/api/games") && r.request().method() === "POST") statuses.push(r.status()); });
   const btn = page.getByRole("button", { name: "New match", exact: true });
-  const enabled = await btn.isEnabled();
-  if (enabled) { await press(page, btn); await page.waitForTimeout(1500); }
-  const live = await (await page.request.get("/api/live-match")).json();
-  const shown = (await cards(page)).join(" | ");
-  note("evidence", { buttonEnabledWhileLive: enabled, postStatuses: statuses, liveIsOldGame: live.id === g.id, boardStillShows3100: /3100/.test(shown) });
-  expect(enabled, "New match button is enabled while a running match exists (App.tsx:1036 newMatchDisabled ignores game.lifecycle; button App.tsx:1345)").toBe(false);
-  expect(statuses, "clicking it POSTs /api/games and gets a 409").not.toContain(409);
+  note("evidence", { newMatchEnabledWhileLive: await btn.isEnabled() });
+  await expect(btn, "New match must be unavailable while a match is on the table").toBeDisabled();
+  expect(statuses, "no request that could 409 and re-show the old game").not.toContain(409);
+  expect((await (await page.request.get("/api/live-match")).json()).id).toBe(g.id);
 });
 
-test("[S21] Changing next-match Elo while a match is live never leaves '3100' as the only visible strength without explanation", async ({ page }) => {
+test("[S21] While a match is live, the only strength control is the live game's, showing its real value with an apply path", async ({ page }) => {
   await createGame(page.request, { stockfish_elo: 3100 });
   await page.goto("/");
   await page.locator(".board").waitFor();
   await expect(page.getByLabel(/^Connection live/)).toBeVisible();
   await openSetup(page);
-  await nextElo(page).fill("1400");
-  const btn = page.getByRole("button", { name: "New match", exact: true });
-  if (await btn.isEnabled()) { await press(page, btn); await page.waitForTimeout(1200); }
-  const heading = await page.locator("h2").filter({ hasText: /vs/ }).first().innerText().catch(() => "");
-  const notice = await page.locator(".board-notice").innerText().catch(() => "");
-  note("evidence", { heading, notice: notice.slice(0, 160) });
-  // After "applying" 1400 the user must either see 1400 on the board or be told clearly why not, with a one-tap path.
-  const ok = /1400/.test(heading) || /End and start new/i.test(notice) && (await page.getByRole("button", { name: /Use .*1400|Apply 1400|Switch to 1400/i }).count()) > 0;
-  expect(ok, `heading="${heading}" notice="${notice.slice(0, 90)}…" - setting 1400 silently leaves the live 3100 game`).toBe(true);
+  // One control at a time (Phase B): no next-match Elo field that could disagree with the board.
+  await expect(nextElo(page), "next-match Elo is hidden while a match is live").toHaveCount(0);
+  const current = page.getByRole("region", { name: "Current match engine strength" });
+  await expect(current).toBeVisible();
+  await expect(current).toContainText("3100");
+  note("evidence", { currentPanel: (await current.innerText()).slice(0, 160) });
 });
 
 test("[S22] Next-match Elo 1400 (after the old game ends) is sent to the API and shown on the board", async ({ page }) => {
@@ -132,7 +125,9 @@ test("[S26] Next-match strength persists across reload in the same browser", asy
 
 test("[S27] A second browser context (e.g. the iPad) sees the same default next-match strength as the first (not independent per-device)", async ({ page, browser }) => {
   await page.goto("/"); await page.locator(".board").waitFor(); await openSetup(page);
+  const saved = page.waitForResponse(r => r.url().endsWith("/api/table-settings") && r.request().method() === "PUT" && r.ok());
   await nextElo(page).fill("2200");
+  await saved; // A real device switch happens after the short save delay.
   const other = await browser.newContext({ baseURL: test.info().project.use.baseURL, viewport: { width: 1280, height: 720 } });
   const p2 = await other.newPage(); await p2.goto("/"); await p2.locator(".board").waitFor(); await openSetup(p2);
   const v = await nextElo(p2).inputValue();

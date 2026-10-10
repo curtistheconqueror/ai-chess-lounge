@@ -1,4 +1,4 @@
-import { expandedWorkspace } from "./workspace-fixture";
+import { chooseMore, expandedWorkspace } from "./workspace-fixture";
 import { expect, test, type Locator } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
 
@@ -20,7 +20,7 @@ test("paused and aborted boards offer a visible path back to play", async ({ pag
   await press(page.locator('[data-square="d7"]'));
   await press(page.locator('[data-square="d5"]'));
   await expect(page.locator('[data-square="d5"]')).toHaveAttribute("aria-label", "d5 black pawn");
-  await page.getByRole("button", { name: "Abort match", exact: true }).click();
+  await chooseMore(page, "End match…");
   await page.getByRole("dialog").getByRole("button", { name: "Abort match", exact: true }).click();
   await expect(controls).toContainText("Match aborted");
   await expect(controls).toContainText("final position and history are saved");

@@ -1,4 +1,4 @@
-import { expandedWorkspace } from "./workspace-fixture";
+import { expandedWorkspace, playControls } from "./workspace-fixture";
 import { expect, test } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
 import { pointerMove } from "./pointer-move";
@@ -30,7 +30,7 @@ test("paused AI suggestion preserves board and a second game is refused", async 
   await expect(page.getByRole("button", { name: "New match", exact: true })).toBeDisabled();
   await expect(page.getByText("Finish or explicitly abort the current match before creating another.")).toBeVisible();
   await expect(page).toHaveURL(new RegExp(game.id));
-  await page.getByRole("button", { name: "Resume match", exact: true }).click();
+  await playControls(page).getByRole("button", { name: "Resume play", exact: true }).click();
   await expect.poll(async () => (await (await page.request.get(`/api/games/${game.id}`)).json()).moves.length).toBe(1);
   const played = await (await page.request.get(`/api/games/${game.id}`)).json();
   expect(played.moves[0].uci).toBe("d2d4");

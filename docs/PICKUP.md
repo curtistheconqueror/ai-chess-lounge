@@ -1,5 +1,72 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - Phase B minimalist board-first layout and shared settings
+
+The owner approved the board-first mockup, shared next-match settings, and separate
+Model Lab and leaderboards pages.
+
+**Layout**
+
+- **Board column:** top player strip, board, bottom player strip, then one fixed
+  action bar:
+  - status line and match ID
+  - primary slot: Play / Pause / Resume / Return live
+  - Resign
+  - Claim draw
+  - a floating "More" menu: End match…, End and start new…, Seats & game setup,
+    Full screen, Copy link
+- **Nothing above the board changes with match state.** The board is sized to the
+  viewport height, so the whole stage fits on a 1440x900 desktop.
+- **Right rail:** match header, a compact broadcast chip (keeps RECOVERY PAUSED /
+  LOCAL REPLAY), move/analysis/PGN/FEN tabs, playback bar, then collapsed sections.
+  - The metrics grid and integrity note moved into "Strategy & live telemetry".
+  - The next-match identity editors moved into setup.
+  - The AI suggestion panel shows only while paused or when a suggestion exists.
+- **Duplicates removed:** the Pause/Resume/Abort buttons in Match control. Adjudicate
+  moved to "Match actions & export".
+- **One Stockfish strength control at a time:** current-match strength while a match
+  is live, next-match strength otherwise.
+- **Top bar:** brand link, connection, Flip board, Full screen, floating "Lounge tools"
+  (links to /lab, /leaderboards, /board-studio, and Share match).
+  - `/lab` and `/leaderboards` are App pages.
+  - The page route is fixed at load, so live snapshots never rewrite those URLs.
+- **Full screen:** `focus-mode` CSS plus document-level Fullscreen API. Dialogs such as
+  promotion still render. A large, always-visible "Exit full screen" button sits
+  top-right, and Esc also exits.
+- **Notices:** below the action slots, dismissible. They never cover a control and
+  never move the board.
+- **Touch targets:** 44px minimum, including the phone top bar and menu items.
+
+**Shared settings** (`1c16464`, ADR0041). `GET/PUT /api/table-settings` with a
+compare-and-swap revision.
+
+- The app loads the settings on start and on focus/visibility.
+- It saves after 400ms, only when valid, and the latest local edit wins once on a 409.
+- Next-match seats, Stockfish strength, time control and start-paused now agree across
+  devices.
+- The e2e fixture resets them per test.
+
+**Tests**
+
+- A Sonnet agent migrated 23 layout-dependent e2e tests (no weakened assertions;
+  removed controls now assert their replacement). It found four real layout bugs,
+  all fixed: More menu clipping, page-route bounce, notice overlay, 44px targets.
+- Final local regression: desktop+phone+small-desktop 205 passed, 1 one-off flake that
+  passed 3x on repeat, 43 skipped; iPad Chromium portrait/landscape 74 passed.
+- Smoke stability/strength (S01-S11, S20-S30) pass on desktop, laptop, phone and WebKit
+  iPad touch, apart from WebKit API stalls on the local server.
+- Further fixes from the smoke rerun:
+  - an older flex rule overrode the grid, so buttons shifted/wrapped
+  - iPad portrait pushed the actions off-screen; fixed with a height budget
+  - a reload within the save delay lost a shared-settings edit; fixed with a keepalive
+    flush plus a per-device unsaved edit applied only if the server is unchanged
+- Windows WebKit occasionally takes over 10s to go live; this is environmental, and
+  CI's Linux WebKit is the gate.
+
+**Deploy note.** The private runtime needs a server restart for the new endpoint.
+Back up `private-practice.db` first. `create_all` adds the table without touching
+existing rows.
+
 ## October 10 - chess.com feel pass and smoke-test Phase A
 
 Owner goal: chess.com-level smoothness, minimalist and production-ready.

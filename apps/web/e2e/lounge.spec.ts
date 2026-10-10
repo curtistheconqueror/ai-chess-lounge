@@ -1,9 +1,11 @@
-import { expandedWorkspace } from "./workspace-fixture";
+import { chooseMore, expandedWorkspace, openToolsPage, playControls } from "./workspace-fixture";
 import { expect, test } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
 import { pointerMove } from "./pointer-move";
 
 test.beforeEach(async ({ page }) => {
+  // Next-match settings are shared through the server: start from the defaults before the page loads them.
+  await finishFixtureGames(page.request);
   await page.goto("/");
   await expandedWorkspace(page);
   await expect(page.getByRole("grid", { name: "Chess board" })).toBeVisible();
@@ -74,10 +76,10 @@ test("operators can adjudicate or abort a match after confirming", async ({ page
   await finishFixtureGames(page.request);
   await page.getByRole("button", { name: "New match", exact: true }).click();
   await created;
-  await page.getByRole("button", { name: "Abort match" }).click();
+  await chooseMore(page, "End match…");
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(page.locator(".match-header")).not.toContainText("Aborted");
-  await page.getByRole("button", { name: "Abort match" }).click();
+  await chooseMore(page, "End match…");
   await page.getByRole("dialog").getByRole("button", { name: "Abort match" }).click();
   await expect(page.locator(".match-header")).toContainText("Aborted");
 });
@@ -866,15 +868,19 @@ test("human seats support drag, confirmation, and reconnect", async ({ page, req
   await expandedWorkspace(page);
   await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeEnabled();
   await expect(page.locator(".move-row").first()).toContainText("e4");
-  await page.getByRole("button", { name: "Resign Black", exact: true }).click();
+  await playControls(page).getByRole("button", { name: "Resign Black", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Resign Black?" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   expect((await (await request.get(`/api/games/${game.id}`)).json()).status).toBe("active");
-  await page.getByRole("button", { name: "Resign Black", exact: true }).click();
+  await playControls(page).getByRole("button", { name: "Resign Black", exact: true }).click();
   await page.getByRole("button", { name: "Confirm resignation" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect.poll(async () => (await (await request.get(`/api/games/${game.id}`)).json()).result).toBe("1-0");
-  await expect(page.getByRole("button", { name: "Resign Black", exact: true })).toBeDisabled();
+  // The finished match offers no resignation; its action slots now lead back to setup and the current table.
+  await expect(playControls(page).getByRole("button", { name: /^Resign/ })).toHaveCount(0);
+  await expect(playControls(page)).toContainText("Match finished");
+  await expect(playControls(page).getByRole("button", { name: "Play a new match", exact: true })).toBeVisible();
+  await expect(playControls(page).getByRole("button", { name: "Seats & game setup", exact: true })).toBeVisible();
 });
 
 test("promotion supports both colors, underpromotion, and keyboard cancel", async ({ page, request }, testInfo) => {
@@ -917,14 +923,17 @@ test("announced repetition claim is durable without playing the intended move", 
   }
   await page.goto(`/games/${game.id}`);
   await expandedWorkspace(page);
-  await page.getByRole("button", { name: "Claim draw", exact: true }).click();
+  await playControls(page).getByRole("button", { name: "Claim draw", exact: true }).click();
   await expect(page.getByLabel("Intended draw-claim move")).toHaveValue("f6g8");
   await page.getByRole("button", { name: "Confirm draw claim" }).click();
   await expect.poll(async () => (await (await request.get(`/api/games/${game.id}`)).json()).status).toBe("draw");
   await page.reload();
   await expandedWorkspace(page);
   await expect(page.getByRole("gridcell", { name: "f6 black knight" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Claim draw", exact: true })).toBeDisabled();
+  // The drawn match no longer offers a claim; the slot becomes a link back to the current table.
+  await expect(playControls(page).getByRole("button", { name: "Claim draw", exact: true })).toHaveCount(0);
+  await expect(playControls(page)).toContainText("Match finished");
+  await expect(playControls(page).getByRole("link", { name: "Open current table", exact: true })).toBeVisible();
   const restored = await (await request.get(`/api/games/${game.id}`)).json();
   expect(restored.moves).toHaveLength(7);
   expect(restored.result).toBe("1/2-1/2");
@@ -938,8 +947,8 @@ test("paused seat takeover preserves the board and restores the human", async ({
   await page.getByRole("gridcell", { name: "e2 white pawn" }).click();
   await page.getByRole("gridcell", { name: "e4 empty" }).click();
   await expect(page.locator(".move-row").first()).toContainText("e4");
-  await page.getByRole("button", { name: "Pause match", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Resume match", exact: true })).toBeVisible();
+  await playControls(page).getByRole("button", { name: "Pause play", exact: true }).click();
+  await expect(playControls(page).getByRole("button", { name: "Resume play", exact: true })).toBeVisible();
   await page.getByLabel("White seat").selectOption("scripted");
   await page.getByRole("button", { name: "Apply White seat" }).click();
   await expect(page.getByRole("dialog", { name: "Change white player?" })).toBeVisible();
@@ -951,7 +960,7 @@ test("paused seat takeover preserves the board and restores the human", async ({
   await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeVisible();
   await page.reload();
   await expandedWorkspace(page);
-  await expect(page.getByRole("button", { name: "Resume match", exact: true })).toBeVisible();
+  await expect(playControls(page).getByRole("button", { name: "Resume play", exact: true })).toBeVisible();
   await page.getByText("Seat history · 1 changes · exhibition", { exact: true }).click();
   await expect(page.locator(".seat-history ol")).toContainText("Deterministic White");
   await page.getByRole("button", { name: "Restore previous white player" }).click();
@@ -964,7 +973,7 @@ test("paused seat takeover preserves the board and restores the human", async ({
   expect(game.pgn).toContain('[SeatChanges "2"]');
   expect(game.lifecycle).toBe("paused");
   await page.screenshot({ path: testInfo.outputPath(`takeover-${testInfo.project.name}.png`), fullPage: true, animations: "disabled" });
-  await page.getByRole("button", { name: "Resume match", exact: true }).click();
+  await playControls(page).getByRole("button", { name: "Resume play", exact: true }).click();
   await page.getByRole("gridcell", { name: "e7 black pawn" }).click();
   await page.getByRole("gridcell", { name: "e5 empty" }).click();
   await expect(page.locator(".move-row").first()).toContainText("e5");
@@ -972,14 +981,14 @@ test("paused seat takeover preserves the board and restores the human", async ({
 
 test("a concurrent lifecycle change dismisses a stale takeover dialog", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Revision smoke runs once on desktop.");
-  await page.getByRole("button", { name: "Pause match", exact: true }).click();
+  await playControls(page).getByRole("button", { name: "Pause play", exact: true }).click();
   await page.getByRole("button", { name: "Apply White seat" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   const url = `/api/games/${page.url().split("/").pop()}`;
   const game = await (await page.request.get(url)).json();
   expect((await page.request.post(url + "/resume", { data: { expected_revision: game.revision } })).ok()).toBeTruthy();
   await expect(page.getByRole("dialog")).not.toBeVisible();
-  await expect(page.getByRole("button", { name: "Pause match", exact: true })).toBeVisible();
+  await expect(playControls(page).getByRole("button", { name: "Pause play", exact: true })).toBeVisible();
 });
 
 test("human consultation suggests without moving and needs confirmation", async ({ page }, testInfo) => {
@@ -1029,7 +1038,7 @@ test("a human can ignore advice and stale confirmation closes", async ({ page },
   expect((await page.request.post(url + "/pause", { data: { expected_revision: game.revision } })).ok()).toBeTruthy();
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(page.getByRole("button", { name: "Review suggested move", exact: true })).not.toBeVisible();
-  await page.getByRole("button", { name: "Resume match", exact: true }).click();
+  await playControls(page).getByRole("button", { name: "Resume play", exact: true }).click();
   await page.getByRole("gridcell", { name: "e2 white pawn" }).click();
   await page.getByRole("gridcell", { name: "e4 empty" }).click();
   await expect(page.locator(".move-row").first()).toContainText("e4");
@@ -1040,8 +1049,9 @@ test("a human can ignore advice and stale confirmation closes", async ({ page },
 
 test("Model Lab previews and saves a color-swapped plan without launching games", async ({ page }, testInfo) => {
   test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Lab acceptance runs on desktop and phone.");
-  const matchUrl = page.url();
-  await page.getByRole("button", { name: "Model Lab", exact: true }).click();
+  const liveBefore = (await (await page.request.get("/api/live-match")).json() as { id: string }).id;
+  await openToolsPage(page, "Model Lab");
+  await expect(page).toHaveURL(/\/lab$/);
   const lab = page.getByRole("region", { name: "Model Lab", exact: true });
   await lab.getByRole("textbox", { name: "Experiment name", exact: true }).fill(`Lab acceptance ${testInfo.project.name}`);
   await lab.getByRole("button", { name: "Preview experiment", exact: true }).click();
@@ -1055,10 +1065,11 @@ test("Model Lab previews and saves a color-swapped plan without launching games"
   await preview.getByRole("button", { name: "Save draft plan", exact: true }).click();
   const saved = await (await savedResponse).json();
   await expect(preview).toContainText("Saved draft");
-  expect(page.url()).toBe(matchUrl);
+  // Saving a plan neither leaves the Lab page nor starts a game: the live match is still the one from before.
+  await expect(page).toHaveURL(/\/lab$/);
+  expect((await (await page.request.get("/api/live-match")).json() as { id: string }).id).toBe(liveBefore);
   await page.reload();
-  await expandedWorkspace(page);
-  await page.getByRole("button", { name: "Model Lab", exact: true }).click();
+  await expect(lab).toBeVisible();
   await lab.getByText(/Saved experiments ·/).click();
   await lab.getByRole("button", { name: `Lab acceptance ${testInfo.project.name} · 6 games`, exact: true }).last().click();
   await expect(preview).toContainText(saved.configuration_hash);
@@ -1074,7 +1085,8 @@ test("Model Lab previews and saves a color-swapped plan without launching games"
 
 test("Model Lab prepares confirms and watches a bounded local batch", async ({ page }, testInfo) => {
   test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Batch smoke runs on desktop and phone.");
-  await page.getByRole("button", { name: "Model Lab", exact: true }).click();
+  await openToolsPage(page, "Model Lab");
+  await expect(page).toHaveURL(/\/lab$/);
   const lab = page.getByRole("region", { name: "Model Lab", exact: true });
   await lab.getByRole("textbox", { name: "Experiment name", exact: true }).fill(`Batch smoke ${testInfo.project.name}`);
   await lab.getByRole("textbox", { name: "Opening suite" }).fill("Start |");
@@ -1128,7 +1140,8 @@ test("Model Lab prepares confirms and watches a bounded local batch", async ({ p
 
 test("Model Lab previews round-robin, gauntlet, and knockout formats on desktop and phone", async ({ page }, testInfo) => {
   test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Tournament preview smoke runs on desktop and phone.");
-  await page.getByRole("button", { name: "Model Lab", exact: true }).click();
+  await openToolsPage(page, "Model Lab");
+  await expect(page).toHaveURL(/\/lab$/);
   const lab = page.getByRole("region", { name: "Model Lab", exact: true });
   await lab.getByRole("textbox", { name: "Experiment name", exact: true }).fill(`Tournament preview ${testInfo.project.name}`);
   await lab.getByRole("button", { name: "Add entrant", exact: true }).click();
@@ -1168,7 +1181,8 @@ test("Model Lab previews round-robin, gauntlet, and knockout formats on desktop 
 
 test("limited tournament games are no-results and do not earn provisional ratings", async ({ page }, testInfo) => {
   test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Tournament execution smoke runs on desktop and phone.");
-  await page.getByRole("button", { name: "Model Lab", exact: true }).click();
+  await openToolsPage(page, "Model Lab");
+  await expect(page).toHaveURL(/\/lab$/);
   const lab = page.getByRole("region", { name: "Model Lab", exact: true });
   await lab.getByRole("textbox", { name: "Experiment name", exact: true }).fill("No-result tournament smoke");
   await lab.getByRole("button", { name: "Add entrant", exact: true }).click();
@@ -1213,7 +1227,7 @@ test("identity snapshots and leaderboard counts remain clear on desktop and phon
   expect(response.status()).toBe(201);
   const game = await response.json();
   await expect.poll(async () => (await (await page.request.get(`/api/games/${game.id}`)).json()).result).toBe("0-1");
-  await page.getByRole("button", { name: "AI leaderboards", exact: true }).click();
+  // The next-match identity editors live in "Seats & game setup" on the table page (already open here).
   await page.getByText("White next match · optional identity declarations", {exact: true}).click();
   const optIn = page.getByLabel("White next match Opt in to alias listing");
   await expect(optIn).not.toBeChecked();
@@ -1221,6 +1235,9 @@ test("identity snapshots and leaderboard counts remain clear on desktop and phon
   await page.getByLabel("White next match Listing alias").fill("Optional alias");
   await optIn.uncheck();
   await expect(page.getByLabel("White next match Listing alias")).toHaveCount(0);
+  // Leaderboards are their own page, reached from Lounge tools.
+  await openToolsPage(page, "AI leaderboards");
+  await expect(page).toHaveURL(/\/leaderboards$/);
   await page.getByText("Filter games involving a matching seat", {exact: true}).click();
   await page.getByLabel("Leaderboard version filter").fill(`${version}-white`);
   const panel = page.getByRole("region", {name: "AI leaderboards", exact: true});

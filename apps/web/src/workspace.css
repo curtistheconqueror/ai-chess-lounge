@@ -103,11 +103,102 @@ summary:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid
   .board-play-controls .match-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .board-play-controls .match-actions > * { font-size: .82rem; }
 }
-.board-play-controls .board-notice {
-  position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50;
-  width: min(560px, calc(100vw - 32px)); margin: 0; padding: 12px 44px 12px 14px; border: 1px solid #8a6b3a; border-radius: 12px;
-  background: #1d1a12; color: #ffcf9b; box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
-}
+/* Notices sit below the action slots: nothing above them (board, buttons) ever moves, and nothing is covered. */
+.board-play-controls .board-notice { position: relative; margin: 0; padding: 10px 44px 10px 12px; border: 1px solid #8a6b3a; border-radius: 10px; background: #1d1a12; color: #ffcf9b; }
 .board-play-controls .notice-dismiss {
   position: absolute; top: 6px; right: 6px; min-height: 32px; width: 32px; padding: 0; border: 0; background: transparent; color: inherit; font-size: 1.2rem;
+}
+
+/* ---- Phase B: board-first layout ---- */
+.topbar { min-height: 52px; margin-bottom: 12px; gap: 12px; }
+.topbar .brand-lockup { color: inherit; text-decoration: none; gap: 10px; min-width: 0; }
+.topbar .brand-lockup h1 { margin: 0; font-size: 1.15rem; white-space: nowrap; }
+.topbar .brand-mark { width: 36px; height: 36px; font-size: 1.45rem; border-radius: 10px; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.board-play-controls { margin: 10px 0 0; }
+.match-stage { display: grid; gap: 8px; align-content: start; }
+
+/* Floating menus: never reflow the page; closed on outside pointer, Escape or a choice. */
+.menu-button { position: relative; }
+.menu-button.lounge-tools[open] { flex: none; }
+.menu-button > summary { list-style: none; cursor: pointer; min-height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: 9px; background: #16211b; color: #e6efe8; font-size: .82rem; white-space: nowrap; }
+.menu-button > summary::-webkit-details-marker { display: none; }
+.menu-button > summary::after { content: "▾"; font-size: .7rem; opacity: .8; }
+.menu-button .menu-items { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: max-content; min-width: 200px; max-width: min(320px, calc(100vw - 32px));
+  display: grid; gap: 4px; padding: 6px; background: #121b16; border: 1px solid #3c4e42; border-radius: 12px; box-shadow: 0 14px 34px rgba(0, 0, 0, .5); }
+.menu-button.align-end .menu-items { left: auto; right: 0; }
+.board-play-controls .menu-button .menu-items { top: auto; bottom: calc(100% + 6px); }
+.menu-button .menu-items > * { min-height: 42px; width: 100%; display: flex; align-items: center; justify-content: flex-start; padding: 0 12px; text-align: left;
+  border: 0; border-radius: 8px; background: transparent; color: #e6efe8; font-size: .86rem; text-decoration: none; }
+.menu-button .menu-items > *:hover:not(:disabled), .menu-button .menu-items > *:focus-visible { background: #22322a; }
+.menu-button .menu-items > *:disabled { opacity: .45; }
+.board-play-controls .match-actions > .menu-button > summary { width: 100%; height: 44px; justify-content: center; }
+
+/* Right rail status chip (was the full-width ribbon). */
+.control-deck .broadcast-ribbon { margin: 0 0 12px; padding: 6px 10px; min-height: 0; font-size: .72rem; gap: 10px; border-radius: 8px; }
+
+/* Full screen: board, clocks and actions only, with an exit that is always on top and always visible. */
+.app-shell.focus-mode { width: 100%; max-width: none; min-height: 100dvh; padding: 10px; }
+.app-shell.focus-mode .topbar, .app-shell.focus-mode .control-deck { display: none; }
+.app-shell.focus-mode .arena-layout { grid-template-columns: minmax(0, 1fr); }
+.app-shell.focus-mode .match-stage { width: min(100%, calc(100dvh - 250px + 34px)); min-width: 280px; margin: 0 auto; padding: 0; background: transparent; border: 0; }
+.exit-focus { position: fixed; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); z-index: 60;
+  min-height: 48px; display: inline-flex; align-items: center; gap: 8px; padding: 0 18px; border: 2px solid #1a1408; border-radius: 999px;
+  background: #f2d27f; color: #1a1408; font-weight: 700; font-size: .95rem; box-shadow: 0 6px 20px rgba(0, 0, 0, .55); cursor: pointer; }
+.exit-focus:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+@media (max-width: 560px) {
+  .topbar .brand-lockup h1 { font-size: 1rem; }
+  .topbar-actions > .ghost-button { padding-inline: 10px; font-size: .78rem; }
+  .app-shell.focus-mode .match-stage { width: 100%; }
+}
+
+/* Board sized to the screen height (chess.com style): the whole stage fits without scrolling on desktop. */
+/* Height budget for everything that is not the board (strips, action bar, notice): the primary
+   action must stay on screen without scrolling. Short screens use the compact chrome below. */
+.match-stage .board-broadcast-frame { width: min(100%, max(320px, calc(100dvh - 500px))); margin-inline: auto; }
+.app-shell.focus-mode .match-stage .board-broadcast-frame { width: 100%; }
+.app-shell.focus-mode .square-entry { display: none; }
+/* Compact player strips: name, configuration and a prominent clock. */
+.match-stage .player-card { min-height: 0; padding: 6px 10px; gap: 10px; }
+.match-stage .player-avatar { width: 34px; height: 34px; font-size: 1.25rem; border-radius: 9px; }
+.match-stage .player-clock { padding: 4px 10px; font-size: clamp(1.25rem, 2.2vw, 1.6rem); min-width: 84px; }
+.match-stage .player-chips { margin-top: 2px; }
+/* Secondary actions share one quiet style; disabled ones fade instead of changing color. */
+.board-play-controls .match-actions > button:not(.primary-button), .board-play-controls .match-actions > a {
+  background: #16211b; border: 1px solid var(--line); color: #e6efe8; border-radius: 10px; }
+.board-play-controls .match-actions > button:disabled { opacity: .45; }
+@media (max-width: 560px) {
+  .match-stage .player-chips, .match-stage .player-copy > span { display: none; }
+  .topbar { margin-bottom: 8px; }
+  .topbar-actions { gap: 6px; }
+  .topbar-actions .ghost-button, .topbar-actions .menu-button > summary { min-height: 36px; padding: 0 9px; font-size: .74rem; letter-spacing: 0; }
+  .topbar .connection { padding: 0 8px; }
+}
+@media (max-width: 440px) { .topbar .brand-lockup h1 { display: none; } }
+@media (max-width: 560px) { .wide-label { display: none; } }
+
+/* The More menu must not inherit the slots' clipping, or its floating items are cut off. */
+.board-play-controls .match-actions > .menu-button { overflow: visible; }
+.board-play-controls .match-actions > .menu-button > summary { overflow: hidden; text-overflow: ellipsis; }
+/* Touch targets: at least 44px everywhere, including the phone top bar and menu items. */
+.menu-button .menu-items > * { min-height: 44px; }
+@media (max-width: 560px) {
+  .topbar-actions .ghost-button, .topbar-actions .menu-button > summary { min-height: 44px; }
+}
+
+/* Short screens (laptops, iPad landscape): give the height to the board. */
+@media (max-height: 959px) {
+  .match-stage .board-broadcast-frame { width: min(100%, max(320px, calc(100dvh - 370px))); }
+  .match-stage .player-chips { display: none; }
+  .board-play-controls .match-status { height: calc(1.3rem + .85rem * 1.45 + 2px); }
+  .board-play-controls .match-status p { -webkit-line-clamp: 1; }
+}
+
+/* Wide stages: status on the left, actions in a fixed-width column on the right. Status text
+   ("White to move" vs "Black to move") can never nudge the buttons sideways. */
+.board-play-controls { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; }
+@media (min-width: 700px) {
+  .board-play-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 460px); column-gap: 14px; }
+  .board-play-controls .board-notice { grid-column: 1 / -1; }
 }

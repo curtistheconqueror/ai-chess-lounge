@@ -2,6 +2,13 @@ import { expect, type APIRequestContext, type Page, type Locator } from "@playwr
 
 /* ---------- API helpers (disposable server only) ---------- */
 export async function finishAll(request: APIRequestContext) {
+  // Next-match settings are shared server-side (Phase B); each test starts from the defaults.
+  const current = await request.get("/api/table-settings");
+  if (current.ok()) {
+    const doc = await current.json();
+    const defaults = { white_seat: "human", black_seat: "stockfish", stockfish: { mode: "elo", elo: 1600, skill_level: null }, time_control: "5+2", start_paused: false };
+    if (JSON.stringify(doc.settings) !== JSON.stringify(defaults)) await request.put("/api/table-settings", { data: { revision: doc.revision, settings: defaults } });
+  }
   for (let i = 0; i < 50; i++) {
     const live = await request.get("/api/live-match");
     if (live.status() === 404) return;

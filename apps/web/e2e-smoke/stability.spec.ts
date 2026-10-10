@@ -123,6 +123,8 @@ test("[S08] Layout-shift score for a Pause/Resume cycle is under 0.02 (chromium 
 test("[S09] End match / start new match: page does not jump (scrollY stable, no board reflow beyond the intended swap)", async ({ page }) => {
   const g = await hvh(page.request);
   await openGame(page, g.id);
+  // Phase B: End match… lives in the More menu beside the primary action.
+  await press(page, controls(page).locator("details.more-menu > summary"));
   await press(page, controls(page).getByRole("button", { name: "End match…" }));
   const dlg = page.getByRole("dialog");
   await expect(dlg).toBeVisible();

@@ -1,15 +1,19 @@
 import { expect, test } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
+import { openMore, playControls } from "./workspace-fixture";
 
 test.beforeEach(async ({ request }) => { await finishFixtureGames(request); });
 
-test("board leads, live metrics stay visible and every workspace opens by keyboard", async ({ page }, info) => {
+test("board leads, live status stays on the board and every workspace opens by keyboard", async ({ page }, info) => {
   const game = await (await page.request.post("/api/games", { data: { opponent: "human", start_paused: true } })).json();
   await page.goto(`/games/${game.id}`);
   await expect(page.getByLabel("Connection live")).toBeVisible();
   await expect(page.locator(".board .classic-piece")).toHaveCount(32);
   await expect(page.getByLabel("White seat", { exact: true })).not.toBeVisible();
-  await expect(page.locator(".telemetry-grid")).toContainText("Evaluation");
+  // Board-first: the detailed metrics live inside the collapsed "Strategy & live telemetry" section.
+  await expect(page.locator(".telemetry-grid")).not.toBeVisible();
+  await expect(page.getByRole("region", { name: "Match broadcast status" })).toContainText("RECOVERY PAUSED");
+  await expect(playControls(page)).toContainText("Match paused");
   await expect(page.getByRole("tab", { name: "MOVES", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "MOVES", exact: true }).focus();
   await page.keyboard.press("End");
@@ -31,6 +35,7 @@ test("board leads, live metrics stay visible and every workspace opens by keyboa
     await page.keyboard.press("Enter");
     await expect(summary.locator("..")).toHaveAttribute("open", "");
   }
+  await expect(page.locator(".telemetry-grid")).toContainText("Evaluation");
   await expect(page.getByLabel("White seat", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Black seat", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Runner turn limit")).toBeVisible();
@@ -40,7 +45,7 @@ test("board leads, live metrics stay visible and every workspace opens by keyboa
   await page.getByRole("tab", { name: "FEN", exact: true }).click();
   await expect(page.getByRole("button", { name: "Download match JSON" })).toBeVisible();
   await expect(page.locator(".board-play-controls")).toContainText(game.id.slice(0, 8).toUpperCase());
-  await expect(page.locator(".board-play-controls").getByRole("button", { name: /^End and start new/ })).toBeVisible();
+  await expect((await openMore(page)).getByRole("button", { name: /^End and start new/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
 

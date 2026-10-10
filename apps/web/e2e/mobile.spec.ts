@@ -61,8 +61,9 @@ test("mobile tap, pointer drag and large controls preserve legal play", async ({
   await page.getByLabel("Move to square").selectOption("f3");
   await page.getByRole("button", { name: "Play move", exact: true }).tap();
   await expect(square("f3")).toHaveAttribute("aria-label", "f3 white knight");
-  const current = await (await page.request.get(`/api/games/${game.id}`)).json();
-  expect(current.moves.map((move: { uci: string }) => move.uci)).toEqual(["e2e4", "d7d5", "g1f3"]);
+  // The board shows the player's own move instantly while the server confirms it, so wait for the saved move list.
+  await expect.poll(async () => ((await (await page.request.get(`/api/games/${game.id}`)).json()).moves as { uci: string }[]).map(move => move.uci))
+    .toEqual(["e2e4", "d7d5", "g1f3"]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
   const small = await page.locator("button:not(.square), select, .square-entry summary").evaluateAll(elements =>
     elements.filter(el => el.getClientRects().length).filter(el => {

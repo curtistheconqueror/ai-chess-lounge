@@ -1,4 +1,4 @@
-import { expandedWorkspace } from "./workspace-fixture";
+import { expandedWorkspace, playControls } from "./workspace-fixture";
 import { expect, test } from "@playwright/test";
 import type { GameSnapshot } from "../src/types";
 import { finishFixtureGames } from "./fixture-games";
@@ -44,7 +44,7 @@ test("late updates from the previous match cannot replace a new match", async ({
   await page.goto(`/games/${previous.id}`);
   await expandedWorkspace(page);
   await expect(page.getByRole("gridcell")).toHaveCount(64);
-  await expect(page.getByRole("button", { name: "Resume match", exact: true })).toBeEnabled();
+  await expect(playControls(page).getByRole("button", { name: "Resume play", exact: true })).toBeEnabled();
   expect((await page.request.post(`/api/games/${previous.id}/abort`)).ok()).toBeTruthy();
   const created = page.waitForResponse(r => r.url().endsWith("/api/games") && r.request().method() === "POST");
   await page.getByRole("button", { name: "New match", exact: true }).click();

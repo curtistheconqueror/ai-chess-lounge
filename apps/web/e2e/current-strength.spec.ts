@@ -49,7 +49,9 @@ test("native skill is a distinct persisted mode and current edits target one Sto
     await expect(page.getByRole("group", { name: "Stockfish strength for next match" }).getByRole("alert")).toContainText("Skill Level from 0 to 20");
     await expect(page.getByRole("button", { name: "New match", exact: true })).toBeDisabled();
   }
-  await skill.fill("3"); await page.reload(); await expandedWorkspace(page);
+  // Next-match settings are shared through the server (debounced save); reload only after it lands.
+  const saved = page.waitForResponse(r => r.url().endsWith("/api/table-settings") && r.request().method() === "PUT");
+  await skill.fill("3"); await saved; await page.reload(); await expandedWorkspace(page);
   await expect(skill).toHaveValue("3");
   await page.getByLabel("White seat", { exact: true }).selectOption("stockfish");
   await page.getByLabel("Start paused to review or advise before any agent call").check();

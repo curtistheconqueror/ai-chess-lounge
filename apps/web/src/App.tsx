@@ -1,4 +1,4 @@
-import { StockfishStrength, readStockfishChoice, stockfishChoiceKey, useStockfishCapabilities, validStrength, strengthName, strengthSettings, type StockfishChoice } from "./StockfishStrength";
+import { StockfishStrength, readStockfishChoice, skillValue, stockfishChoiceKey, useStockfishCapabilities, validStrength, strengthName, strengthSettings, type StockfishChoice } from "./StockfishStrength";
 import { Leaderboards } from "./Leaderboards";
 import { IdentityEditor } from "./IdentityEditor";
 import type { IdentityDeclaration } from "./types";
@@ -7,6 +7,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 
 import {
   ApiRequestError,
+  fetchTableSettings,
+  flushTableSettings,
+  saveTableSettings,
+  type TableSettings,
+  type TableSettingsDocument,
   abortGame,
   adjudicateGame,
   claimDraw,
@@ -120,6 +125,9 @@ const providerDetails: Record<AgentProviderChoice, { label: string; provider: st
 };
 
 const noMoves: string[] = [];
+const unsavedTableKey = "ai-chess-lounge:unsaved-table-settings";
+// Fixed at load: a live snapshot rewriting the URL to /games/<id> must not turn a page into the table.
+const initialPageRoute = window.location.pathname === "/lab" ? "lab" : window.location.pathname === "/leaderboards" ? "leaderboards" : "table";
 
 function App() {
   const boardSound = useBoardSound();
@@ -128,14 +136,29 @@ function App() {
     try { localStorage.setItem(motionStorageKey, JSON.stringify(motion)); } catch { /* Optional storage. */ }
   }, [motion]);
   const playMoveSound = boardSound.playMove;
-  const [showLab, setShowLab] = useState(false);
-  const [showLeaderboards, setShowLeaderboards] = useState(false);
+  // Model Lab and leaderboards are their own pages; the table page stays board-first.
+  const pageRoute = initialPageRoute;
+  // Full screen: board, clocks and actions only. Native fullscreen is requested on the document (not the
+  // board) so dialogs such as promotion still render; CSS hides everything else either way.
+  const [focusMode, setFocusMode] = useState(false);
+  const enterFocusMode = useCallback(() => {
+    setFocusMode(true);
+    const root = document.documentElement;
+    if (root.requestFullscreen && !document.fullscreenElement) void root.requestFullscreen().catch(() => { /* CSS mode still applies. */ });
+  }, []);
+  const exitFocusMode = useCallback(() => {
+    setFocusMode(false);
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => { /* Already exited. */ });
+  }, []);
   useEffect(() => {
-    if (showLab) document.getElementById("model-lab-workspace")?.focus();
-  }, [showLab]);
-  useEffect(() => {
-    if (showLeaderboards) document.getElementById("leaderboards-workspace")?.focus();
-  }, [showLeaderboards]);
+    if (!focusMode) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !document.querySelector("[role=dialog]")) exitFocusMode(); };
+    // Leaving native fullscreen (browser Esc, gesture) also leaves focus mode.
+    const onChange = () => { if (!document.fullscreenElement) setFocusMode(false); };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("fullscreenchange", onChange); };
+  }, [focusMode, exitFocusMode]);
   const [whiteIdentity, setWhiteIdentity] = useState<IdentityDeclaration>({});
   const [blackIdentity, setBlackIdentity] = useState<IdentityDeclaration>({});
   const [runnerIdentity, setRunnerIdentity] = useState<IdentityDeclaration>({});
@@ -199,6 +222,87 @@ function App() {
   const [promotion, setPromotion] = useState<PromotionRequest | null>(null);
   const [adviceMode, setAdviceMode] = useState(false);
   const [startPaused, setStartPaused] = useState(false);
+
+  // Next-match settings are shared across devices: loaded from the server, refreshed when the tab
+  // returns to the foreground, and saved (debounced, valid values only) when changed here.
+  const tableRevision = useRef<number | null>(null);
+  const tableSaved = useRef("");
+  const sharedSettings = useMemo<TableSettings>(() => ({
+    white_seat: whiteSeat,
+    black_seat: blackSeat,
+    stockfish: stockfishElo === "full" ? { mode: "full", elo: null, skill_level: null }
+      : skillValue(stockfishElo) !== null ? { mode: "skill", elo: null, skill_level: skillValue(stockfishElo) }
+      : { mode: "elo", elo: stockfishElo as number, skill_level: null },
+    time_control: timeControl,
+    start_paused: startPaused,
+  }), [whiteSeat, blackSeat, stockfishElo, timeControl, startPaused]);
+  const applyTableSettings = useCallback((doc: TableSettingsDocument) => {
+    tableRevision.current = doc.revision;
+    tableSaved.current = JSON.stringify(doc.settings);
+    // An edit made here that never reached the server (e.g. reload within the save delay) still wins
+    // if the server has not changed since that edit was made; the save effect then shares it.
+    let unsaved: { base: number; settings: TableSettings } | null = null;
+    try { unsaved = JSON.parse(localStorage.getItem(unsavedTableKey) ?? "null"); } catch { /* Optional storage. */ }
+    const shared = unsaved && unsaved.base === doc.revision ? unsaved.settings : doc.settings;
+    if (!unsaved || unsaved.base !== doc.revision) {
+      try { localStorage.removeItem(unsavedTableKey); } catch { /* Optional storage. */ }
+      if (doc.revision === 0) return; // Nothing shared yet: keep this device's choices and share them.
+    }
+    setWhiteSeat(shared.white_seat as SeatChoice);
+    setBlackSeat(shared.black_seat as SeatChoice);
+    setStockfishElo(shared.stockfish.mode === "full" ? "full"
+      : shared.stockfish.mode === "skill" ? `skill:${shared.stockfish.skill_level ?? 20}` : shared.stockfish.elo ?? 1600);
+    if (shared.time_control in timeControls) setTimeControl(shared.time_control as TimeControlKey);
+    setStartPaused(shared.start_paused);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => fetchTableSettings()
+      .then(doc => { if (!cancelled && doc.revision !== tableRevision.current) applyTableSettings(doc); })
+      .catch(() => { if (!cancelled && tableRevision.current === null) tableRevision.current = -1; });
+    void load();
+    const onVisible = () => { if (document.visibilityState === "visible") void load(); };
+    window.addEventListener("focus", load);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { cancelled = true; window.removeEventListener("focus", load); document.removeEventListener("visibilitychange", onVisible); };
+  }, [applyTableSettings]);
+  // A change made just before leaving or reloading must not be lost to the debounce: flush it with a
+  // keepalive request when the page is hidden.
+  const pendingShared = useRef<TableSettings | null>(null);
+  useEffect(() => {
+    const flush = () => {
+      const pending = pendingShared.current;
+      const revision = tableRevision.current;
+      if (!pending || revision === null || revision < 0) return;
+      pendingShared.current = null;
+      flushTableSettings(revision, pending);
+    };
+    const onHidden = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => { window.removeEventListener("pagehide", flush); document.removeEventListener("visibilitychange", onHidden); };
+  }, []);
+  useEffect(() => {
+    const revision = tableRevision.current;
+    // Not loaded yet, unavailable (offline/older server), unchanged, or mid-edit invalid: nothing to save.
+    if (revision === null || revision < 0 || JSON.stringify(sharedSettings) === tableSaved.current
+      || !validStrength(stockfishElo, stockfishCaps)) { pendingShared.current = null; return; }
+    pendingShared.current = sharedSettings;
+    try { localStorage.setItem(unsavedTableKey, JSON.stringify({ base: revision, settings: sharedSettings })); } catch { /* Optional. */ }
+    const timer = window.setTimeout(() => {
+      pendingShared.current = null;
+      const save = (base: number) => saveTableSettings(base, sharedSettings).then(doc => {
+        try { localStorage.removeItem(unsavedTableKey); } catch { /* Optional storage. */ }
+        tableRevision.current = doc.revision;
+        tableSaved.current = JSON.stringify(doc.settings);
+      });
+      // Another device saved first: this device's latest explicit change wins, once.
+      save(revision).catch(error => error instanceof ApiRequestError && error.status === 409
+        ? fetchTableSettings().then(doc => save(doc.revision)).catch(() => fetchTableSettings().then(applyTableSettings))
+        : undefined).catch(() => { /* Settings still apply locally; the next change retries. */ });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [sharedSettings, stockfishElo, stockfishCaps, applyTableSettings]);
   const cancelPromotion = useCallback(() => setPromotion(null), []);
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [busy, setBusy] = useState(true);
@@ -352,7 +456,8 @@ function App() {
       currentPly === null ? null : Math.min(currentPly, snapshot.moves.length),
     );
     const path = `/games/${snapshot.id}`;
-    if (window.location.pathname !== path) window.history.replaceState(null, "", path);
+    // Only the table page mirrors the selected match in the URL; /lab and /leaderboards stay put.
+    if (initialPageRoute === "table" && window.location.pathname !== path) window.history.replaceState(null, "", path);
   }, [playMoveSound]);
 
   const startNewGame = useCallback(async () => {
@@ -880,6 +985,13 @@ function App() {
     }
   }
 
+  function openSetup() {
+    const section = document.getElementById("seats-setup") as HTMLDetailsElement | null;
+    if (!section) return;
+    // An explicit "go to setup" request: scrolling there is what the user asked for.
+    section.open = true; section.querySelector("summary")?.focus(); section.scrollIntoView({ block: "nearest" });
+  }
+
   function openMatchAction(action: MatchAction) {
     if (!game) return;
     matchActionTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -1149,78 +1261,52 @@ function App() {
       ? "RECOVERY PAUSED"
       : "MATCH COMPLETE";
 
-  return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">♞</div>
-          <div>
-            <p className="eyebrow">LIVE INTELLIGENCE ARENA</p>
-            <h1>AI Chess Lounge</h1>
-          </div>
-        </div>
-        <div className="topbar-actions">
-          <details className="lounge-tools" onKeyDown={event => {
-            if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); }
-          }}>
-          <summary>Lounge tools</summary>
-          <div>
-          <a className="ghost-button" href="/board-studio">Compare board looks</a>
-          <button className="ghost-button" aria-expanded={showLeaderboards} onClick={() => setShowLeaderboards(v => !v)}>{showLeaderboards ? "Close AI leaderboards" : "AI leaderboards"}</button>
-          <button className="ghost-button" aria-expanded={showLab} onClick={() => setShowLab(v => !v)}>{showLab ? "Close Model Lab" : "Model Lab"}</button>
-          </div>
-          </details>
-          <span className={`connection ${connection}`} aria-label={`Connection ${game ? connection : busy ? "checking" : "ready"}`}>
-            <span className="connection-dot" /> {game ? connection : busy ? "checking" : "ready"}
-          </span>
-          <button className="ghost-button" onClick={() => setFlipped((value) => !value)}>Flip board</button>
-          <button className="gold-ghost-button" onClick={() => void shareMatch()} disabled={!game}>Share match</button>
-        </div>
-      </header>
+  const humanColors = (["white", "black"] as const).filter(color => game?.[`${color}_player`].connection_mode === "human");
+  // One Resign: the only human seat, or the side to move when two humans share the board.
+  const resignColor = humanColors.length === 1 ? humanColors[0] : game && humanColors.includes(game.turn) ? game.turn : null;
+  const liveMatch = Boolean(game && !matchEnded);
+  const actionsReady = followingLive && connection === "live";
+  const topBar = (
+    <header className="topbar">
+      <a className="brand-lockup" href="/" aria-label="AI Chess Lounge table">
+        <div className="brand-mark" aria-hidden="true">♞</div>
+        <h1>AI Chess Lounge</h1>
+      </a>
+      <div className="topbar-actions">
+        <span className={`connection ${connection}`} aria-label={`Connection ${game ? connection : busy ? "checking" : "ready"}`}>
+          <span className="connection-dot" /> {game ? connection : busy ? "checking" : "ready"}
+        </span>
+        {pageRoute === "table" ? <>
+          <button className="ghost-button" aria-label="Flip board" onClick={() => setFlipped((value) => !value)}><span aria-hidden="true">⇅ </span>Flip<span className="wide-label"> board</span></button>
+          <button className="ghost-button" aria-label="Full screen" onClick={enterFocusMode}><span aria-hidden="true">⛶ </span>Full<span className="wide-label"> screen</span></button>
+        </> : <a className="ghost-button" href="/">Back to table</a>}
+        <MenuButton label="Lounge tools" className="lounge-tools" align="end">
+          <a href="/lab">Model Lab</a>
+          <a href="/leaderboards">AI leaderboards</a>
+          <a href="/board-studio">Compare board looks</a>
+          <button onClick={() => void shareMatch()} disabled={!game}>Share match</button>
+        </MenuButton>
+      </div>
+    </header>
+  );
 
-      <section className="broadcast-ribbon" aria-label="Match broadcast status">
-        <span className={game?.status === "active" ? "live-pulse" : "result-pulse"} />
-        <strong>{broadcastLabel}</strong>
-        <span>Table 01</span>
-        <span>{game ? `${Math.round(game.clock.initial_time_ms / 60_000)}+${game.clock.increment_ms / 1_000}` : "—"}</span>
-        <span>Server authoritative</span>
-        {!followingLive && <b>LOCAL REPLAY · LIVE FEED CONTINUES</b>}
-      </section>
+  if (pageRoute !== "table") return (
+    <main className="app-shell page-shell">
+      {topBar}
+      {pageRoute === "lab"
+        ? <section id="model-lab-workspace" aria-label="Model Lab workspace"><ModelLab catalog={playerAdapters} /></section>
+        : <section id="leaderboards-workspace" aria-label="Leaderboards workspace"><Leaderboards /></section>}
+    </main>
+  );
+
+  return (
+    <main className={focusMode ? "app-shell focus-mode" : "app-shell"}>
+      {topBar}
+      {focusMode && <button className="exit-focus" onClick={exitFocusMode} aria-label="Exit full screen (Esc)">
+        <span aria-hidden="true">✕</span> Exit full screen</button>}
 
       <section className="arena-layout">
         <div className="match-stage">
-          <section ref={boardControlsRef} className="board-play-controls" aria-label="Board play controls">
-            {/* Fixed layout: one status line and four action slots that never reorder or change size,
-                so pausing, resuming, ending or starting a match never moves the board or the page. */}
-            <div className="match-status">
-              <div className="match-status-title"><strong>{controlStatus.title}</strong>
-                {game && <small className="match-id">Match {game.id.slice(0, 8).toUpperCase()}</small>}</div>
-              <p>{controlStatus.detail}</p>
-            </div>
-            <div className="match-actions">
-              {!game || matchEnded
-                ? <button className="primary-button" disabled={newMatchDisabled} onClick={() => void startNewGame()}>Play a new match</button>
-                : connection !== "live" ? <button className="primary-button" disabled>Reconnecting…</button>
-                : !followingLive ? <button className="primary-button" onClick={() => { setReplayRunning(false); setReplayPly(null); }}>Return to live board</button>
-                : game.lifecycle === "paused" ? <button className="primary-button" disabled={matchControlBusy || busy} onClick={() => void onMatchControl("resume")}>Resume play</button>
-                : game.lifecycle === "running" ? <button className="primary-button" disabled={matchControlBusy} onClick={() => void onMatchControl("pause")}>Pause play</button>
-                : <button className="primary-button" disabled>Waiting…</button>}
-              {game && !matchEnded
-                ? <button disabled={busy || matchControlBusy || !followingLive || connection !== "live"} onClick={() => openMatchAction("abort")}>End match…</button>
-                : <a className="table-link" href="/">Open current table</a>}
-              {game && !matchEnded
-                ? <button disabled={newMatchDisabled || !followingLive || connection !== "live"} onClick={() => openMatchAction("restart")}>End and start new…</button>
-                : <span className="action-slot" aria-hidden="true" />}
-              <button className="setup-shortcut" onClick={() => {
-                const section = document.getElementById("seats-setup") as HTMLDetailsElement;
-                // An explicit "go to setup" request: scrolling there is what the user asked for.
-                section.open = true; section.querySelector("summary")?.focus(); section.scrollIntoView({ block: "nearest" });
-              }}>Seats &amp; game setup</button>
-            </div>
-            {/* Floats over the page instead of inserting a line that pushes the board down. */}
-            {notice && <p className="board-notice" role="alert">{notice}
-              <button className="notice-dismiss" aria-label="Dismiss message" onClick={() => setNotice(null)}>×</button></p>}
-          </section>
           <PlayerCard {...(flipped ? whitePlayer : blackPlayer)} />
 
           <div className="board-broadcast-frame" onContextMenu={event => {
@@ -1254,47 +1340,59 @@ function App() {
             />
           </div>
 
-          {game && adviceSupported && <section className="consultation-panel" aria-label="Suggest a move to your AI">
-            <h3>Suggest a move to your AI</h3>
-            <p>Pause on the AI turn, enable suggestion mode, then drag a piece or select two squares. The board stays unchanged. Resume to let the AI decide.</p>
-            <label><input type="checkbox" checked={adviceMode} disabled={game.lifecycle !== "paused" || !followingLive || connection !== "live" || busy} onChange={e => setAdviceMode(e.target.checked)} /> Suggestion mode</label>
-            {canSuggest && <p role="status">Board input saves a suggestion for {activeSeat?.display_name}; it does not play a move.</p>}
-            {latestHumanSuggestion && <p>Human suggested {latestHumanSuggestion.san} to {latestHumanSuggestion.advisor.display_name}: {latestHumanSuggestion.status === "played" ? "AI turn completed (may choose differently)" : latestHumanSuggestion.status}.</p>}
-            {latestHumanSuggestion?.status === "ready" && <button disabled={!canSuggest} onClick={() => void saveHumanSuggestion(null)}>Clear human suggestion</button>}
-            <small>Human-AI Team exhibition. Advice is recorded in history and PGN.</small>
-          </section>}
-
           <PlayerCard {...(flipped ? blackPlayer : whitePlayer)} />
 
-          <div className="playback-bar">
-            <button aria-label="First position" onClick={() => selectPly(0)} disabled={!game?.moves.length}>|◀</button>
-            <button aria-label="Previous move" onClick={() => selectPly(displayPly - 1)} disabled={!game?.moves.length || displayPly === 0}>◀</button>
-            <button className="replay-toggle" onClick={toggleReplay} disabled={!game?.moves.length}>{replayRunning ? "PAUSE" : "REPLAY"}</button>
-            <input type="range" min="0" max={game?.moves.length ?? 0} value={displayPly} onChange={(event) => selectPly(Number(event.target.value))} aria-label="Replay position" />
-            <span><strong>{displayPly}</strong> / {game?.moves.length ?? 0}</span>
-            <button aria-label="Next move" onClick={() => selectPly(displayPly + 1)} disabled={!game || displayPly >= game.moves.length}>▶</button>
-            <button className={followingLive ? "live active" : "live"} onClick={() => { setReplayRunning(false); setReplayPly(null); }} disabled={followingLive}>LIVE</button>
-          </div>
+          <section ref={boardControlsRef} className="board-play-controls" aria-label="Board play controls">
+            {/* Below the board and fixed in size: nothing above the board changes with the match state,
+                and every action keeps its slot. Secondary actions live in More. */}
+            <div className="match-status">
+              <div className="match-status-title"><strong>{controlStatus.title}</strong>
+                {game && <small className="match-id">Match {game.id.slice(0, 8).toUpperCase()}</small>}</div>
+              <p>{controlStatus.detail}</p>
+            </div>
+            <div className="match-actions">
+              {!game || matchEnded
+                ? <button className="primary-button" disabled={newMatchDisabled} onClick={() => void startNewGame()}>Play a new match</button>
+                : connection !== "live" ? <button className="primary-button" disabled>Reconnecting…</button>
+                : !followingLive ? <button className="primary-button" onClick={() => { setReplayRunning(false); setReplayPly(null); }}>Return to live board</button>
+                : game.lifecycle === "paused" ? <button className="primary-button" disabled={matchControlBusy || busy} onClick={() => void onMatchControl("resume")}>Resume play</button>
+                : game.lifecycle === "running" ? <button className="primary-button" disabled={matchControlBusy} onClick={() => void onMatchControl("pause")}>Pause play</button>
+                : <button className="primary-button" disabled>Waiting…</button>}
+              {liveMatch
+                ? <button aria-label={resignColor ? `Resign ${capitalize(resignColor)}` : "Resign"} disabled={!resignColor || !game || busy || game.status !== "active" || !actionsReady}
+                  onClick={() => resignColor && setHumanAction(resignColor)}>Resign</button>
+                : <button className="setup-shortcut" onClick={openSetup}>Seats &amp; game setup</button>}
+              {liveMatch
+                ? <button onClick={() => setHumanAction("draw")} disabled={!playerCanMove || (!game?.can_claim_draw && !game?.draw_claim_moves?.length)} title="Available for threefold repetition or the fifty-move rule">Claim draw</button>
+                : <a className="table-link" href="/">Open current table</a>}
+              <MenuButton label="More" className="more-menu" align="end">
+                {liveMatch && <button disabled={busy || matchControlBusy || !actionsReady} onClick={() => openMatchAction("abort")}>End match…</button>}
+                {liveMatch && <button disabled={newMatchDisabled || !actionsReady} onClick={() => openMatchAction("restart")}>End and start new…</button>}
+                {liveMatch && <button className="setup-shortcut" onClick={openSetup}>Seats &amp; game setup</button>}
+                <button onClick={enterFocusMode}>Full screen</button>
+                <button disabled={!game} onClick={() => game && void copyText(permalink(game.id), "Match link")}>Copy link</button>
+              </MenuButton>
+            </div>
+            {/* Floats over the page instead of inserting a line that pushes the board down. */}
+            {notice && <p className="board-notice" role="alert">{notice}
+              <button className="notice-dismiss" aria-label="Dismiss message" onClick={() => setNotice(null)}>×</button></p>}
+          </section>
         </div>
 
         <aside className="control-deck">
           <div className="match-header">
             <div>
-              <p className="eyebrow">EXHIBITION TABLE 01</p>
               <h2>{game?.white_player.display_name ?? seatChoiceLabel(whiteSeat)} <span>vs</span> {game?.black_player.display_name ?? seatChoiceLabel(blackSeat)}</h2>
               <small>{game?.id ? `Match ${game.id.slice(0, 8).toUpperCase()}${game.termination_reason ? ` · ${terminationLabel(game.termination_reason)}` : ""}` : "No match loaded"}</small>
             </div>
             <span className={`result-badge ${game?.status ?? "loading"}`}>{game?.status === "active" ? "LIVE" : game?.status === "paused" ? "PAUSED" : game?.status === "aborted" ? "ABORTED" : game?.result ?? (busy ? "CHECKING" : "READY")}</span>
           </div>
-
-          <div className="telemetry-grid">
-            <Metric label="Position" value={`${displayPly} / ${game?.moves.length ?? 0}`} />
-            <Metric label="Evaluation" value={formatEvaluation(selectedPoint)} accent />
-            <Metric label="Move latency" value={latestAgentMove?.player_metadata ? `${latestAgentMove.player_metadata.latency_ms} ms` : "—"} />
-            <Metric label="Analysis depth" value={selectedPoint?.depth ? `Depth ${selectedPoint.depth}` : analysisLoading ? "CALCULATING" : "—"} />
-            <Metric label="Event sequence" value={String(game?.event_sequence ?? 0)} />
-            <Metric label="Lifecycle" value={(game?.lifecycle ?? "loading").toUpperCase()} accent />
-          </div>
+          <section className="broadcast-ribbon" aria-label="Match broadcast status">
+            <span className={game?.status === "active" ? "live-pulse" : "result-pulse"} />
+            <strong>{broadcastLabel}</strong>
+            <span>{game ? `${Math.round(game.clock.initial_time_ms / 60_000)}+${game.clock.increment_ms / 1_000}` : "—"}</span>
+            {!followingLive && <b>LOCAL REPLAY · LIVE FEED CONTINUES</b>}
+          </section>
 
           <div className="panel-tabs" role="tablist" aria-label="Match details">
             {(["moves", "analysis", "pgn", "fen"] as const).map((tab) => (
@@ -1338,8 +1436,36 @@ function App() {
             )}
           </div>
 
+          <div className="playback-bar">
+            <button aria-label="First position" onClick={() => selectPly(0)} disabled={!game?.moves.length}>|◀</button>
+            <button aria-label="Previous move" onClick={() => selectPly(displayPly - 1)} disabled={!game?.moves.length || displayPly === 0}>◀</button>
+            <button className="replay-toggle" onClick={toggleReplay} disabled={!game?.moves.length}>{replayRunning ? "PAUSE" : "REPLAY"}</button>
+            <input type="range" min="0" max={game?.moves.length ?? 0} value={displayPly} onChange={(event) => selectPly(Number(event.target.value))} aria-label="Replay position" />
+            <span><strong>{displayPly}</strong> / {game?.moves.length ?? 0}</span>
+            <button aria-label="Next move" onClick={() => selectPly(displayPly + 1)} disabled={!game || displayPly >= game.moves.length}>▶</button>
+            <button className={followingLive ? "live active" : "live"} onClick={() => { setReplayRunning(false); setReplayPly(null); }} disabled={followingLive}>LIVE</button>
+          </div>
+
+          {game && adviceSupported && (game.lifecycle === "paused" || latestHumanSuggestion) && <section className="consultation-panel" aria-label="Suggest a move to your AI">
+            <h3>Suggest a move to your AI</h3>
+            <p>Enable suggestion mode, then drag a piece or select two squares. The board stays unchanged. Resume to let the AI decide.</p>
+            <label><input type="checkbox" checked={adviceMode} disabled={game.lifecycle !== "paused" || !followingLive || connection !== "live" || busy} onChange={e => setAdviceMode(e.target.checked)} /> Suggestion mode</label>
+            {canSuggest && <p role="status">Board input saves a suggestion for {activeSeat?.display_name}; it does not play a move.</p>}
+            {latestHumanSuggestion && <p>Human suggested {latestHumanSuggestion.san} to {latestHumanSuggestion.advisor.display_name}: {latestHumanSuggestion.status === "played" ? "AI turn completed (may choose differently)" : latestHumanSuggestion.status}.</p>}
+            {latestHumanSuggestion?.status === "ready" && <button disabled={!canSuggest} onClick={() => void saveHumanSuggestion(null)}>Clear human suggestion</button>}
+            <small>Human-AI Team exhibition. Advice is recorded in history and PGN.</small>
+          </section>}
+
           <details className="workspace-section">
-            <summary>Strategy &amp; live telemetry <span>Plans, usage, consultation</span></summary>
+            <summary>Strategy &amp; live telemetry <span>Metrics, plans, usage, consultation</span></summary>
+          <div className="telemetry-grid">
+            <Metric label="Position" value={`${displayPly} / ${game?.moves.length ?? 0}`} />
+            <Metric label="Evaluation" value={formatEvaluation(selectedPoint)} accent />
+            <Metric label="Move latency" value={latestAgentMove?.player_metadata ? `${latestAgentMove.player_metadata.latency_ms} ms` : "—"} />
+            <Metric label="Analysis depth" value={selectedPoint?.depth ? `Depth ${selectedPoint.depth}` : analysisLoading ? "CALCULATING" : "—"} />
+            <Metric label="Event sequence" value={String(game?.event_sequence ?? 0)} />
+            <Metric label="Lifecycle" value={(game?.lifecycle ?? "loading").toUpperCase()} accent />
+          </div>
           <StrategyChannel
             white={whiteStrategy}
             black={blackStrategy}
@@ -1352,6 +1478,10 @@ function App() {
           {game && <ConsultationPanel key={game.id} game={game} catalog={playerAdapters}
             enabled={followingLive && connection === "live" && !busy}
             onSnapshot={snapshot => { if (gameRef.current?.id === snapshot.id) acceptSnapshot(snapshot); }} />}
+          <div className="integrity-note">
+            <span>BROADCAST INTEGRITY</span>
+            Evaluation runs in a separate spectator engine and never chooses the competitor’s move. Public strategy cards contain declared or position-derived summaries—not hidden model reasoning.
+          </div>
           </details>
           <details className="workspace-section" id="seats-setup">
             <summary>Seats &amp; game setup <span>Players, models, strength, clock</span></summary>
@@ -1429,11 +1559,13 @@ function App() {
                 onRunnerChange={setBlackRunnerId}
               />
             )}
-            {game && [game.white_player, game.black_player].some(p => p.adapter_id === "stockfish") &&
-              <CurrentStockfishStrength game={game} caps={stockfishCaps}
+            {/* One strength control at a time: the live game's engine while a match is on the table,
+                otherwise the next match's. Avoids two Elo fields that disagree. */}
+            {liveMatch && game && [game.white_player, game.black_player].some(p => p.adapter_id === "stockfish")
+              ? <CurrentStockfishStrength game={game} caps={stockfishCaps}
                 disabled={matchControlBusy || !followingLive || connection !== "live" || !["running", "paused"].includes(game.lifecycle)}
-                onApply={updateCurrentStockfish} />}
-            <StockfishStrength value={stockfishElo} onChange={setStockfishElo} caps={stockfishCaps} game={game} />
+                onApply={updateCurrentStockfish} />
+              : <StockfishStrength value={stockfishElo} onChange={setStockfishElo} caps={stockfishCaps} game={game} />}
             <label>
               Time control
               <select value={timeControl} onChange={(event) => setTimeControl(event.target.value as TimeControlKey)}>
@@ -1443,6 +1575,8 @@ function App() {
               </select>
             </label>
             <label><input type="checkbox" checked={startPaused} onChange={e => setStartPaused(e.target.checked)} /> Start paused to review or advise before any agent call</label>
+            {whiteSeat !== "remote_runner" && <IdentityEditor label="White next match" value={whiteIdentity} onChange={setWhiteIdentity} />}
+            {blackSeat !== "remote_runner" && <IdentityEditor label="Black next match" value={blackIdentity} onChange={setBlackIdentity} />}
             {(game?.lifecycle === "running" || game?.lifecycle === "paused") && <p>Finish or explicitly abort the current match before creating another.</p>}
             <button
               className="primary-button"
@@ -1455,22 +1589,17 @@ function App() {
 
           <section className="takeover-panel" aria-label="Match control">
             <h3>Match control</h3>
-            {game?.lifecycle === "running" && <button disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => void onMatchControl("pause")}>Pause match</button>}
+            {game?.lifecycle === "running" && <p>Pause play under the board to change a seat.</p>}
             {game?.lifecycle === "paused" && <>
               {pauseReason && <p className="pause-reason" role="status">{pauseReason}</p>}
               <p>Match paused. Choose players in the seat selectors above, apply a change, then resume. Position and remaining time carry over.</p>
               <div className="secondary-actions">
                 {(["white", "black"] as const).map((color) => <button key={color} disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => prepareTakeover(color)}>Apply {capitalize(color)} seat</button>)}
-                <button disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => void onMatchControl("resume")}>Resume match</button>
               </div>
               <div className="secondary-actions">
                 {(["white", "black"] as const).filter(color => (game.seat_history ?? []).some(change => change.color === color)).map(color => <button key={color} disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => prepareTakeover(color, true)}>Restore previous {color} player</button>)}
               </div>
             </>}
-            {(game?.lifecycle === "running" || game?.lifecycle === "paused") && <div className="secondary-actions">
-              <button disabled={busy || matchControlBusy || !followingLive || connection !== "live"} onClick={() => openMatchAction("abort")}>Abort match</button>
-              <button disabled={busy || matchControlBusy || !followingLive || connection !== "live"} onClick={() => openMatchAction("adjudicate")}>Adjudicate…</button>
-            </div>}
             {!!game?.seat_history?.length && <details className="seat-history">
               <summary>Seat history · {game.seat_history.length} changes · exhibition</summary>
               <ol>{game.seat_history.map((change) => <li key={change.position_version}>
@@ -1607,7 +1736,7 @@ function App() {
             <BoardSoundControls sound={boardSound} />
           </details>
           <details className="workspace-section">
-            <summary>Match actions &amp; export <span>Resign, draw, reset, download</span></summary>
+            <summary>Match actions &amp; export <span>Retry, reset, adjudicate, download</span></summary>
           <div className="secondary-actions">
             {canRetryAgent && (
               <button onClick={() => void onRetryAgentTurn()} disabled={busy}>
@@ -1615,31 +1744,15 @@ function App() {
               </button>
             )}
             <button onClick={onReset} disabled={!game || matchEnded || busy || matchControlBusy || connection !== "live"}>Reset</button>
-            {(["white", "black"] as const).filter((color) => game?.[`${color}_player`].connection_mode === "human").map((color) => (
-              <button key={color} onClick={() => setHumanAction(color)} disabled={!game || busy || game.status !== "active" || !followingLive || connection !== "live"}>
-                Resign {color === "white" ? "White" : "Black"}
-              </button>
-            ))}
-            <button onClick={() => setHumanAction("draw")} disabled={!playerCanMove || (!game?.can_claim_draw && !game?.draw_claim_moves?.length)} title="Available for threefold repetition or the fifty-move rule">
-              Claim draw
-            </button>
-            <button disabled={!game} onClick={() => game && void copyText(permalink(game.id), "Match link")}>Copy link</button>
+            {(game?.lifecycle === "running" || game?.lifecycle === "paused") && <button disabled={busy || matchControlBusy || !followingLive || connection !== "live"} onClick={() => openMatchAction("adjudicate")}>Adjudicate…</button>}
             <button onClick={() => downloadGame("pgn")} disabled={!game}>Export PGN</button>
           </div>
 
           </details>
 
-          <div className="integrity-note">
-            <span>BROADCAST INTEGRITY</span>
-            Evaluation runs in a separate spectator engine and never chooses the competitor’s move. Public strategy cards contain declared or position-derived summaries—not hidden model reasoning.
-          </div>
         </aside>
       </section>
 
-      {showLab && <section id="model-lab-workspace" tabIndex={-1} aria-label="Model Lab workspace"><ModelLab catalog={playerAdapters} /></section>}
-      {showLeaderboards && <section id="leaderboards-workspace" tabIndex={-1} aria-label="Leaderboards workspace"><section className="model-lab" aria-label="Next match identity"><h2>Next match identity</h2><p>Optional declarations are saved when a new match starts. Existing game identities remain unchanged. Remote seats use the declarations saved during pairing.</p>{whiteSeat !== "remote_runner" && <IdentityEditor label="White next match" value={whiteIdentity} onChange={setWhiteIdentity} />}{blackSeat !== "remote_runner" && <IdentityEditor label="Black next match" value={blackIdentity} onChange={setBlackIdentity} />}</section><Leaderboards /></section>}
-
-      <footer className="lounge-footer"><span>AI Chess Lounge</span><span>Provider-neutral broadcast shell</span><span>PGN · FEN · JSON · Replay</span></footer>
       {promotion && <PromotionPicker color={promotion.color} onChoose={choosePromotion} onCancel={cancelPromotion} />}
       {takeover && game && <SeatTakeoverDialog color={takeover.color} current={game[`${takeover.color}_player`]} player={takeover.player} busy={matchControlBusy} onConfirm={() => void confirmTakeover()} onCancel={() => setTakeover(null)} />}
       {matchAction && game && <MatchActionDialog action={matchAction} targetLabel={matchActionTarget.current?.label} nextMatchLabel={`${seatChoiceLabel(whiteSeat)} vs ${seatChoiceLabel(blackSeat)}`} busy={busy || matchControlBusy} onCancel={() => { setMatchAction(null); matchActionTrigger.current?.focus({ preventScroll: true }); }} onConfirm={(result) => void onMatchAction(result)} />}
@@ -1647,6 +1760,27 @@ function App() {
       <div className="sr-only" aria-live="polite">Position {displayPly}. {selectedPoint ? formatEvaluation(selectedPoint) : "Evaluation pending"}.</div>
     </main>
   );
+}
+
+/** A compact menu that floats over the page (never reflows it) and closes on Escape, outside click or a choice. */
+function MenuButton({ label, className, align = "start", children }: { label: string; className?: string; align?: "start" | "end"; children: React.ReactNode }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = (event: Event) => {
+      const menu = ref.current;
+      if (menu?.open && !menu.contains(event.target as Node)) menu.open = false;
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
+  return <details ref={ref} className={`menu-button ${className ?? ""} align-${align}`} onKeyDown={event => {
+    if (event.key === "Escape" && ref.current?.open) { event.stopPropagation(); ref.current.open = false; ref.current.querySelector("summary")?.focus(); }
+  }} onClick={event => {
+    if ((event.target as HTMLElement).closest("button:not(:disabled), a") && ref.current) ref.current.open = false;
+  }}>
+    <summary>{label}</summary>
+    <div className="menu-items" role="group" aria-label={label}>{children}</div>
+  </details>;
 }
 
 function PlayerCard({ side, title, provider, configuration, division, cost, latency, badge, active, clock }: PlayerCardProps) {

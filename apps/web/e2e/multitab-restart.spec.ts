@@ -1,4 +1,4 @@
-import { expandedWorkspace } from "./workspace-fixture";
+import { chooseMore, expandedWorkspace } from "./workspace-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
 
@@ -23,7 +23,7 @@ test("confirmed restart synchronizes separate device sessions and preserves its 
   await page.evaluate(() => localStorage.setItem("restart-test-device-marker", "source"));
   expect(await other.evaluate(() => localStorage.getItem("restart-test-device-marker"))).toBeNull();
   await page.getByLabel("Black seat", { exact: true }).selectOption("human");
-  await controls(page).getByRole("button", { name: "End and start new…", exact: true }).click();
+  await chooseMore(page, "End and start new…");
   await expect(page.getByRole("dialog")).toContainText(original.id.slice(0, 8).toUpperCase());
   const created = page.waitForResponse(r => r.url().endsWith("/api/games") && r.request().method() === "POST");
   await page.getByRole("dialog").getByRole("button", { name: "End and start new", exact: true }).click();
@@ -56,7 +56,7 @@ test("restart reveals an older blocking match without silently ending it", async
   const selected = await create(page); // Simulates legacy/API-created multiple tables.
   await show(page, selected.id);
   await page.getByLabel("Black seat", { exact: true }).selectOption("human");
-  await controls(page).getByRole("button", { name: "End and start new…", exact: true }).click();
+  await chooseMore(page, "End and start new…");
   await page.getByRole("dialog").getByRole("button", { name: "End and start new", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/games/${older.id}$`));
   await expect(controls(page)).toContainText("Match paused");
@@ -92,7 +92,7 @@ test("two tabs racing New match converge on one current game", async ({ page, co
 test("a reset after confirmation opened cannot make restart end a different generation", async ({ page }) => {
   const game = await create(page);
   await show(page, game.id);
-  await controls(page).getByRole("button", { name: "End and start new…", exact: true }).click();
+  await chooseMore(page, "End and start new…");
   const reset = await (await page.request.post(`/api/games/${game.id}/reset`)).json();
   await page.getByRole("dialog").getByRole("button", { name: "End and start new", exact: true }).click();
   await expect(controls(page).getByRole("alert")).toContainText("was reset");

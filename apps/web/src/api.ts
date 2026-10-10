@@ -95,6 +95,32 @@ export function suggestToAgent(game: GameSnapshot, move: string | null): Promise
 }
 
 /** The newest running or paused match, or null when nothing is live. */
+/** Next-match settings shared by every device at the one Lounge table (ADR0041). */
+export interface TableSettings {
+  white_seat: string;
+  black_seat: string;
+  stockfish: { mode: "elo" | "skill" | "full"; elo: number | null; skill_level: number | null };
+  time_control: string;
+  start_paused: boolean;
+}
+export interface TableSettingsDocument { revision: number; updated_at: string; settings: TableSettings }
+
+export async function fetchTableSettings(): Promise<TableSettingsDocument> {
+  return request<TableSettingsDocument>("/api/table-settings");
+}
+
+export async function saveTableSettings(revision: number, settings: TableSettings): Promise<TableSettingsDocument> {
+  return request<TableSettingsDocument>("/api/table-settings", { method: "PUT", body: JSON.stringify({ revision, settings }) });
+}
+
+/** Fire-and-forget save that survives the page unloading (keepalive), for changes made just before leaving. */
+export function flushTableSettings(revision: number, settings: TableSettings): void {
+  void fetch(`${apiBase}/api/table-settings`, {
+    method: "PUT", keepalive: true, cache: "no-store", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ revision, settings }),
+  }).catch(() => { /* Best effort while the page goes away. */ });
+}
+
 export async function fetchLiveMatch(): Promise<GameSnapshot | null> {
   const response = await fetch(`${apiBase}/api/live-match`, { cache: "no-store" });
   if (response.status === 404) return null;
