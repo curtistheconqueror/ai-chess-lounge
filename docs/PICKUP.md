@@ -1,5 +1,61 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - app-only publication and approved private HTTPS
+
+Curtis approved publishing ordinary app changes separately from the CI workflow.
+This increment starts at verified remote `1c3d468c6803094d848b188c354937352bc41a42`
+(green CI144), applies the tested phone code and checklist, and leaves
+`.github/workflows/ci.yml` byte-identical to that base. The original commits
+`46813c1794c5a61a432329630abfe18c631a64a3` and
+`e0d9711c6a5877e8c1c4e5897b59638592740788` are preserved on local
+`saved/phone-with-mobile-ci-e0d9711` and in a verified recovery bundle.
+The earlier push containing workflow edits was rejected for missing `workflow`
+scope. No credential/access changes, force-push or shared-history rewrite.
+The mobile CI patch is saved separately; ordinary CI runs the existing responsive
+suite, not the new Chromium/WebKit mobile matrix. Local mobile evidence remains
+valid; Linux WebKit native audio is still an explicit outstanding gate.
+
+The final six screenshot/board-detail captures passed in both browsers at all
+three widths. See PHONE_ACCEPTANCE.md for all passed/skipped/manual gates.
+[Stage 3 checklist](HOSTED_NEXT_CHECKLIST.md) records Supabase/Cloudflare access,
+runtime, invites and provider funding decisions only. After separate explicit
+approval, private HTTPS Serve was activated for the existing account on port8444
+to a loopback-only backend8001 and a separate practice database. Existing Serve443
+and8443 routes were verified unchanged. HTTPS frontend/API/PWA assets returned200;
+Chrome rendered64 squares, persisted e2e4 and received3 secure-WebSocket frames.
+The practice game was left paused; wrong-origin and runner-admin requests returned403.
+No invitation, ACL/firewall expansion, Funnel, purchase or new credential occurred.
+The foreground Serve/runtime has no new autostart and requires the host to stay on.
+Remote-device and physical-phone acceptance remain. PR36 stays draft; check this
+new app-only commit's CI before merge, and obtain separate authorization to publish
+the saved mobile workflow patch if desired. No merge or public deployment.
+
+## October 10 - Stage 2 phone support
+
+Continues from Stage 1 `1c3d468c6803094d848b188c354937352bc41a42`, verified
+on the remote PR36 head and green [CI144](https://github.com/curtistheconqueror/ai-chess-lounge/actions/runs/38018779066).
+PR36 remains draft on `feat/wooden-move-audio`; no merge or deployment is authorized.
+Pointer/tap input, safe-area padding, 44px controls with a square-entry alternative,
+home-screen manifest/icons, offline-only service worker, touch audio unlock and
+foreground socket resynchronization are implemented. Approved pieces/audio and
+all hosted/security guards remain in place. See PHONE_ACCEPTANCE.md for evidence.
+
+Mobile local gate: 33 passed, 3 Windows WebKit native-audio skips at
+320/390/430px. Existing five-viewport suite: 125 passed, 95 existing scope skips;
+no failures. Build passed. Lighthouse: 73 performance, 100 accessibility,
+100 best practices, 63 SEO; indexing is intentionally blocked and performance
+findings remain. Physical install/audio/safe-area and two-user Tailscale tests
+remain unverified. Linux WebKit native audio is required in CI.
+
+Read-only host verification corrects the earlier restricted daemon check:
+Tailscale is Running/Automatic, connected, with zero service exit codes. Existing
+private Serve listeners occupy 443 and 8443; no Funnel exposure was reported.
+Do not start/reinstall the service or overwrite those listeners. Activation still
+requires the colleague identity, reviewed access policy and a separately approved
+unused HTTPS port. That preparation changed no network settings; later approved
+activation is recorded above. Next: complete the phone
+CI/manual gates and use the Stage 3 checklist before considering paid hosting.
+
 ## October 10 - Stage 1 trusted Tailscale preparation
 
 Curtis's current direction replaces tonight's hosted rollout with two-person

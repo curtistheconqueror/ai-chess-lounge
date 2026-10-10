@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
+import { pointerMove } from "./pointer-move";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -846,7 +847,7 @@ test("human seats support drag, confirmation, and reconnect", async ({ page, req
   const from = page.getByRole("gridcell", { name: "e2 white pawn" });
   const to = page.getByRole("gridcell", { name: "e4 empty" });
   await expect(from).toBeEnabled();
-  if (testInfo.project.name === "desktop") await from.dragTo(to);
+  if (testInfo.project.name === "desktop") await pointerMove(page, "e2", "e4");
   else { await from.click(); await to.click(); }
   await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeVisible();
   await page.reload();

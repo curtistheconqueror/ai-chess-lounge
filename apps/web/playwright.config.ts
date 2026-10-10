@@ -10,6 +10,7 @@ const viewports = [
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: /mobile\.spec\.ts/,
   outputDir: "./test-results",
   timeout: 30_000,
   expect: { timeout: 8_000 },

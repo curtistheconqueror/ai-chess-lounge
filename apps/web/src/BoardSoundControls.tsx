@@ -21,9 +21,13 @@ export function useBoardSound(preloadPrototype = true) {
       });
     };
     window.addEventListener("pointerdown", gesture, true);
+    window.addEventListener("pointerup", gesture, true);
+    window.addEventListener("touchend", gesture, { capture: true, passive: true });
     window.addEventListener("keydown", gesture, true);
     return () => {
       window.removeEventListener("pointerdown", gesture, true);
+      window.removeEventListener("pointerup", gesture, true);
+      window.removeEventListener("touchend", gesture, true);
       window.removeEventListener("keydown", gesture, true);
       engine.dispose();
       audio.current = null;
@@ -60,7 +64,7 @@ export function BoardSoundControls({ sound }: { sound: ReturnType<typeof useBoar
   return <section className="board-sound" aria-label="Board sound">
     <div className="board-sound-controls">
       <span className="board-sound-title">ORIGINAL WOOD · SELECTED</span>
-      <button className="ghost-button" aria-label="Mute board sounds" aria-pressed={settings.muted}
+      <button className="ghost-button" aria-label={`${settings.muted ? "Sound off" : "Sound on"}: Mute board sounds`} aria-pressed={settings.muted}
         onClick={() => setSettings(value => ({ ...value, muted: !value.muted }))}>
         {settings.muted ? "Sound off" : "Sound on"}
       </button>

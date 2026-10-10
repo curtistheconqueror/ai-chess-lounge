@@ -1,5 +1,11 @@
 # Lounge UI quality and regression matrix
 
+The October 10 phone increment adds a separate Chromium/WebKit matrix at
+320/390/430 CSS px, pointer/tap input, large square-entry controls, foreground
+resynchronization and home-screen/offline assets. See
+[phone acceptance](PHONE_ACCEPTANCE.md) for measured results and physical-device
+gates; browser emulation does not complete those gates.
+
 The Lounge should feel like a premium chess broadcast, not a developer console. This
 matrix is a release gate for every change that can affect snapshots, clocks, moves,
 the board, WebSockets, or responsive layout. Stage 4F now runs the five required

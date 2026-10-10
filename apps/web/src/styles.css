@@ -2237,6 +2237,43 @@ select {
 .stockfish-strength p { margin: 0; color: #b8c5bc; font-size: .74rem; line-height: 1.5; }
 .stockfish-strength p[role="alert"] { color: #ffbcac; }
 .stockfish-strength .stockfish-current { color: #e8c778; }
+
+.board-input { min-width: 0; }
+.board-row { display: contents; }
+.board-broadcast-frame > .board-input { display: contents; }
+.board-broadcast-frame .board-frame { grid-column: 2; }
+.board-broadcast-frame .square-entry { grid-column: 1 / -1; }
+.board { touch-action: none; user-select: none; -webkit-user-select: none; }
+.board svg { pointer-events: none; }
+.square-entry { margin: 10px 0; color: var(--muted); font-size: .8rem; }
+.square-entry summary { min-height: 44px; cursor: pointer; padding: 12px 4px; }
+.square-entry > div { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.square-entry label { display: grid; gap: 5px; min-width: 0; }
+.square-entry select, .square-entry button { min-height: 44px; min-width: 44px; }
+.square-entry p { line-height: 1.5; }
+body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+button, a, select, summary { touch-action: manipulation; }
+.board .square { touch-action: none; }
+@media (max-width: 640px), (pointer: coarse) {
+  button:not(.square), select, input:not([type="checkbox"]):not([type="radio"]), summary {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  a { display: inline-flex; align-items: center; min-height: 44px; }
+  label:has(input[type="checkbox"]), label:has(input[type="radio"]) { min-height: 44px; align-items: center; }
+  input, select, textarea { font-size: 16px; }
+  .topbar { flex-wrap: wrap; }
+  .arena-layout { grid-template-columns: minmax(0, 1fr); }
+  .match-stage, .control-deck { min-width: 0; }
+  .playback-bar { grid-template-columns: 44px 44px minmax(57px, 1fr) 44px 44px; }
+  .playback-bar input[type="range"] { grid-column: 1 / -1; grid-row: 2; }
+  .topbar-actions { flex: 1 1 100%; justify-content: flex-start; }
+  .board-volume input { flex: 1; min-width: 80px; }
+  .square-entry > div { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .square-entry button { grid-column: 1 / -1; }
+  .panel-tabs { flex-wrap: wrap; }
+  .promotion-dialog { max-height: calc(100dvh - 32px); overflow: auto; }
+}
 .stockfish-slider { grid-column: 1 / -1; min-width: 0; color: #c5d2c8; font-size: .75rem; }
 .stockfish-slider summary { cursor: pointer; margin-bottom: 8px; }
 .stockfish-slider input { width: 100%; margin-top: 10px; }

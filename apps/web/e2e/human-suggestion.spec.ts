@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
+import { pointerMove } from "./pointer-move";
 
 test("paused AI suggestion preserves board and a second game is refused", async ({ page }) => {
   await finishFixtureGames(page.request);
@@ -13,9 +14,8 @@ test("paused AI suggestion preserves board and a second game is refused", async 
   await expect(page.getByLabel("Suggestion mode")).toBeEnabled();
   await page.getByLabel("Suggestion mode").check();
   await page.getByRole("grid", { name: "Chess board" }).scrollIntoViewIfNeeded();
-  const cell = (square: string) => page.locator(`[role="gridcell"][aria-label^="${square} "]`);
-  // Real drag events exercise the same legal-move path as tap-to-select on mobile.
-  await cell("e2").dragTo(cell("e4"));
+  // Real pointer events exercise the same legal-move path as touch/tap input.
+  await pointerMove(page, "e2", "e4");
   await expect(panel).toContainText("Human suggested e4");
   const suggested = await (await page.request.get(`/api/games/${game.id}`)).json();
   expect(suggested.fen).toBe(game.fen);

@@ -21,6 +21,7 @@ dist/
 coverage/
 playwright-report/
 test-results/
+test-results-mobile/
 
 # Editors and operating systems
 .idea/

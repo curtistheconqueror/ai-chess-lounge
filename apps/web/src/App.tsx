@@ -447,7 +447,7 @@ function App() {
     let retryCount = 0;
 
     function connect() {
-      if (stopped) return;
+      if (stopped || document.visibilityState === "hidden") return;
       setConnection("connecting");
       const socket = new WebSocket(websocketUrl(gameId));
       let receivedSnapshot = false;
@@ -484,8 +484,22 @@ function App() {
     }
 
     connect();
+    function visibilityChanged() {
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      // Invalidate the old socket before closing it so queued events cannot
+      // re-enable input. Foreground always gets a fresh authoritative baseline.
+      const previous = socketRef.current;
+      socketRef.current = null;
+      previous?.close();
+      setConnection("connecting");
+      setSelected(null);
+      setPromotion(null);
+      if (document.visibilityState === "visible") connect();
+    }
+    document.addEventListener("visibilitychange", visibilityChanged);
     return () => {
       stopped = true;
+      document.removeEventListener("visibilitychange", visibilityChanged);
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       socketRef.current?.close();
     };
@@ -1013,6 +1027,7 @@ function App() {
               <span>{formatEvaluation(selectedPoint)}</span>
             </div>
             <ChessBoard
+              showSquareEntry
               fen={displayFen || "8/8/8/8/8/8/8/8 w - - 0 1"}
               positionKey={`${game?.id}:${game?.version}:${game?.revision}`}
               flipped={flipped}
