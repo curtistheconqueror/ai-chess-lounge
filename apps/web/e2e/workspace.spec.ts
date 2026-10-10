@@ -11,6 +11,12 @@ test("board leads, live metrics stay visible and every workspace opens by keyboa
   await expect(page.getByLabel("White seat", { exact: true })).not.toBeVisible();
   await expect(page.locator(".telemetry-grid")).toContainText("Evaluation");
   await expect(page.getByRole("tab", { name: "MOVES", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "MOVES", exact: true }).focus();
+  await page.keyboard.press("End");
+  await expect(page.getByRole("tab", { name: "FEN", exact: true })).toBeFocused();
+  await expect(page.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", "detail-tab-fen");
+  await page.keyboard.press("Home");
+  await expect(page.getByRole("tab", { name: "MOVES", exact: true })).toBeFocused();
   const layout = await page.evaluate(() => ({
     overflow: document.documentElement.scrollWidth > innerWidth,
     board: document.querySelector(".board")!.getBoundingClientRect().toJSON(),

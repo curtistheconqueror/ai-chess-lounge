@@ -1,5 +1,26 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - board-first workspace and bounded visual motion
+
+Continues from `8591fb92b1b5fd8b6b971e9bacd24717ff0286b0` on draft PR36.
+Stage 1 (`ff0034e`) moves setup, runner connections, detailed telemetry and board
+preferences into native disclosures while keeping board, clocks, live metrics,
+move history and named End / End and start new recovery prominent. Stage 2
+(`ce220e6`) adds native piece translation and optional bounded automated-move
+visual buffering without delaying authoritative clocks, history, agents or
+sound. SVG pieces and the selected wood sample are unchanged. See
+`docs/BOARD_WORKSPACE.md` for the complete feature inventory and six checkpoints.
+
+Stage 3 strengthens missed-history and drag-release handling, fixes a 320px
+tools-menu overflow, and retains all existing feature tests through explicit
+expanded-workspace fixtures. The full desktop suite passed68; the full iPad
+Chromium/WebKit portrait/landscape matrix passed122 with two existing Windows
+WebKit native-audio skips. Build/typecheck passed. No backend, workflow, access,
+credential or database changes are part of this refactor. Check PR36's latest
+CI and the local dashboard handoff for final live asset identity and screenshots.
+Physical iPad feel remains unverified; test counts do not establish experience
+parity with chess.com. Hosted auth/ownership work remains separate and incomplete.
+
 ## October 10 - targeted end/restart across tabs
 
 Restart implementation `75d1e370ee57cc4f1282575bdf489df8838cdc61` is live in

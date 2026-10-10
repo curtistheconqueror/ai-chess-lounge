@@ -1,3 +1,4 @@
+import { expandedWorkspace } from "./workspace-fixture";
 import { expect, test, type Locator } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
 
@@ -9,6 +10,7 @@ test("paused and aborted boards offer a visible path back to play", async ({ pag
   const moved = await (await page.request.post(`/api/games/${game.id}/moves`, { data: { move: "e2e4", position_version: game.version } })).json();
   expect((await page.request.post(`/api/games/${game.id}/pause`, { data: { expected_revision: moved.revision } })).ok()).toBeTruthy();
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   await expect(page.getByLabel("Connection live")).toBeVisible();
   const controls = page.getByRole("region", { name: "Board play controls" });
   await expect(controls).toContainText("Match paused");
@@ -26,6 +28,7 @@ test("paused and aborted boards offer a visible path back to play", async ({ pag
   expect(archived.status).toBe("aborted");
   expect(archived.moves.map((move: { uci: string }) => move.uci)).toEqual(["e2e4", "d7d5"]);
   await page.reload();
+  await expandedWorkspace(page);
   await expect(controls).toContainText("Match aborted");
   await page.getByLabel("Black seat", { exact: true }).selectOption("human");
   const nextResponse = page.waitForResponse(response => response.url().endsWith("/api/games") && response.request().method() === "POST");
@@ -55,6 +58,7 @@ test("private runner denial stops polling without blocking chess", async ({ page
   const created = await page.request.post("/api/games", { data: { opponent: "human", initial_time_ms: 3600000 } });
   const game = await created.json();
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   await expect(page.getByLabel("Connection live")).toBeVisible();
   await expect(page.getByLabel("Remote runner pairing")).toHaveCount(0);
   const before = requests;
@@ -73,6 +77,7 @@ test.describe("request failure feedback", () => {
     const created = await page.request.post("/api/games", { data: { opponent: "human", start_paused: true } });
     const game = await created.json();
     await page.goto(`/games/${game.id}`);
+    await expandedWorkspace(page);
     await expect(page.getByLabel("Connection live")).toBeVisible();
     await page.route(`**/api/games/${game.id}/resume`, route => route.fulfill({ status: 409, json: { detail: "This match changed. Review its current state." } }));
     const controls = page.getByRole("region", { name: "Board play controls" });

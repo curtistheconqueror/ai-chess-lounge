@@ -1,6 +1,10 @@
+import { expandedWorkspace } from "./workspace-fixture";
 import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { finishFixtureGames } from "./fixture-games";
+
+// Audio must stay deduplicated while real visual transitions are enabled.
+test.use({ reducedMotion: "no-preference" });
 
 test.beforeEach(async ({ request }) => { await finishFixtureGames(request); });
 
@@ -76,6 +80,7 @@ async function createBoard(page: Page) {
   expect(response.ok()).toBeTruthy();
   const game = await response.json();
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   await expect(page.getByLabel("Connection live")).toBeVisible();
   return game;
 }
@@ -145,6 +150,7 @@ test("mute, zero volume, persistence, keyboard unlock and replay stay correct", 
   expect(await count(page)).toBe(1);
   await expect.poll(() => page.evaluate(() => window.soundProbe.gains[0].gain.value)).toBeLessThan(0.001);
   await page.reload();
+  await expandedWorkspace(page);
   await expect(mute).toHaveAttribute("aria-pressed", "true");
   expect(await count(page)).toBe(0); // No history audio on reload.
   await mute.click();
@@ -169,6 +175,7 @@ test("mute, zero volume, persistence, keyboard unlock and replay stay correct", 
   await expect(page.locator(".move-row")).toHaveCount(2);
   expect(await count(page)).toBe(1); // Background live feed while replaying is quiet.
   await page.reload();
+  await expandedWorkspace(page);
   await expect(volume).toHaveValue("5");
   expect(await count(page)).toBe(0);
 });
@@ -179,6 +186,7 @@ test("socket baseline, duplicate update, history gap and reset are silent", asyn
   let socket: WebSocketRoute | undefined;
   await page.routeWebSocket("**/ws/games/**", ws => { socket = ws; });
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   await expect(page.getByRole("gridcell", { name: "e2 white pawn" })).toBeVisible();
   await page.getByRole("button", { name: "Test sound", exact: true }).click();
   await expect.poll(() => count(page)).toBe(1);

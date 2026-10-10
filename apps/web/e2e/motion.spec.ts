@@ -60,6 +60,18 @@ test("drag follows the pointer, sends one move and does not replay the dragged p
   expect((await (await page.request.get(`/api/games/${game.id}`)).json()).moves).toHaveLength(1);
 });
 
+test("keyboard square activation plays once and restores input after translation", async ({ page }) => {
+  const game = await create(page);
+  await page.getByRole("gridcell", { name: "e2 white pawn" }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("gridcell", { name: "e4 empty" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeVisible();
+  await expect(moving(page)).toHaveAttribute("data-animating", "false");
+  await expect(page.getByRole("gridcell", { name: "e7 black pawn" })).toBeEnabled();
+  expect((await (await page.request.get(`/api/games/${game.id}`)).json()).moves).toHaveLength(1);
+});
+
 test("rapid updates and abort cancel motion; reset and reconnect establish an instant baseline", async ({ page }) => {
   const game = await create(page);
   await move(page, game.id, "e2e4");
@@ -119,4 +131,37 @@ test("automated buffer is visual only, bounded, persisted and respects reduced m
   await page.getByLabel("Piece transition", { exact: true }).selectOption("150");
   await page.getByLabel("Automated move buffer").selectOption("0");
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("lounge.board-motion.v1")!))).toEqual({ duration: 150, buffer: 0 });
+});
+
+test("flip, resize and socket reconnection cancel stale visual positions", async ({ page }) => {
+  const sockets: WebSocketRoute[] = [];
+  await page.routeWebSocket("**/ws/games/**", ws => { sockets.push(ws); });
+  const game = await (await page.request.post("/api/games", { data: { opponent: "human", initial_time_ms: 3600000 } })).json();
+  await page.goto(`/games/${game.id}`);
+  await expect.poll(() => sockets.length).toBe(1);
+  sockets[0].send(JSON.stringify({ type: "snapshot", payload: game }));
+  await expect(page.getByLabel("Connection live")).toBeVisible();
+  const first = await move(page, game.id, "e2e4");
+  sockets[0].send(JSON.stringify({ type: "snapshot", payload: first }));
+  await expect(moving(page)).toHaveAttribute("data-animating", "true");
+  await page.getByRole("button", { name: "Flip board" }).click();
+  await expect(moving(page)).toHaveAttribute("data-animating", "false");
+  const second = await move(page, game.id, "e7e5");
+  sockets[0].send(JSON.stringify({ type: "snapshot", payload: second }));
+  await expect(moving(page)).toHaveAttribute("data-animating", "true");
+  const viewport = page.viewportSize()!;
+  await page.setViewportSize({ width: viewport.width, height: viewport.height - 160 });
+  await expect(moving(page)).toHaveAttribute("data-animating", "false");
+  const third = await move(page, game.id, "g1f3");
+  sockets[0].send(JSON.stringify({ type: "snapshot", payload: third }));
+  await expect(moving(page)).toHaveAttribute("data-animating", "true");
+  sockets[0].close();
+  await expect(page.getByLabel("Connection offline")).toBeVisible();
+  await expect(moving(page)).toHaveAttribute("data-animating", "false");
+  const missed = await move(page, game.id, "b8c6");
+  await expect.poll(() => sockets.length).toBe(2);
+  sockets[1].send(JSON.stringify({ type: "snapshot", payload: missed }));
+  await expect(page.getByLabel("Connection live")).toBeVisible();
+  await expect(page.getByRole("gridcell", { name: "c6 black knight" })).toBeVisible();
+  await expect(moving(page)).toHaveAttribute("data-animating", "false");
 });

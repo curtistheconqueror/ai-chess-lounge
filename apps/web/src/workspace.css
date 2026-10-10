@@ -2,7 +2,7 @@
 .app-shell { width: min(1440px, 100%); padding: 20px 28px 36px; }
 body { background: #111815; }
 body::before { display: none; }
-.topbar { gap: 18px; margin-bottom: 12px; }
+.topbar { position: relative; gap: 18px; margin-bottom: 12px; }
 .brand-mark { box-shadow: none; }
 .broadcast-ribbon { margin-bottom: 18px; background: transparent; }
 .arena-layout { grid-template-columns: minmax(0, 1.65fr) minmax(310px, 1fr); gap: 28px; }
@@ -66,7 +66,8 @@ summary:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid
   .topbar-actions { gap: 6px; }
   .topbar-actions .ghost-button, .topbar-actions .gold-ghost-button { padding: 9px; font-size: .62rem; }
   .topbar-actions .connection { margin-left: auto; }
-  .lounge-tools > div { left: 0; right: auto; }
+  .lounge-tools { position: static; }
+  .lounge-tools > div { left: 0; right: auto; width: min(235px, calc(100vw - 32px)); }
   .board-play-controls { gap: 6px; }
   .player-card { padding: 8px; }
   .telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

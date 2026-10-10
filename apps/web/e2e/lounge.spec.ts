@@ -1,9 +1,11 @@
+import { expandedWorkspace } from "./workspace-fixture";
 import { expect, test } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
 import { pointerMove } from "./pointer-move";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
+  await expandedWorkspace(page);
   await expect(page.getByRole("grid", { name: "Chess board" })).toBeVisible();
   await expect(page.getByRole("gridcell")).toHaveCount(64);
   // A first visit spectates whichever match is live. Wait for that lookup, then start
@@ -29,6 +31,7 @@ test("a first visit spectates the live match instead of creating one", async ({ 
     if (request.method() === "POST" && request.url().endsWith("/api/games")) creates.push(request.url());
   });
   await visitor.goto(new URL("/", page.url()).toString());
+  await expandedWorkspace(visitor);
   await expect(visitor).toHaveURL(/\/games\/[A-Za-z0-9-]+$/);
   await expect(visitor.locator(".match-header small")).toContainText("Match ");
   const shown = new URL(visitor.url()).pathname.split("/").at(-1);
@@ -50,6 +53,7 @@ test("with nothing live a first visit shows an empty table", async ({ page, brow
     if (request.method() === "POST" && request.url().endsWith("/api/games")) creates.push(request.url());
   });
   await visitor.goto(new URL("/", page.url()).toString());
+  await expandedWorkspace(visitor);
   await expect(visitor.getByText("No match is live")).toBeVisible();
   await expect(visitor.locator(".match-header small")).toHaveText("No match loaded");
   expect(creates).toEqual([]);
@@ -90,6 +94,7 @@ test("reset warns before breaking a paired bot's authorization", async ({ page }
     data: { opponent: "human", black_player: claimed.player },
   })).json() as { id: string };
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   await expect(page.locator(".match-header")).toContainText("Reset Warning Bot");
 
   await page.getByRole("button", { name: "Reset", exact: true }).click();
@@ -344,6 +349,7 @@ test("paused automated turns expose an audited operator retry", async ({ page },
   }).toBe("paused");
 
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   await expect(page.locator(".broadcast-ribbon")).toContainText("RECOVERY PAUSED");
   await expect(page.locator(".pause-reason")).toContainText(
     "Paused because White (Recovery Test Agent) proposed an illegal move.",
@@ -417,6 +423,7 @@ test("OpenAI seats use catalog models, selected effort, and only public settings
   });
 
   await page.reload();
+  await expandedWorkspace(page);
   await expect(page.getByRole("grid", { name: "Chess board" })).toBeVisible();
   await expect(page.getByLabel("White seat").locator('option[value="openai"]')).toBeEnabled();
   await expect(page.getByLabel("Black seat").locator('option[value="openai"]')).toBeEnabled();
@@ -546,6 +553,7 @@ test("Claude and OpenAI can be configured as opposing provider seats", async ({ 
   });
 
   await page.reload();
+  await expandedWorkspace(page);
   await expect(page.getByRole("grid", { name: "Chess board" })).toBeVisible();
   await expect(page.getByLabel("White seat").locator('option[value="anthropic"]')).toBeEnabled();
 
@@ -672,6 +680,7 @@ test("Gemini exposes model-specific effort and can face Claude", async ({ page }
   });
 
   await page.reload();
+  await expandedWorkspace(page);
   await expect(page.getByRole("grid", { name: "Chess board" })).toBeVisible();
   await expect(page.getByLabel("White seat").locator('option[value="google"]')).toBeEnabled();
 
@@ -776,6 +785,7 @@ test("OpenRouter can face a local Ollama model without invented effort", async (
   });
 
   await page.reload();
+  await expandedWorkspace(page);
   await page.getByLabel("White seat").selectOption("openrouter");
   await page.getByLabel("White OpenRouter model").selectOption("openai/gpt-6.1-sol");
   await page.getByLabel("White effort").selectOption("deep");
@@ -811,6 +821,7 @@ test("OpenRouter can face a local Ollama model without invented effort", async (
 test("runner authorization limits and revoke control", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Trust lifecycle runs once on desktop.");
   await page.goto("/");
+  await expandedWorkspace(page);
   await page.getByLabel("Remote agent name").fill("Trust Control Bot");
   await page.getByLabel("Runner turn limit").fill("20");
   await page.getByLabel("Runner authorization minutes").fill("10");
@@ -844,6 +855,7 @@ test("human seats support drag, confirmation, and reconnect", async ({ page, req
   const created = await request.post("/api/games", { data: { opponent: "human" } });
   const game = await created.json();
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   const from = page.getByRole("gridcell", { name: "e2 white pawn" });
   const to = page.getByRole("gridcell", { name: "e4 empty" });
   await expect(from).toBeEnabled();
@@ -851,6 +863,7 @@ test("human seats support drag, confirmation, and reconnect", async ({ page, req
   else { await from.click(); await to.click(); }
   await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeVisible();
   await page.reload();
+  await expandedWorkspace(page);
   await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeEnabled();
   await expect(page.locator(".move-row").first()).toContainText("e4");
   await page.getByRole("button", { name: "Resign Black", exact: true }).click();
@@ -873,6 +886,7 @@ test("promotion supports both colors, underpromotion, and keyboard cancel", asyn
     game = await response.json();
   }
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   await page.getByRole("gridcell", { name: "b7 white pawn" }).click();
   await page.getByRole("gridcell", { name: "a8 black rook" }).click();
   await expect(page.getByRole("dialog", { name: "Choose your piece" })).toBeVisible();
@@ -891,6 +905,7 @@ test("promotion supports both colors, underpromotion, and keyboard cancel", asyn
   await page.getByRole("button", { name: "Promote to rook" }).click();
   await expect(page.getByRole("gridcell", { name: "h1 black rook" })).toBeVisible();
   await page.reload();
+  await expandedWorkspace(page);
   await expect(page.getByRole("gridcell", { name: "h1 black rook" })).toBeVisible();
 });
 
@@ -901,11 +916,13 @@ test("announced repetition claim is durable without playing the intended move", 
     game = await (await request.post(`/api/games/${game.id}/moves`, { data: { move, position_version: game.version } })).json();
   }
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   await page.getByRole("button", { name: "Claim draw", exact: true }).click();
   await expect(page.getByLabel("Intended draw-claim move")).toHaveValue("f6g8");
   await page.getByRole("button", { name: "Confirm draw claim" }).click();
   await expect.poll(async () => (await (await request.get(`/api/games/${game.id}`)).json()).status).toBe("draw");
   await page.reload();
+  await expandedWorkspace(page);
   await expect(page.getByRole("gridcell", { name: "f6 black knight" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Claim draw", exact: true })).toBeDisabled();
   const restored = await (await request.get(`/api/games/${game.id}`)).json();
@@ -933,6 +950,7 @@ test("paused seat takeover preserves the board and restores the human", async ({
   await expect(page.locator(".player-card").filter({ hasText: "Deterministic White" })).toBeVisible();
   await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeVisible();
   await page.reload();
+  await expandedWorkspace(page);
   await expect(page.getByRole("button", { name: "Resume match", exact: true })).toBeVisible();
   await page.getByText("Seat history · 1 changes · exhibition", { exact: true }).click();
   await expect(page.locator(".seat-history ol")).toContainText("Deterministic White");
@@ -980,6 +998,7 @@ test("human consultation suggests without moving and needs confirmation", async 
   expect(advice.consultations[0].status).toBe("ready");
   expect(advice.pgn).toContain('Human-AI Team exhibition');
   await page.reload();
+  await expandedWorkspace(page);
   await expect(page.getByRole("button", { name: "Review suggested move", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Review suggested move", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -1038,6 +1057,7 @@ test("Model Lab previews and saves a color-swapped plan without launching games"
   await expect(preview).toContainText("Saved draft");
   expect(page.url()).toBe(matchUrl);
   await page.reload();
+  await expandedWorkspace(page);
   await page.getByRole("button", { name: "Model Lab", exact: true }).click();
   await lab.getByText(/Saved experiments ·/).click();
   await lab.getByRole("button", { name: `Lab acceptance ${testInfo.project.name} · 6 games`, exact: true }).last().click();

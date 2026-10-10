@@ -57,8 +57,19 @@ on acceptance, independently of visual pacing.
 `motion.spec.ts` covers these boundaries on disposable games. The automated
 metadata scenario is a mocked socket fixture, not a live provider call.
 
-## Remaining checkpoints
+## Stage 3: regression and review
 
-3A: full feature/lifecycle/accessibility
-regression. 3B: visual/performance inspection and private-serving byte identity.
-Test counts alone do not establish chess.com experience parity.
+3A: 68 desktop feature/lifecycle checks passed. Full iPad Chromium/WebKit
+portrait/landscape matrix: 122 passed, two existing Windows WebKit native-audio
+skips. The first desktop run found narrow-screen tools-menu overflow; the fix
+passed the clean aggregate rerun. Legacy feature suites explicitly set the
+expanded workspace fixture without an audio-unlocking gesture. Separate tests
+cover real keyboard disclosure, focus, tab navigation and the collapsed layout.
+Provider catalogs are mocked for binding tests; no paid provider calls occur.
+An additional20-check desktop run passed with native audio and motion enabled,
+including keyboard square activation and actual socket reconnection during motion.
+
+3B records visual/performance inspection and private-serving byte identity in
+the local dashboard handoff. Full screenshots and a bounded animation sample
+are diagnostic evidence, not proof of physical iPad latency or chess.com parity.
+Physical iPad acceptance and Linux WebKit native-audio verification remain gates.

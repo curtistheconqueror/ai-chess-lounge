@@ -20,6 +20,7 @@ interface ChessBoardProps {
   motionContext?: string;
   transitionMs?: number;
   bufferMs?: number;
+  motionPly?: number;
 }
 
 export function ChessBoard({
@@ -38,9 +39,10 @@ export function ChessBoard({
   motionContext = "board",
   transitionMs = 300,
   bufferMs = 0,
+  motionPly,
 }: ChessBoardProps) {
   const board = useRef<HTMLDivElement>(null);
-  const previous = useRef({ fen, motionContext, flipped });
+  const previous = useRef({ fen, motionContext, flipped, motionPly });
   const animations = useRef<Animation[]>([]);
   const interrupted = useRef(false);
   const dropped = useRef<{ from: string; to: string } | null>(null);
@@ -56,14 +58,17 @@ export function ChessBoard({
     const prior = previous.current;
     const superseded = interrupted.current;
     interrupted.current = false;
-    previous.current = { fen, motionContext, flipped };
+    const dragged = dropped.current;
+    dropped.current = null;
+    previous.current = { fen, motionContext, flipped, motionPly };
     setMoving(false);
-    if (superseded || reducedMotion || !transitionMs || prior.motionContext !== motionContext || prior.flipped !== flipped) return;
+    if (superseded || reducedMotion || !transitionMs || prior.motionContext !== motionContext || prior.flipped !== flipped
+      || (motionPly !== undefined && motionPly !== (prior.motionPly ?? motionPly) + 1)) return;
     const shifts = pieceTranslations(prior.fen, fen, lastMove);
     const raised: HTMLElement[] = [];
     for (const shift of shifts) {
       // The pointer already carried this piece to its destination; do not replay it.
-      if (dropped.current?.from === shift.from && dropped.current.to === shift.to) continue;
+      if (dragged?.from === shift.from && dragged.to === shift.to) continue;
       const source = board.current?.querySelector<HTMLElement>(`[data-square="${shift.from}"]`);
       const target = board.current?.querySelector<HTMLElement>(`[data-square="${shift.to}"]`);
       const sprite = target?.querySelector<HTMLElement>(".piece-motion");
@@ -110,11 +115,17 @@ export function ChessBoard({
       animations.current = [];
       raised.forEach(el => { el.style.zIndex = ""; });
     };
-  }, [fen, motionContext, flipped, reducedMotion, transitionMs, bufferMs, lastMove]);
+  }, [fen, motionContext, flipped, reducedMotion, transitionMs, bufferMs, lastMove, motionPly]);
   const pointer = useRef<{ id: number; from: string; key: string; x: number; y: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
   const [dragFrom, setDragFrom] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [released, setReleased] = useState<{ from: string; key: string; x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!released) return;
+    const timer = window.setTimeout(() => setReleased(null), 500);
+    return () => window.clearTimeout(timer);
+  }, [released]);
   const [moveFrom, setMoveFrom] = useState("");
   const [moveTo, setMoveTo] = useState("");
   useEffect(() => {
@@ -137,7 +148,7 @@ export function ChessBoard({
   return (
     <div className="board-input">
     <div className="board-frame">
-      <div ref={board} className="board" role="grid" aria-label="Chess board" data-animating={moving}>
+      <div ref={board} className="board" role="grid" aria-label="Chess board" aria-busy={moving} data-animating={moving}>
         {Array.from({ length: 8 }, (_, row) => <div role="row" className="board-row" key={row}>
         {squares.slice(row * 8, row * 8 + 8).map((square, column) => {
           const displayIndex = row * 8 + column;
@@ -190,6 +201,9 @@ export function ChessBoard({
                 const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-square]");
                 if (target && event.currentTarget.closest(".board")?.contains(target)) {
                   dropped.current = { from: active.from, to: target.dataset.square! };
+                  if (legalMoves.some(move => move.startsWith(active.from + target.dataset.square))) {
+                    setReleased({ from: active.from, key: positionKey, x: event.clientX - active.x, y: event.clientY - active.y });
+                  }
                   onMoveDrop(active.from, target.dataset.square!);
                 }
               }}
@@ -199,14 +213,15 @@ export function ChessBoard({
               onLostPointerCapture={() => {
                 pointer.current = null; setDragFrom(null);
               }}
-              style={dragFrom === square.name ? { zIndex: 6 } : undefined}
+              style={dragFrom === square.name || (released?.key === positionKey && released.from === square.name) ? { zIndex: 6 } : undefined}
               disabled={disabled || moving}
               aria-label={`${square.name}${square.piece ? ` ${square.piece.color} ${square.piece.type}` : " empty"}`}
             >
               {showRank && <span className="coordinate rank" aria-hidden="true">{square.rank}</span>}
               {showFile && <span className="coordinate file" aria-hidden="true">{square.file}</span>}
               {square.piece && (
-                <span className="piece-motion" style={dragFrom === square.name ? { transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)` } : undefined}>
+                <span className="piece-motion" style={dragFrom === square.name ? { transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)` }
+                  : released?.key === positionKey && released.from === square.name ? { transform: `translate(${released.x}px, ${released.y}px)` } : undefined}>
                   <ChessPiece piece={square.piece} design={pieceDesign} />
                 </span>
               )}

@@ -1116,6 +1116,7 @@ function App() {
             </div>
             <ChessBoard
               motionContext={`${game?.id}:${game?.generation}:${game?.lifecycle}:${connection}:${followingLive ? "live" : "replay"}`}
+              motionPly={displayPly}
               transitionMs={motion.duration}
               bufferMs={followingLive && game?.moves.at(-1)?.player_metadata?.adapter_id !== "human" && game?.moves.at(-1)?.player_metadata ? motion.buffer : 0}
               showSquareEntry

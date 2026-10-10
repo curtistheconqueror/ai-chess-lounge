@@ -1,3 +1,4 @@
+import { expandedWorkspace } from "./workspace-fixture";
 import { expect, test } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
 
@@ -10,6 +11,7 @@ test("all supported Elo values and full strength persist without editing the cur
   if (caps !== runtime) await page.route("**/api/engine/strength", route => route.fulfill({ json: caps }));
   const original = await (await page.request.post("/api/games", { data: { opponent: "human", initial_time_ms: 3600000 } })).json();
   await page.goto(`/games/${original.id}`);
+  await expandedWorkspace(page);
   const elo = page.getByRole("spinbutton", { name: "Stockfish target Elo" });
   await expect(page.getByRole("slider", { name: "Stockfish Elo slider" })).toHaveAttribute("max", String(caps.elo_max));
   await expect(elo).toHaveAttribute("min", String(caps.elo_min));
@@ -29,6 +31,7 @@ test("all supported Elo values and full strength persist without editing the cur
     await elo.fill(String(value));
     await expect(elo).toHaveValue(String(value));
     await page.reload();
+    await expandedWorkspace(page);
     await expect(elo).toHaveValue(String(value));
     const unchanged = await (await page.request.get(`/api/games/${original.id}`)).json();
     expect(unchanged.fen).toBe(original.fen);
@@ -56,6 +59,7 @@ test("all supported Elo values and full strength persist without editing the cur
   }
   await page.getByLabel("Stockfish strength mode").selectOption("full");
   await page.reload();
+  await expandedWorkspace(page);
   await expect(page.getByLabel("Stockfish strength mode")).toHaveValue("full");
   const response = page.waitForResponse(r => r.url().endsWith("/api/games") && r.request().method() === "POST");
   await finishFixtureGames(page.request);

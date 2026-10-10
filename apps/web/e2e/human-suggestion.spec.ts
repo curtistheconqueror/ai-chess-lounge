@@ -1,3 +1,4 @@
+import { expandedWorkspace } from "./workspace-fixture";
 import { expect, test } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
 import { pointerMove } from "./pointer-move";
@@ -9,6 +10,7 @@ test("paused AI suggestion preserves board and a second game is refused", async 
   expect(created.ok()).toBeTruthy();
   const game = await created.json();
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   const panel = page.getByRole("region", { name: "Suggest a move to your AI" });
   await expect(panel).toBeVisible();
   await expect(page.getByLabel("Suggestion mode")).toBeEnabled();
@@ -21,6 +23,7 @@ test("paused AI suggestion preserves board and a second game is refused", async 
   expect(suggested.fen).toBe(game.fen);
   expect(suggested.moves).toEqual([]);
   await page.reload();
+  await expandedWorkspace(page);
   await expect(panel).toContainText("Human suggested e4");
   await expect(page.getByRole("region", { name: "Game compute usage" })).toContainText("Cost: unknown");
   const rejected = page.waitForResponse(r => r.url().endsWith("/api/games") && r.request().method() === "POST");

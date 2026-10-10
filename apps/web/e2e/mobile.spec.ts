@@ -1,3 +1,4 @@
+import { expandedWorkspace } from "./workspace-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { pointerMove } from "./pointer-move";
 import { finishFixtureGames } from "./fixture-games";
@@ -11,6 +12,7 @@ async function board(page: Page) {
   expect(response.ok()).toBeTruthy();
   const game = await response.json();
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   await expect(page.getByLabel("Connection live")).toBeVisible();
   return game;
 }

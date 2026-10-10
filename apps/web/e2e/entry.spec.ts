@@ -1,3 +1,4 @@
+import { expandedWorkspace } from "./workspace-fixture";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
 
@@ -24,6 +25,7 @@ test("fresh and stale saved entries show an explicit start without creating a ga
   let creates = 0;
   page.on("request", r => { if (r.method() === "POST" && r.url().endsWith("/api/games")) creates++; });
   await page.goto("/");
+  await expandedWorkspace(page);
   await expect(controls(page)).toContainText("Ready to start");
   await expect(page.getByLabel("Connection ready")).toBeVisible();
   await expect(page.getByLabel("Match broadcast status")).toContainText("READY TO START");
@@ -36,6 +38,7 @@ test("fresh and stale saved entries show an explicit start without creating a ga
     await cache.put("/api/live-match", new Response(JSON.stringify({ id: oldId, status: "active" })));
   }, old.id);
   await page.reload();
+  await expandedWorkspace(page);
   await expect(controls(page)).toContainText("Ready to start");
   await expect(page).toHaveURL(/\/$/);
   expect(creates).toBe(0);
@@ -51,6 +54,7 @@ test("root discovers a paused table despite stale storage and resumes by touch",
   await page.addInitScript(() => localStorage.setItem("ai-chess-lounge:active-game", "missing-old-game"));
   const live = await fixture(page.request, true);
   await page.goto("/");
+  await expandedWorkspace(page);
   await expect(page).toHaveURL(new RegExp(`/games/${live.id}$`));
   await expect(controls(page)).toContainText("Match paused");
   const press = async (selector: ReturnType<Page["locator"]>) => hasTouch ? selector.tap() : selector.click();
@@ -76,6 +80,7 @@ test("terminal deep link preserves review and a conflicting new match opens the 
   const before = await snapshot(page.request, archive.id);
   const live = await fixture(page.request, true);
   await page.goto(`/games/${archive.id}`);
+  await expandedWorkspace(page);
   await expect(controls(page)).toContainText("Match aborted");
   await expect(page).toHaveURL(new RegExp(`/games/${archive.id}$`));
   await controls(page).getByRole("button", { name: "Play a new match" }).click();
@@ -90,6 +95,7 @@ test("terminal deep link preserves review and a conflicting new match opens the 
 test("missing deep link offers the current table without silently replacing review", async ({ page }) => {
   const live = await fixture(page.request, true);
   await page.goto("/games/missing-entry-fixture");
+  await expandedWorkspace(page);
   await expect(controls(page).getByRole("alert")).toContainText("shared match is unavailable");
   await expect(page).toHaveURL(/missing-entry-fixture$/);
   await controls(page).getByRole("link", { name: "Open current table" }).click();
@@ -100,6 +106,7 @@ test("missing deep link offers the current table without silently replacing revi
 test("foreground refresh explains remotely paused and ended games before enabling moves", async ({ page }) => {
   const live = await fixture(page.request);
   await page.goto(`/games/${live.id}`);
+  await expandedWorkspace(page);
   await expect(controls(page)).toContainText("White to move");
   await visibility(page, "hidden");
   await expect(page.locator('[data-square="e2"]')).toBeDisabled();
@@ -125,6 +132,7 @@ test("storage unavailable does not prevent fresh entry or selecting a match", as
   page.on("pageerror", error => errors.push(error.message));
   const live = await fixture(page.request, true);
   await page.goto("/");
+  await expandedWorkspace(page);
   await expect(controls(page)).toContainText("Match paused");
   await expect(page).toHaveURL(new RegExp(`/games/${live.id}$`));
   expect(errors).toEqual([]);
@@ -137,6 +145,7 @@ test("finished review links return to an active table without creating or resumi
   const mutations: string[] = [];
   page.on("request", r => { if (r.method() === "POST") mutations.push(r.url()); });
   await page.goto(`/games/${archive.id}`);
+  await expandedWorkspace(page);
   await expect(controls(page)).toContainText("Match finished");
   await expect(page.locator('[data-square="e2"]')).toBeDisabled();
   await controls(page).getByRole("link", { name: "Open current table" }).click();
@@ -152,6 +161,7 @@ test.describe("entry network recovery", () => {
     const live = await fixture(page.request, true);
     await page.route("**/api/live-match", route => route.fulfill({ status: 503, body: "Unavailable" }));
     await page.goto("/");
+    await expandedWorkspace(page);
     await expect(controls(page).getByRole("alert")).toContainText("503");
     await expect(page.locator('[data-square="e2"]')).toBeDisabled();
     await page.unroute("**/api/live-match");

@@ -1,3 +1,4 @@
+import { expandedWorkspace } from "./workspace-fixture";
 import { expect, test } from "@playwright/test";
 import type { GameSnapshot } from "../src/types";
 import { finishFixtureGames } from "./fixture-games";
@@ -10,6 +11,7 @@ test("connecting controls fit the viewport while moves remain disabled", async (
   // Keep the connection pending instead of relying on a transient network delay.
   await page.routeWebSocket("**/ws/**", () => {});
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   await expect(page.locator(".match-header small")).toContainText("Match ");
   await expect(page.getByLabel("Connection connecting")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
@@ -40,6 +42,7 @@ test("late updates from the previous match cannot replace a new match", async ({
     Object.assign(window, { navigationTestSockets: sockets });
   });
   await page.goto(`/games/${previous.id}`);
+  await expandedWorkspace(page);
   await expect(page.getByRole("gridcell")).toHaveCount(64);
   await expect(page.getByRole("button", { name: "Resume match", exact: true })).toBeEnabled();
   expect((await page.request.post(`/api/games/${previous.id}/abort`)).ok()).toBeTruthy();

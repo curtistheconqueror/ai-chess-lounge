@@ -1,3 +1,4 @@
+import { expandedWorkspace } from "./workspace-fixture";
 import { expect, test } from "@playwright/test";
 
 test("approved classic pieces appear on the live board and all comparison surfaces", async ({ page }) => {
@@ -33,6 +34,7 @@ test("approved classic pieces appear on the live board and all comparison surfac
   expect(writes).toEqual([]);
   const game = await (await page.request.post("/api/games", { data: { opponent: "human", initial_time_ms: 3600000 } })).json();
   await page.goto(`/games/${game.id}`);
+  await expandedWorkspace(page);
   await expect(page.getByRole("gridcell")).toHaveCount(64);
   await expect(page.locator(".piece-svg")).toHaveCount(32);
   await expect(page.locator(".classic-piece")).toHaveCount(32);
@@ -40,6 +42,7 @@ test("approved classic pieces appear on the live board and all comparison surfac
   await page.getByRole("gridcell", { name: "f3 empty" }).click();
   await expect(page.getByRole("gridcell", { name: "f3 white knight" }).locator(".classic-piece")).toBeVisible();
   await page.reload();
+  await expandedWorkspace(page);
   await expect(page.getByLabel("Connection live")).toBeVisible();
   await expect(page.getByRole("gridcell", { name: "f3 white knight" }).locator(".classic-piece")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();

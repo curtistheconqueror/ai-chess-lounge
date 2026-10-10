@@ -1,3 +1,4 @@
+import { expandedWorkspace } from "./workspace-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { finishFixtureGames } from "./fixture-games";
 
@@ -5,6 +6,7 @@ const controls = (page: Page) => page.getByRole("region", { name: "Board play co
 test.beforeEach(async ({ request }) => { await finishFixtureGames(request); });
 async function show(page: Page, id: string) {
   await page.goto(`/games/${id}`);
+  await expandedWorkspace(page);
   await page.bringToFront();
   await expect(page.getByLabel("Connection live")).toBeVisible();
 }
@@ -33,8 +35,10 @@ test("confirmed restart synchronizes separate device sessions and preserves its 
   await expect(other.getByRole("button", { name: "Reset", exact: true })).toBeDisabled();
   expect((await other.request.post(`/api/games/${original.id}/reset`)).status()).toBe(409);
   await other.reload();
+  await expandedWorkspace(other);
   await expect(controls(other)).toContainText("Match aborted");
   await other.goto("/");
+  await expandedWorkspace(other);
   await expect(other).toHaveURL(new RegExp(`/games/${next.id}$`));
   await expect(controls(other)).toContainText("White to move");
   await other.locator('[data-square="e2"]').click();
