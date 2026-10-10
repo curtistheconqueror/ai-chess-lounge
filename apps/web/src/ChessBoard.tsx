@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motionEasingCss, pieceTranslations, remainingFlight } from "./boardMotion";
 
 import { boardForOrientation, parseFen } from "./chess";
@@ -23,7 +23,7 @@ interface ChessBoardProps {
   motionPly?: number;
 }
 
-export function ChessBoard({
+function ChessBoardView({
   fen,
   positionKey,
   flipped,
@@ -297,3 +297,6 @@ export function ChessBoard({
     </div>
   );
 }
+
+/** Memoized: the board re-renders only when its own inputs change, never on clock ticks. */
+export const ChessBoard = memo(ChessBoardView);

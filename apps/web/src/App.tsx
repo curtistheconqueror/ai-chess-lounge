@@ -85,8 +85,7 @@ interface PlayerCardProps {
   latency: string;
   badge: string;
   active: boolean;
-  clock: string;
-  urgent: boolean;
+  clock: SeatClock;
 }
 
 const timeControls: Record<
@@ -119,6 +118,8 @@ const providerDetails: Record<AgentProviderChoice, { label: string; provider: st
   ollama: { label: "Ollama", provider: "Ollama" },
   vllm: { label: "vLLM", provider: "vLLM" },
 };
+
+const noMoves: string[] = [];
 
 function App() {
   const boardSound = useBoardSound();
@@ -190,7 +191,6 @@ function App() {
   const [busy, setBusy] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const boardControlsRef = useRef<HTMLElement | null>(null);
-  const [clockTick, setClockTick] = useState(Date.now());
   const socketRef = useRef<WebSocket | null>(null);
   const gameRef = useRef<GameSnapshot | null>(null);
   const clockSyncRef = useRef<ClockSync | null>(null);
@@ -312,7 +312,6 @@ function App() {
       receivedAt,
     };
     setGame(snapshot);
-    setClockTick(receivedAt);
     if (
       !current ||
       current.id !== snapshot.id ||
@@ -570,13 +569,6 @@ function App() {
   }, [game?.id, game?.generation, game?.version]);
 
   useEffect(() => {
-    if (game?.lifecycle !== "running" || game.status !== "active") return;
-    setClockTick(Date.now());
-    const timer = window.setInterval(() => setClockTick(Date.now()), 100);
-    return () => window.clearInterval(timer);
-  }, [game?.id, game?.lifecycle, game?.status, game?.turn, game?.clock.server_time]);
-
-  useEffect(() => {
     if (!game) return;
     document.title = `${game.status === "active" ? "Live" : game.result} · AI Chess Lounge`;
     const description = document.querySelector('meta[name="description"]');
@@ -641,8 +633,9 @@ function App() {
   }, [displayPly, game]);
   const moveRows = useMemo(() => pairMoves(game?.moves ?? []), [game?.moves]);
   const clocks = useMemo(
-    () => projectClocks(game, clockTick, clockSyncRef.current),
-    [game, clockTick],
+    // Snapshot baseline only; each LiveClock ticks itself so the app is not re-rendered 10x/s.
+    () => clockBaseline(game, clockSyncRef.current),
+    [game],
   );
   const playerCanMove = Boolean(game?.can_move && followingLive && !busy && connection === "live");
   const activeSeat = game?.[game.turn === "white" ? "white_player" : "black_player"];
@@ -699,6 +692,12 @@ function App() {
       setBusy(false);
     }
   }
+
+  // Stable identities let the memoized board skip renders; the ref always calls the latest handlers.
+  const boardHandlers = useRef({ onSquareClick, onMoveDrop });
+  boardHandlers.current = { onSquareClick, onMoveDrop };
+  const boardSquareClick = useCallback((square: string) => void boardHandlers.current.onSquareClick(square), []);
+  const boardMoveDrop = useCallback((from: string, to: string) => void boardHandlers.current.onMoveDrop(from, to), []);
 
   async function onSquareClick(square: string) {
     if (!game || !boardCanInteract) return;
@@ -1142,13 +1141,13 @@ function App() {
               fen={displayFen || "8/8/8/8/8/8/8/8 w - - 0 1"}
               positionKey={`${game?.id}:${game?.version}:${game?.revision}`}
               flipped={flipped}
-              legalMoves={followingLive ? game?.legal_moves ?? [] : []}
+              legalMoves={followingLive ? game?.legal_moves ?? noMoves : noMoves}
               selected={selected}
               lastMove={displayLastMove}
               inCheck={Boolean(followingLive && game?.in_check)}
               disabled={!boardCanInteract}
-              onSquareClick={(square) => void onSquareClick(square)}
-              onMoveDrop={(from, to) => void onMoveDrop(from, to)}
+              onSquareClick={boardSquareClick}
+              onMoveDrop={boardMoveDrop}
             />
           </div>
 
@@ -1547,7 +1546,7 @@ function App() {
   );
 }
 
-function PlayerCard({ side, title, provider, configuration, division, cost, latency, badge, active, clock, urgent }: PlayerCardProps) {
+function PlayerCard({ side, title, provider, configuration, division, cost, latency, badge, active, clock }: PlayerCardProps) {
   return (
     <div className={`player-card ${side} ${active ? "active" : ""}`}>
       <div className={`player-avatar ${side}`}>{side === "white" ? "♔" : "♚"}</div>
@@ -1556,7 +1555,7 @@ function PlayerCard({ side, title, provider, configuration, division, cost, late
         <span>{provider} · {configuration}</span>
         <div className="player-chips"><small>{division}</small><small>{latency}</small><small>{cost}</small></div>
       </div>
-      <strong className={`player-clock ${urgent ? "urgent" : ""}`}>{clock}</strong>
+      <LiveClock {...clock} active={active} />
     </div>
   );
 }
@@ -1910,7 +1909,7 @@ function playerCardForSeat(
   game: GameSnapshot | null,
   side: "white" | "black",
   player: PlayerConfiguration,
-  clockMs: number,
+  clock: SeatClock,
 ): PlayerCardProps {
   const active = game?.status === "active" && game.turn === side;
   const afterPly = (game?.seat_history ?? []).filter(change => change.color === side).at(-1)?.after_ply ?? 0;
@@ -1940,22 +1939,33 @@ function playerCardForSeat(
     latency: metadata ? `${metadata.latency_ms} ms` : player.adapter_id === "human" ? "Human controlled" : "Awaiting move",
     badge: active ? (player.adapter_id === "human" ? "YOUR MOVE" : "THINKING") : side.toUpperCase(),
     active: Boolean(active),
-    clock: formatClock(clockMs),
-    urgent: Boolean(active && clockMs <= 10_000),
+    clock,
   };
 }
 
-function projectClocks(game: GameSnapshot | null, nowMs: number, sync: ClockSync | null): { white: number; black: number } {
-  if (!game) return { white: 0, black: 0 };
-  let white = game.clock.white_remaining_ms;
-  let black = game.clock.black_remaining_ms;
-  if (game.lifecycle === "running" && game.status === "active") {
-    const synchronized = sync?.gameId === game.id && sync.generation === game.generation && sync.revision === game.revision;
-    const elapsed = synchronized ? Math.max(0, nowMs - sync.receivedAt) : 0;
-    if (game.turn === "white") white = Math.max(0, white - elapsed);
-    else black = Math.max(0, black - elapsed);
-  }
-  return { white, black };
+interface SeatClock { ms: number; since: number | null }
+
+/** Server remaining time per seat, plus when the running seat's clock was received (null = not running). */
+function clockBaseline(game: GameSnapshot | null, sync: ClockSync | null): { white: SeatClock; black: SeatClock } {
+  if (!game) return { white: { ms: 0, since: null }, black: { ms: 0, since: null } };
+  const synchronized = sync?.gameId === game.id && sync.generation === game.generation && sync.revision === game.revision;
+  const running = game.lifecycle === "running" && game.status === "active" && synchronized ? game.turn : null;
+  return {
+    white: { ms: game.clock.white_remaining_ms, since: running === "white" ? sync!.receivedAt : null },
+    black: { ms: game.clock.black_remaining_ms, since: running === "black" ? sync!.receivedAt : null },
+  };
+}
+
+function LiveClock({ ms, since, active }: SeatClock & { active: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (since === null) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 100);
+    return () => window.clearInterval(timer);
+  }, [since]);
+  const remaining = since === null ? ms : Math.max(0, ms - Math.max(0, now - since));
+  return <strong className={`player-clock ${active && remaining <= 10_000 ? "urgent" : ""}`}>{formatClock(remaining)}</strong>;
 }
 
 function formatClock(milliseconds: number): string {
