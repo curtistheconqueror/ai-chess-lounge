@@ -154,11 +154,16 @@ def test_ready_and_websocket_activity_do_not_change_match_state(tmp_path):
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://fixture"
             ) as client:
+                # Warm the shared database probe first: a cold runner can need more than the
+                # 250ms bounded wait. The burst below is about state, not cold-start latency.
+                async with asyncio.timeout(5):
+                    while (await client.get("/api/ready")).status_code != 200:
+                        await asyncio.sleep(0.05)
                 responses = await asyncio.gather(*[client.get("/api/ready") for _ in range(32)])
                 assert all(response.status_code == 200 for response in responses)
                 assert len({r.headers["x-request-id"] for r in responses}) == 32
                 assert await manager.store.load_recoverable_games() == []
-                assert len(app.state.operations.snapshot()["recent"]) == 32
+                assert len(app.state.operations.snapshot()["recent"]) >= 32
         assert not app.state.readiness.started
 
     asyncio.run(run())
