@@ -37,7 +37,7 @@ import { MatchActionDialog, type AdjudicatedResult, type MatchAction } from "./M
 import { GameUsage } from "./GameUsage";
 import { ChessBoard } from "./ChessBoard";
 import { BoardSoundControls, useBoardSound } from "./BoardSoundControls";
-import { newMoveSound } from "./boardSound";
+import { endingSound, newMoveSound } from "./boardSound";
 import { motionStorageKey, previewMove, readMotionSettings } from "./boardMotion";
 import { EvaluationChart } from "./EvaluationChart";
 import { PromotionPicker, type PromotionPiece } from "./PromotionPicker";
@@ -306,12 +306,14 @@ function App() {
       return;
     }
     if (current?.id !== snapshot.id || current.revision !== snapshot.revision) setTakeover(null);
-    const sound = newMoveSound(current, snapshot);
+    const sound = newMoveSound(current, snapshot) ?? (endingSound(current, snapshot) ? "end" : null);
     const announced = announcedRef.current;
     const alreadyPlayed = Boolean(announced && announced.gameId === snapshot.id
       && announced.generation === snapshot.generation && announced.ply === snapshot.moves.length);
     if (announced && (announced.gameId !== snapshot.id || snapshot.moves.length >= announced.ply)) announcedRef.current = null;
-    if (announceMove && sound && !alreadyPlayed && replayPlyRef.current === null) playMoveSound(sound);
+    // An own move already tapped at submit; only what the server alone knows (check, game over) is added.
+    const cue = alreadyPlayed ? (sound === "check" ? "accent" : sound === "end" ? "end" : null) : sound;
+    if (announceMove && cue && replayPlyRef.current === null) playMoveSound(cue);
     const receivedAt = Date.now();
     if (current?.id !== snapshot.id) setConnection("connecting");
     gameRef.current = snapshot;
@@ -747,7 +749,8 @@ function App() {
     const preview = previewMove(game.fen, move);
     setOptimistic({ gameId: game.id, generation: game.generation, version: game.version, uci: move, fen: preview.fen });
     // Mark the confirmation silent only if the instant cue really played (audio may still be decoding).
-    announcedRef.current = playMoveSound(preview.capture ? "capture" : "move")
+    const instantCue = move.length === 5 ? "promote" : preview.castle ? "castle" : preview.capture ? "capture" : "move";
+    announcedRef.current = playMoveSound(instantCue)
       ? { gameId: game.id, generation: game.generation, ply: game.moves.length + 1 } : null;
     try {
       acceptSnapshot(await submitMove(game.id, move, game.version));

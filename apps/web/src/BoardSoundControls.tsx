@@ -13,7 +13,7 @@ export function useBoardSound(preloadPrototype = true) {
   useEffect(() => {
     const engine = new BoardAudio(setStatus);
     audio.current = engine;
-    engine.settings(currentSettings.current.muted, currentSettings.current.volume);
+    engine.settings(currentSettings.current.muted, currentSettings.current.volume, currentSettings.current.varied);
     if (preloadPrototype) void engine.preloadPrototype().catch(() => { /* Explicit replay can retry. */ });
     const gesture = (event: Event) => {
       if (event.isTrusted) void engine.unlock().then(ready => {
@@ -35,7 +35,7 @@ export function useBoardSound(preloadPrototype = true) {
   }, [preloadPrototype]);
 
   useEffect(() => {
-    audio.current?.settings(settings.muted, settings.volume);
+    audio.current?.settings(settings.muted, settings.volume, settings.varied);
     setTestResult("");
     try { localStorage.setItem(soundStorageKey, JSON.stringify(settings)); } catch { /* Storage is optional. */ }
   }, [settings]);
@@ -74,6 +74,8 @@ export function BoardSoundControls({ sound }: { sound: ReturnType<typeof useBoar
           onChange={event => setSettings(value => ({ ...value, volume: Number(event.target.value) }))} />
         <output>{settings.volume}%</output>
       </label>
+      <label className="board-cues"><input type="checkbox" checked={settings.varied}
+        onChange={event => setSettings(value => ({ ...value, varied: event.target.checked }))} /> Varied cues</label>
       <button className="ghost-button" disabled={settings.muted || settings.volume === 0}
         onClick={() => void sound.testSound()}>Test sound</button>
     </div>

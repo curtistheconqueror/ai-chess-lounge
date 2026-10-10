@@ -37,18 +37,19 @@ const promotionTypes: Record<string, string> = { q: "Q", r: "R", b: "B", n: "N" 
  * Never authoritative: the server snapshot replaces it, and a rejection discards it.
  * Only the placement and side to move are meaningful; castling/en passant fields are cleared.
  */
-export function previewMove(fen: string, uci: string, keepTurn = false): { fen: string; capture: boolean } {
+export function previewMove(fen: string, uci: string, keepTurn = false): { fen: string; capture: boolean; castle: boolean } {
   const placement = new Map(parseFen(fen).map(s => [s.name, s.piece ? (s.piece.color === "white"
     ? pieceLetters[s.piece.type].toUpperCase() : pieceLetters[s.piece.type]) : null]));
   const from = uci.slice(0, 2), to = uci.slice(2, 4);
   const piece = placement.get(from);
-  if (!piece) return { fen, capture: false };
+  if (!piece) return { fen, capture: false, castle: false };
   let capture = Boolean(placement.get(to));
   placement.set(from, null);
   const white = piece === piece.toUpperCase();
   const promoted = uci[4] ? promotionTypes[uci[4]] : null;
   placement.set(to, promoted ? (white ? promoted : promoted.toLowerCase()) : piece);
-  if (piece.toLowerCase() === "k" && Math.abs(from.charCodeAt(0) - to.charCodeAt(0)) === 2) {
+  const castle = piece.toLowerCase() === "k" && Math.abs(from.charCodeAt(0) - to.charCodeAt(0)) === 2;
+  if (castle) {
     const rookFrom = `${to[0] === "g" ? "h" : "a"}${from[1]}`;
     placement.set(`${to[0] === "g" ? "f" : "d"}${from[1]}`, placement.get(rookFrom) ?? null);
     placement.set(rookFrom, null);
@@ -69,7 +70,7 @@ export function previewMove(fen: string, uci: string, keepTurn = false): { fen: 
   }
   const parts = fen.split(" ");
   const turn = keepTurn ? parts[1] : parts[1] === "b" ? "w" : "b";
-  return { fen: `${rows.join("/")} ${turn} - - ${parts[4] ?? 0} ${parts[5] ?? 1}`, capture };
+  return { fen: `${rows.join("/")} ${turn} - - ${parts[4] ?? 0} ${parts[5] ?? 1}`, capture, castle };
 }
 
 /** One easing for every translation so an interrupted flight can be resumed exactly. */

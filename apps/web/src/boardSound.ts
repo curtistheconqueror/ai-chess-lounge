@@ -1,9 +1,10 @@
 import type { GameSnapshot } from "./types";
 
-export type BoardSoundKind = "move" | "capture";
+/** "accent" is the check flourish alone, for an own move whose base tap already played instantly. */
+export type BoardSoundKind = "move" | "capture" | "check" | "castle" | "promote" | "end" | "accent";
 export type AudioStatus = "locked" | "ready" | "unavailable";
 export const soundStorageKey = "ai-chess-lounge:board-sound";
-export const defaultSoundSettings = { muted: false, volume: 40 };
+export const defaultSoundSettings = { muted: false, volume: 40, varied: true };
 
 export const woodSamples = [
   { id: 1, name: "Wood", description: "Current board sound · rounded contact, short wooden body", pitch: 1, decay: 1, noise: 1, cutoff: 1900, attack: 0.0012, duration: 0.16, weight: 1, second: 0 },
@@ -44,6 +45,7 @@ export function readSoundSettings() {
       muted: typeof saved?.muted === "boolean" ? saved.muted : false,
       volume: typeof saved?.volume === "number" && Number.isFinite(saved.volume)
         ? Math.max(0, Math.min(100, saved.volume)) : 40,
+      varied: typeof saved?.varied === "boolean" ? saved.varied : true,
     };
   } catch {
     return { ...defaultSoundSettings };
@@ -55,8 +57,34 @@ export function readSoundSettings() {
 export function newMoveSound(previous: GameSnapshot | null, next: GameSnapshot): BoardSoundKind | null {
   if (!previous || previous.id !== next.id || previous.generation !== next.generation
     || next.version <= previous.version || next.moves.length !== previous.moves.length + 1) return null;
-  return next.moves.at(-1)?.san.includes("x") ? "capture" : "move";
+  return moveCue(next.moves.at(-1)?.san ?? "", next.status !== "active");
 }
+
+/** chess.com-style cue for a move, from its SAN. Every cue is built from the selected wooden tap. */
+export function moveCue(san: string, ended: boolean): BoardSoundKind {
+  if (ended) return "end";
+  if (san.includes("+")) return "check";
+  if (san.startsWith("O-O")) return "castle";
+  if (san.includes("=")) return "promote";
+  return san.includes("x") ? "capture" : "move";
+}
+
+/** A game ending without a move (resignation, timeout, agreed draw) gets the end cue too. */
+export function endingSound(previous: GameSnapshot | null, next: GameSnapshot): boolean {
+  return Boolean(previous && previous.id === next.id && previous.generation === next.generation
+    && previous.status === "active" && next.status !== "active" && next.moves.length === previous.moves.length);
+}
+
+// Taps per cue: [delay seconds, playback rate, relative gain]. One tap when varied cues are off.
+const cueTaps: Record<BoardSoundKind, [number, number, number][]> = {
+  move: [[0, 1, 1]],
+  capture: [[0, 0.88, 1.18]],
+  check: [[0, 1, 1], [0.075, 1.32, 0.62]],
+  accent: [[0, 1.32, 0.62]],
+  castle: [[0, 1, 1], [0.09, 0.94, 0.85]],
+  promote: [[0, 1.12, 1], [0.08, 1.4, 0.6]],
+  end: [[0, 0.82, 0.9], [0.17, 0.7, 0.75]],
+};
 
 // Original synthesized contact sound: a rounded noise transient excites several
 // short, inharmonic wooden resonances. No sample downloads or musical oscillator.
@@ -101,6 +129,7 @@ export class BoardAudio {
   private sources = new Set<AudioBufferSourceNode>();
   private muted = false;
   private volume = 40;
+  private varied = true;
   private disposed = false;
   private assetData = new Map<number, Promise<ArrayBuffer>>();
   private assetDecode = new Map<number, Promise<void>>();
@@ -144,9 +173,10 @@ export class BoardAudio {
     }
   }
 
-  settings(muted: boolean, volume: number) {
+  settings(muted: boolean, volume: number, varied = true) {
     this.muted = muted;
     this.volume = volume;
+    this.varied = varied;
     if (this.gain && this.context) {
       this.gain.gain.cancelScheduledValues(this.context.currentTime);
       if (muted || volume === 0) {
@@ -213,12 +243,24 @@ export class BoardAudio {
         oldest.disconnect();
         this.sources.delete(oldest);
       }
-      const source = context.createBufferSource();
-      source.buffer = buffer;
-      source.connect(this.gain);
-      source.onended = () => { source.disconnect(); this.sources.delete(source); };
-      this.sources.add(source);
-      source.start();
+      const taps = exclusive || !this.varied ? [[0, kind === "accent" ? 1.32 : 1, 1] as [number, number, number]]
+        : cueTaps[kind];
+      for (const [delay, rate, level] of taps) {
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.playbackRate.value = rate;
+        let output: AudioNode = this.gain;
+        if (level !== 1) {
+          const tapGain = context.createGain();
+          tapGain.gain.value = level;
+          tapGain.connect(this.gain);
+          output = tapGain;
+        }
+        source.connect(output);
+        source.onended = () => { source.disconnect(); if (output !== this.gain) output.disconnect(); this.sources.delete(source); };
+        this.sources.add(source);
+        source.start(context.currentTime + delay);
+      }
       return true;
     } catch {
       this.onStatus("unavailable");
