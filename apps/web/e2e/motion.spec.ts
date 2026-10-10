@@ -112,6 +112,7 @@ test("automated buffer is visual only, bounded, persisted and respects reduced m
   const next = await move(page, game.id, "e2e4");
   // Presentation-only fixture: emulate an automated move without making provider calls.
   next.moves[0].player_metadata = { adapter_id: "scripted", latency_ms: 10, usage: {}, plan: "", threat: "" };
+  next.can_move = false;
   socket!.send(JSON.stringify({ type: "snapshot", payload: next }));
   await expect(moving(page)).toHaveAttribute("data-animating", "true");
   const timing = await page.locator('[data-square="e4"] .piece-motion').evaluate(el => el.getAnimations()[0].effect!.getTiming());
@@ -121,11 +122,18 @@ test("automated buffer is visual only, bounded, persisted and respects reduced m
   const actual = await (await page.request.get(`/api/games/${game.id}`)).json();
   expect(actual.version).toBe(next.version);
   expect(actual.moves).toHaveLength(1);
+  await expect(moving(page)).toHaveAttribute("data-animating", "false");
+  const reply = await move(page, game.id, "e7e5");
+  reply.moves.at(-1).player_metadata = { adapter_id: "scripted", latency_ms: 10, usage: {}, plan: "", threat: "" };
+  expect(reply.can_move).toBe(true);
+  socket!.send(JSON.stringify({ type: "snapshot", payload: reply }));
+  await expect(moving(page)).toHaveAttribute("data-animating", "true");
+  expect(await page.locator('[data-square="e5"] .piece-motion').evaluate(el => el.getAnimations()[0].effect!.getTiming().delay)).toBe(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(moving(page)).toHaveAttribute("data-animating", "false");
-  const last = await move(page, game.id, "e7e5");
+  const last = await move(page, game.id, "g1f3");
   socket!.send(JSON.stringify({ type: "snapshot", payload: last }));
-  await expect(page.getByRole("gridcell", { name: "e5 black pawn" })).toBeVisible();
+  await expect(page.getByRole("gridcell", { name: "f3 white knight" })).toBeVisible();
   await expect(moving(page)).toHaveAttribute("data-animating", "false");
   await page.locator("summary").filter({ hasText: "Board preferences" }).click();
   await page.getByLabel("Piece transition", { exact: true }).selectOption("150");

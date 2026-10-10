@@ -1118,7 +1118,7 @@ function App() {
               motionContext={`${game?.id}:${game?.generation}:${game?.lifecycle}:${connection}:${followingLive ? "live" : "replay"}`}
               motionPly={displayPly}
               transitionMs={motion.duration}
-              bufferMs={followingLive && game?.moves.at(-1)?.player_metadata?.adapter_id !== "human" && game?.moves.at(-1)?.player_metadata ? motion.buffer : 0}
+              bufferMs={followingLive && !game?.can_move && game?.moves.at(-1)?.player_metadata?.adapter_id !== "human" && game?.moves.at(-1)?.player_metadata ? motion.buffer : 0}
               showSquareEntry
               fen={displayFen || "8/8/8/8/8/8/8/8 w - - 0 1"}
               positionKey={`${game?.id}:${game?.version}:${game?.revision}`}

@@ -126,6 +126,7 @@ export function ChessBoard({
     const timer = window.setTimeout(() => setReleased(null), 500);
     return () => window.clearTimeout(timer);
   }, [released]);
+  useEffect(() => { setReleased(null); }, [positionKey, motionContext, flipped]);
   const [moveFrom, setMoveFrom] = useState("");
   const [moveTo, setMoveTo] = useState("");
   useEffect(() => {

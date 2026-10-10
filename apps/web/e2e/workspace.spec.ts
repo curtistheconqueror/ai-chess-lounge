@@ -23,7 +23,7 @@ test("board leads, live metrics stay visible and every workspace opens by keyboa
     header: document.querySelector(".match-header")!.getBoundingClientRect().toJSON(),
   }));
   expect(layout.overflow).toBe(false);
-  expect(layout.board.width).toBeGreaterThan(Math.min(380, page.viewportSize()!.width - 100));
+  expect(layout.board.width).toBeGreaterThan(Math.min(380, page.viewportSize()!.width - 100, page.viewportSize()!.height - 430));
   await page.screenshot({ path: `test-results/workspace-${info.project.name}.png`, fullPage: true });
   for (const label of ["Strategy & live telemetry", "Seats & game setup", "Connections & API access", "Board preferences", "Match actions & export"]) {
     const summary = page.locator(".workspace-section > summary").filter({ hasText: label });

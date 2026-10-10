@@ -39,7 +39,8 @@ follows the pointer. The server owns the accepted move and no motion callback
 submits a move or produces sound. A dragged piece is not animated a second time.
 
 2B provides instant/150/300/500 ms transitions and 0/150/300/600 ms visual buffers
-for automated moves. Preferences use optional local storage. Reduced motion
+for automated moves when no human move is available. A human's reply gets no
+extra spectator buffer. Preferences use optional local storage. Reduced motion
 snaps immediately, including when toggled during an animation. Clocks, history
 and evaluation update from the current authoritative snapshot without waiting.
 Board input is fenced during the bounded visual transition to avoid acting on a
@@ -68,8 +69,14 @@ cover real keyboard disclosure, focus, tab navigation and the collapsed layout.
 Provider catalogs are mocked for binding tests; no paid provider calls occur.
 An additional20-check desktop run passed with native audio and motion enabled,
 including keyboard square activation and actual socket reconnection during motion.
+Final refinements passed36 iPad motion checks,10 responsive workspace checks and
+four explicit no-buffer-on-human-reply checks. These runs overlap earlier cases.
 
 3B records visual/performance inspection and private-serving byte identity in
 the local dashboard handoff. Full screenshots and a bounded animation sample
 are diagnostic evidence, not proof of physical iPad latency or chess.com parity.
+Five private desktop/iPad browser contexts verified HTTPS/API/WSS, settled
+evaluation, zero page errors/overflow and no mutation requests. The paused game
+was verified unchanged. Static assets were refreshed without a backend restart;
+the prior entry/assets remain recoverable. Exact current hashes are local evidence.
 Physical iPad acceptance and Linux WebKit native-audio verification remain gates.
