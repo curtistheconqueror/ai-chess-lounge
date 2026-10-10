@@ -51,13 +51,23 @@ class MatchState(StrEnum):
 
 
 class CreateGameRequest(BaseModel):
+    start_paused: bool = Field(default=False, strict=True)
+    single_game: bool = Field(default=False, strict=True)
     opponent: OpponentKind = OpponentKind.STOCKFISH
     stockfish_elo: int = Field(default=1600, ge=800, le=3200)
+    stockfish_full_strength: bool = Field(default=False, strict=True)
+    stockfish_skill_level: int | None = Field(default=None, strict=True, ge=0, le=20)
     engine_move_time_ms: int = Field(default=450, ge=50, le=10_000)
     initial_time_ms: int = Field(default=300_000, ge=100, le=86_400_000)
     increment_ms: int = Field(default=2_000, ge=0, le=60_000)
     white_player: PlayerConfiguration | None = None
     black_player: PlayerConfiguration | None = None
+
+    @model_validator(mode="after")
+    def exclusive_stockfish_mode(self):
+        if self.stockfish_skill_level is not None and self.stockfish_full_strength:
+            raise ValueError("Choose Stockfish skill level or full strength, not both.")
+        return self
 
 
 class MoveRequest(BaseModel):
@@ -70,6 +80,10 @@ class MoveRequest(BaseModel):
     @classmethod
     def normalize_move(cls, value: str) -> str:
         return value.strip().lower()
+
+
+class AbortRequest(BaseModel):
+    expected_generation: int | None = Field(default=None, ge=0)
 
 
 class ResignRequest(BaseModel):
@@ -92,7 +106,13 @@ class ConsultationRequest(BaseModel):
     expected_revision: int = Field(ge=0)
 
 
+class HumanSuggestionRequest(BaseModel):
+    move: str | None = Field(default=None, pattern=r"^[a-h][1-8][a-h][1-8][qrbn]?$")
+    expected_revision: int = Field(ge=0)
+
+
 class Consultation(BaseModel):
+    direction: Literal["ai_to_human", "human_to_ai"] = "ai_to_human"
     id: str
     color: Literal["white", "black"]
     advisor: PlayerConfiguration
@@ -295,6 +315,8 @@ class EngineSummary(BaseModel):
     target_elo: int
     move_time_ms: int
     version: str | None = None
+    full_strength: bool = False
+    skill_level: int | None = None
 
 
 class AnalysisPoint(BaseModel):

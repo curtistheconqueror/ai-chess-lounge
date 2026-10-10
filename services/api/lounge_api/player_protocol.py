@@ -25,6 +25,8 @@ PUBLIC_SETTINGS_BY_ADAPTER: dict[str, frozenset[str]] = {
         {
             "color",
             "target_elo",
+            "full_strength",
+            "skill_level",
             "move_time_ms",
             "move_timeout_ms",
             "spectator_delay_ms",
@@ -170,6 +172,14 @@ class PlayerConfiguration(BaseModel):
                 raise ValueError(f"{key} must be an integer between {minimum} and {maximum}.")
 
         if self.adapter_id == "stockfish":
+            if "skill_level" in self.settings:
+                skill = self.settings["skill_level"]
+                if type(skill) is not int or not 0 <= skill <= 20:
+                    raise ValueError("Stockfish skill_level must be an integer between 0 and 20.")
+                if self.settings.get("full_strength", False):
+                    raise ValueError("Choose skill_level or full_strength, not both.")
+            if type(self.settings.get("full_strength", False)) is not bool:
+                raise ValueError("Stockfish full_strength must be a boolean.")
             target_elo = self.settings.get("target_elo", 1600)
             move_time_ms = self.settings.get("move_time_ms", 450)
             if type(target_elo) is not int or not 800 <= target_elo <= 3200:
@@ -281,10 +291,18 @@ class PlayerConfiguration(BaseModel):
         *,
         target_elo: int = 1600,
         move_time_ms: int = 450,
+        full_strength: bool = False,
+        skill_level: int | None = None,
     ) -> PlayerConfiguration:
         return cls(
             adapter_id="stockfish",
-            display_name=f"Stockfish {target_elo}",
+            display_name=(
+                f"Stockfish skill {skill_level}"
+                if skill_level is not None
+                else "Stockfish full strength"
+                if full_strength
+                else f"Stockfish {target_elo}"
+            ),
             provider="Local UCI",
             model="Stockfish",
             connection_mode=ConnectionMode.LOCAL,
@@ -294,6 +312,8 @@ class PlayerConfiguration(BaseModel):
                 "color": color,
                 "target_elo": target_elo,
                 "move_time_ms": move_time_ms,
+                **({"full_strength": True} if full_strength else {}),
+                **({"skill_level": skill_level} if skill_level is not None else {}),
             },
         )
 
@@ -301,6 +321,8 @@ class PlayerConfiguration(BaseModel):
 class MoveRequest(BaseModel):
     # Internal lifecycle fence, intentionally excluded from the wire schema.
     _match_revision: int | None = PrivateAttr(default=None)
+    # Local prompt input only; external runner protocol remains unchanged.
+    _human_suggestion: str | None = PrivateAttr(default=None)
 
     schema_version: str = PROTOCOL_VERSION
     request_id: str = Field(default_factory=lambda: str(uuid4()))

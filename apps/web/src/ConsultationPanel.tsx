@@ -23,7 +23,8 @@ export function ConsultationPanel({ game, catalog, enabled, onSnapshot }: {
   const choice = choices.find(c => c.key === selection) ?? choices[0];
   const efforts = choice?.adapter === "stockfish" ? [] : effortLevels.filter(e => choice?.cap.effort_levels?.includes(e));
   const actualEffort = efforts.includes(effort) ? effort : efforts[0] ?? null;
-  const latest = game.consultations?.at(-1);
+  const adviceRecords = game.consultations?.filter(c => c.direction !== "human_to_ai");
+  const latest = adviceRecords?.at(-1);
   const pending = latest?.status === "pending";
   const humanTurn = game.lifecycle === "running" && game[game.turn === "white" ? "white_player" : "black_player"].adapter_id === "human";
   const canAct = enabled && humanTurn && !busy;
@@ -87,8 +88,8 @@ export function ConsultationPanel({ game, catalog, enabled, onSnapshot }: {
       {latest.status === "ready" && <><p>Play this suggestion or make your own move on the board.</p><button disabled={!canAct} onClick={() => setConfirm({ advice: latest, revision: game.revision })}>Review suggested move</button></>}
       {latest.status === "stale" && <p>This advice belongs to an earlier turn or an expired request. Request fresh advice for the current position.</p>}
     </article>}
-    {!!game.consultations?.length && <details><summary>Consultation history · {game.consultations.length}</summary><ol>
-      {game.consultations.map(c => <li key={c.id}>{c.color} · after ply {c.after_ply} · {c.advisor.display_name} · {c.san ?? "No published move"} · {c.status}</li>)}
+    {!!adviceRecords?.length && <details><summary>Consultation history · {adviceRecords.length}</summary><ol>
+      {adviceRecords.map(c => <li key={c.id}>{c.color} · after ply {c.after_ply} · {c.advisor.display_name} · {c.san ?? "No published move"} · {c.status}</li>)}
     </ol></details>}
     <small>Public suggestions only. Assistance is recorded in game history and PGN. API advisers use your configured provider account. Remote runner advisers are not supported yet.</small>
     {confirm && <ConfirmSuggestion advice={confirm.advice} busy={busy} onCancel={() => setConfirm(null)} onPlay={() => {

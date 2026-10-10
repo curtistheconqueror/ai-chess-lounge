@@ -7,6 +7,8 @@
     "build": "tsc -b && vite build",
     "dev": "vite --host 0.0.0.0",
     "e2e": "playwright test",
+    "e2e:mobile": "playwright test --config=playwright.mobile.config.ts",
+    "e2e:tablet": "playwright test --config=playwright.tablet.config.ts",
     "e2e:list": "playwright test --list",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc -b"

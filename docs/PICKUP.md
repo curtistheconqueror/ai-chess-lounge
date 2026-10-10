@@ -1,5 +1,560 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - motion gaps closed and phone/iPad suites restored to CI
+
+Continues from `e3b1393` (CI154 green). Closes the three motion gaps recorded in
+`MOTION_AND_RATING_AUDIT.md`:
+
+- **Rapid updates resume instead of snapping.** When a new consecutive position
+  arrives mid-flight, the earlier piece finishes its remaining path from where it
+  was drawn (same easing, remaining time), and the new move animates too.
+  Previously the earlier piece snapped and the new move didn't animate.
+  Missed/non-adjacent snapshots, flips, context changes, resize and reduced motion
+  still snap. `boardMotion.ts` holds the shared easing and `remainingFlight` math.
+- **Input is never blocked by animation.** Board squares, square-entry selects and
+  Play move no longer disable while pieces translate. Any pointer down, click or
+  square-entry submit finishes live flights immediately and proceeds. `settle()`
+  only finishes running/paused flights, because `finish()` on a cancelled animation
+  revives it as a lingering frame (found by the new test).
+- **Drag tracks the pointer synchronously.** Pointer moves write the sprite
+  transform directly instead of waiting for a React render. That render lag was
+  the source of the intermittent 5px drag assertion. Release/cancel clears the
+  direct style and React's release hold takes over.
+
+New regression: "a reply mid-flight animates too, resumes the earlier piece where
+it was drawn, and input settles motion". Desktop motion suite: 10 tests x3 repeats,
+30 passed locally.
+
+CI: Codex's unpublished `46813c1` app changes had already landed via `327b19b`.
+The one piece never published was its workflow change (the push lacked `workflow`
+scope). That change is prepared as local branch `ci/phone-ipad-suites`: install
+WebKit, run `e2e:mobile` and `e2e:tablet` after the desktop suite, and upload their
+result folders. Its push was rejected again for the same reason (this machine's
+token lacks `workflow` scope). **Owner action:** publish it from a workflow-capable
+session (`gh auth refresh -s workflow`, or a PAT with the Workflows permission), or
+paste the diff in GitHub's web editor. Until then, CI runs desktop browser tests
+only.
+
+Local run of this head (Windows, fixture server): desktop default config passed 275
+(95 skipped). Phone: 212 passed, 1 WebKit failure. iPad: 139 passed, 3 WebKit
+failures. All four were entry/board-state timeouts with no motion involvement.
+Three passed on rerun. `entry.spec.ts:77` (iPad landscape WebKit) failed once in
+sequence and passed 6/6 alone, consistent with shared-table ordering flakiness.
+
+Owner direction: the target is chess.com-level smoothness. The next candidates are
+an instant local move display (visual only; the server stays authoritative and
+rejection reverts) and premoves.
+
+## October 10 - native Stockfish Skill Level
+
+Current-match confirmation checkpoint `85acbc93f9cd8a60918fd878a7e0a19cb9419c27`
+passed build/Ruff, 22 backend strength/seat tests and desktop/phone multi-view
+checks before skill work began. This follow-up adds native Skill Level 0-20 as
+a separate uncalibrated mode. Existing Elo/full choices remain. Current controls
+apply to one Stockfish seat only; model/effort controls for agentic seats are unchanged.
+Persistence and comparison conditions distinguish skill levels, and actual UCI
+tests verify the Elo limiter is off in skill mode and all mode switches reset
+conflicting options. See ADR0039 and docs/STOCKFISH_STRENGTH.md. Check the exact
+PR36 head's CI and local strength handoff for final private runtime evidence.
+
+## October 10 - confirmed current-match Stockfish strength
+
+Continues from verified `9079ff379124d5572d615cb92eb0db3964fdbe76` / CI152.
+The existing Elo control edited next-game draft settings, so Exhibition correctly
+retained the current rating. Dedicated current-seat controls now show current
+versus proposed strength and require confirmation. Confirm uses existing revision
+fences to pause and change the selected Stockfish seat, preserving the position,
+history, and paused clocks; all viewers receive the authoritative seat snapshot.
+Resume is explicit. Cancel sends no action, and stale confirmations are dismissed.
+The engine-search cancellation regression verifies the old result cannot land and
+the resumed search receives the new UCI_Elo. Native Skill Level is the next phase.
+
+## October 10 - header tools preserve board hit targets
+
+CI151 on `13c19fec2f5e56d3c0cf362a6bf94052c3301f29` found an actual phone
+pointer interception: the open header tools panel used absolute positioning and
+covered Play a new match after scrolling back from seat setup. The unchanged
+entry regression reproduced locally with the same30-second timeout. Expanded
+tools now occupy normal header layout space, so they cannot overlay board actions.
+No click is forced and no existing assertion is weakened. The regression opens
+tools through their native summary, scrolls from setup to start/pause/resume/end,
+checks each actual center hit target, and cancels the named restart dialog.
+Check the latest PR36 CI; local evidence is in handoff/HEADER_OVERLAP_HANDOFF.md.
+
+## October 10 - board-first workspace and bounded visual motion
+
+Continues from `8591fb92b1b5fd8b6b971e9bacd24717ff0286b0` on draft PR36.
+Stage 1 (`ff0034e`) moves setup, runner connections, detailed telemetry and board
+preferences into native disclosures while keeping board, clocks, live metrics,
+move history and named End / End and start new recovery prominent. Stage 2
+(`ce220e6`) adds native piece translation and optional bounded automated-move
+visual buffering without delaying authoritative clocks, history, agents or
+sound. SVG pieces and the selected wood sample are unchanged. See
+`docs/BOARD_WORKSPACE.md` for the complete feature inventory and six checkpoints.
+
+Stage 3 strengthens missed-history and drag-release handling, fixes a 320px
+tools-menu overflow, and retains all existing feature tests through explicit
+expanded-workspace fixtures. The full desktop suite passed68; the full iPad
+Chromium/WebKit portrait/landscape matrix passed122 with two existing Windows
+WebKit native-audio skips. Build/typecheck passed. No backend, workflow, access,
+credential or database changes are part of this refactor. Check PR36's latest
+CI and the local dashboard handoff for final live asset identity and screenshots.
+Physical iPad feel remains unverified; test counts do not establish experience
+parity with chess.com. Hosted auth/ownership work remains separate and incomplete.
+
+## October 10 - targeted end/restart across tabs
+
+Restart implementation `75d1e370ee57cc4f1282575bdf489df8838cdc61` is live in
+the approved private runtime. CI148 passed migration/lint checks and 476 backend
+tests, but one strength test left multiple live fixtures and hit the new reset
+guard (six tests skipped). This follow-up retires each disposable strength fixture
+and asserts reset success explicitly. All 19 strength/restart checks pass locally;
+the local environment reports one Starlette/httpx deprecation warning, so its
+warnings-as-errors attempt did not collect tests. Verify the follow-up CI result.
+No runtime code, database, frontend assets or workflows change in this follow-up.
+
+Continues from `71654cfd9dab183b1e006ce3c9c883c4c05def42` (CI147 passed).
+The reported screenshot displayed an aborted archive, while read-only server
+and database inspection found one different paused Human/Stockfish match with
+16 moves holding the table. This is a different blocking game, not evidence of
+duplicate live games or a Tailscale cache fault. Current served assets matched
+the prior build. Saved snapshots and a consistent SQLite backup preserve the
+user's games before changes; no user game was ended to test recovery.
+
+End match and End and start new are now beside the board. The dialog identifies
+the exact match/players and pins its generation. Restart archives only that game
+and requests normal single-game creation; a concurrent winner or older live
+blocker is shown and preserved. Repeated aborts return the same terminal state.
+Finished games cannot be revived through stale HTTP Reset/Resume requests.
+Active Reset shares the creation lock and refuses a different live blocker.
+Live discovery scans beyond five rows so expired entries cannot hide a paused
+table. See ADR0038 for the single-process boundary and request compatibility.
+
+Build/typecheck and Ruff passed. Backend lifecycle/API/persistence/private-network
+regression:103 passed. Tablet multi-tab/recovery:28 passed. Five additional
+isolated-browser-context checks passed, including moves after restart without
+shared browser storage. Desktop regression:58 passed and one sound fixture
+failed because earlier fixtures left other live games; isolating sound fixtures
+resolved it, and all11 sound checks then passed. Private-serving evidence is
+recorded in the local restart handoff; verify the new head's CI before any merge. Physical
+iPad confirmation remains separate. Existing account access, workflows and public
+hosting remain unchanged. PR36 stays draft.
+
+## October 10 - fresh connections and iPad entry
+
+Continues from `687101c6f7fc1aed2ff236ec5b698b5db1695b4d`, verified green
+[CI146](https://github.com/curtistheconqueror/ai-chess-lounge/actions/runs/38026332867).
+Curtis clarified the device is an iPad and requested reliable entry on every
+connection. Root entry previously preferred a locally remembered game over the
+server's current table, including old terminal games. Root now discovers only
+the server's running/paused table, ignores stale saved-game storage, and shows
+an explicit start button when the table is empty. Deliberate game deep links
+still preserve archive review. Missing links offer the current table; a new-game
+409 opens and explains the existing table without ending it. Blocked storage
+does not break snapshot acceptance. API requests and service-worker navigation
+bypass HTTP cache; the worker still only serves generic offline content offline.
+
+No connection automatically starts or resumes any game or agent. Paused games
+need Resume play, finished games remain archived, and reconnect waits for a fresh
+snapshot. Use the private origin root `/` for a new connection or home-screen
+launch; do not distribute the old aborted game's deep link as the start URL.
+
+Tablet Chromium/WebKit at820x1180 and1180x820:66 passed, two existing Windows
+native-audio skips. Eight entry cases cover fresh/empty tables, stale saved IDs
+and cache data, paused and active tables, touch moves after rotation, intentional
+terminal review, concurrent new-game conflict, unavailable deep links, background
+pause/abort, blocked storage and failed-lookup recovery. Existing tap/drag,
+large controls, audio, foreground and offline tests also run in the tablet config.
+Use `npm run e2e:tablet`; no workflow changes are included.
+
+Phone matrix:99 passed, three Windows native-audio skips. Desktop regression:
+54 passed and one obsolete saved-ID storage assertion failed; that assertion now
+checks the selected match displayed on screen. After the final loading/empty-table
+label correction,32 tablet entry checks, six phone entry/label checks and ten
+desktop entry/navigation checks passed. Build/typecheck and diff checks passed.
+
+Real private HTTPS checks passed in all four tablet profiles with zero mutation
+requests and no page errors. The original game was verified unchanged. The
+private frontend is refreshed; server and access rules are unchanged. This is
+browser emulation, not physical iPad acceptance. Curtis must confirm the start
+URL on his iPad. PR36 remains draft; no merge or public deployment.
+
+## October 10 - phone paused/aborted board recovery
+
+Baseline `327b19b6c83c2821cb336a961dccd2fcb06a1206` passed
+[CI145](https://github.com/curtistheconqueror/ai-chess-lounge/actions/runs/38020934236).
+Curtis reported that the iPhone private board stayed on its first move even after
+Abort. Read-only evidence showed the shared practice game had been paused, a New
+match attempt returned409 while it was live, and Abort then returned200. The game
+was correctly terminal at version1/revision6 with e2e4 saved; retaining its final
+board looked like a failed action because recovery controls were far below it.
+The served bundle was current, the worker caches only a generic offline page,
+and real HTTPS/WebSocket mutation tests succeeded. No gesture or transport failure
+was reproduced; actual iPhone acceptance still needs Curtis's confirmation.
+
+Board-adjacent controls now explain paused, aborted, replay, reconnecting and
+side-to-move states. Resume play and Play a new match provide direct recovery;
+Abort explicitly explains the saved final position. Action completion returns
+the view to these controls, and failures appear there. Runner403 responses stop
+the unavailable pairing panel/poll instead of repeating every3seconds; access
+checks remain unchanged. Existing browser selectors now distinguish the original
+New match/LIVE controls from the new board-adjacent alternatives.
+
+New regressions:18 passed across mobile Chromium/WebKit at320/390/430px,
+including resume→touch move→abort→new match, archive preservation, denied runner
+polling and visible failed-resume feedback. Error mocking blocks service workers
+only for that mocked-response case; real worker/play acceptance remains enabled.
+Existing mobile compatibility: 33 passed, three Windows native-audio skips. The
+responsive aggregate had 138 passed, 95 viewport-scope skips and two ambiguous
+selector errors; both affected tests passed after exact-selector corrections.
+Build/typecheck and diff check passed. Real private HTTPS mobile-WebKit acceptance
+passed the complete flow on two newly created fixture games; only those fixtures
+were ended. The user's original FEN, history, status, version and revision were
+verified unchanged (timestamps compared by instant, not timezone spelling).
+
+The private static frontend was refreshed without restarting the backend or
+changing Serve, access rules or data. Reload once on the phone, then use Play a
+new match for the already-aborted game, or Resume play for a paused one. Archived
+games are never silently reset or revived. No workflow changes, paid calls,
+production migration, merge or public deployment. Local handoff evidence lives
+in phone-state-mobile.xml and phone-fix-private-verification.json with an updated
+phone-original-aborted-fixed.png. Check this new head's CI before any merge.
+
+## October 10 - app-only publication and approved private HTTPS
+
+Curtis approved publishing ordinary app changes separately from the CI workflow.
+This increment starts at verified remote `1c3d468c6803094d848b188c354937352bc41a42`
+(green CI144), applies the tested phone code and checklist, and leaves
+`.github/workflows/ci.yml` byte-identical to that base. The original commits
+`46813c1794c5a61a432329630abfe18c631a64a3` and
+`e0d9711c6a5877e8c1c4e5897b59638592740788` are preserved on local
+`saved/phone-with-mobile-ci-e0d9711` and in a verified recovery bundle.
+The earlier push containing workflow edits was rejected for missing `workflow`
+scope. No credential/access changes, force-push or shared-history rewrite.
+The mobile CI patch is saved separately; ordinary CI runs the existing responsive
+suite, not the new Chromium/WebKit mobile matrix. Local mobile evidence remains
+valid; Linux WebKit native audio is still an explicit outstanding gate.
+
+The final six screenshot/board-detail captures passed in both browsers at all
+three widths. See PHONE_ACCEPTANCE.md for all passed/skipped/manual gates.
+[Stage 3 checklist](HOSTED_NEXT_CHECKLIST.md) records Supabase/Cloudflare access,
+runtime, invites and provider funding decisions only. After separate explicit
+approval, private HTTPS Serve was activated for the existing account on port8444
+to a loopback-only backend8001 and a separate practice database. Existing Serve443
+and8443 routes were verified unchanged. HTTPS frontend/API/PWA assets returned200;
+Chrome rendered64 squares, persisted e2e4 and received3 secure-WebSocket frames.
+The practice game was left paused; wrong-origin and runner-admin requests returned403.
+No invitation, ACL/firewall expansion, Funnel, purchase or new credential occurred.
+The foreground Serve/runtime has no new autostart and requires the host to stay on.
+Remote-device and physical-phone acceptance remain. PR36 stays draft; check this
+new app-only commit's CI before merge, and obtain separate authorization to publish
+the saved mobile workflow patch if desired. No merge or public deployment.
+
+## October 10 - Stage 2 phone support
+
+Continues from Stage 1 `1c3d468c6803094d848b188c354937352bc41a42`, verified
+on the remote PR36 head and green [CI144](https://github.com/curtistheconqueror/ai-chess-lounge/actions/runs/38018779066).
+PR36 remains draft on `feat/wooden-move-audio`; no merge or deployment is authorized.
+Pointer/tap input, safe-area padding, 44px controls with a square-entry alternative,
+home-screen manifest/icons, offline-only service worker, touch audio unlock and
+foreground socket resynchronization are implemented. Approved pieces/audio and
+all hosted/security guards remain in place. See PHONE_ACCEPTANCE.md for evidence.
+
+Mobile local gate: 33 passed, 3 Windows WebKit native-audio skips at
+320/390/430px. Existing five-viewport suite: 125 passed, 95 existing scope skips;
+no failures. Build passed. Lighthouse: 73 performance, 100 accessibility,
+100 best practices, 63 SEO; indexing is intentionally blocked and performance
+findings remain. Physical install/audio/safe-area and two-user Tailscale tests
+remain unverified. Linux WebKit native audio is required in CI.
+
+Read-only host verification corrects the earlier restricted daemon check:
+Tailscale is Running/Automatic, connected, with zero service exit codes. Existing
+private Serve listeners occupy 443 and 8443; no Funnel exposure was reported.
+Do not start/reinstall the service or overwrite those listeners. Activation still
+requires the colleague identity, reviewed access policy and a separately approved
+unused HTTPS port. That preparation changed no network settings; later approved
+activation is recorded above. Next: complete the phone
+CI/manual gates and use the Stage 3 checklist before considering paid hosting.
+
+## October 10 - Stage 1 trusted Tailscale preparation
+
+Curtis's current direction replaces tonight's hosted rollout with two-person
+private practice; paid hosting/Supabase integration is deferred. Baseline
+`8de33355290de6b85cf3944421a8a7142c92870c` passed CI143/38009452464.
+New `python -m lounge_api.serve` launcher defaults to loopback; explicit direct
+Tailscale mode validates exact source peers and bind address. Loopback Serve mode
+allows at most two exact Tailscale login headers. Both modes independently check
+Host/Origin for HTTP and WebSockets, block administrative/credential/batch routes,
+and leave the hosted startup guard intact. See PRIVATE_TAILSCALE.md and ADR0037.
+
+Stage 1 local gate passed: focused 57 passed/four Windows symlink privilege skips;
+compatible API suite 402 passed/13 environment skips. Two Unix-only performance
+modules remain excluded on Windows. Ruff format/check, diff check and the guide's
+real --check command passed. A secret canary stayed absent from catalog, health,
+game/event and socket responses. Tailscale 1.102.2 CLI help confirms Serve flags,
+but status could not reach its daemon. No installation, sign-in, invite, ACL,
+firewall, Serve activation or two-device connection was performed. Those need
+approval and live verification; no public exposure or provider calls occurred.
+Next phase: pointer/tap input, safe areas, home-screen assets, sound/foreground
+recovery, mobile Chromium/WebKit and Lighthouse; physical phones remain a user gate.
+
+## October 10 - keep new-match navigation stable
+
+Continues from `5edf9b97fc6291cbfef71292a403ae5ef8adb478` on
+`feat/wooden-move-audio`, draft PR36. CI142 (run38007377223) passed Linux
+backend (443 passed, six skipped), SQLite/PostgreSQL migrations, performance,
+TypeScript SDK and web build, but failed responsive browser setup: a late
+snapshot from the previous match restored its URL after New match succeeded.
+
+Snapshot acceptance now permits a different match only for explicit creation;
+ordinary HTTP/socket updates remain bound to the selected match. Socket handlers
+also check current socket identity, selected match and effect cleanup, and the
+new match waits for its own authoritative socket snapshot before enabling moves.
+Generation/revision checks, public-file containment and hosted startup guards
+remain in force. No browser assertion, timeout or retry was weakened.
+
+The deterministic regression retained the previous real socket, delivered a late
+snapshot/error after switching, and reproduced the old URL failure before the fix.
+It now passes at all five viewports, checking URL, saved selection and a legal move
+in the new match. A second regression holds the socket pending and checks disabled
+moves and viewport containment. It reproduced a 21px tablet overflow from the
+longer connecting label; the toolbar now wraps to its available width. The remote
+pairing fixture explicitly selects its newly created runner so retained runners
+from a previous run/retry cannot change its payload. Credential-exclusion checks
+are preserved. Typecheck/build and diff checks passed. The full Windows/Chrome run
+passed 124 tests, skipped 95 and exposed that one retained-runner fixture failure;
+after its correction the final focused run passed 16 with four viewport skips,
+covering both regressions, the original viewport gate and runner credential
+exclusion. No application failure remains from those runs. An earlier run also
+had a Windows worker exit (3221226505); it did not recur in the full rerun.
+Next gate: verify the corrected head's CI before review/merge. Hosted readiness
+and the exact Auth patch transfer blockers below remain unchanged.
+
+## October 10 - public-file containment and hosted startup safeguards
+
+Continues from `cdf8abb62256e3911ce56a6cdfd9fb3b5d70f01f` on the same PR36 branch.
+A read-only fixture showed the SPA returning the public repository README via
+encoded parent traversal. Public paths now reject parent/absolute/drive/stream
+forms and require resolved containment, including symlinks, index fallback and
+asset-root mounting. Normal assets and game permalinks remain supported.
+
+Hosted or malformed deployment modes now stop before app/manager/worker startup
+and database initialization. The container defaults to hosted (blocked in this
+unfinished build); loopback Compose explicitly uses local mode. Container startup
+no longer runs Alembic. Read-only schema validation checks every revision head,
+all mapped tables/columns and caller-specified future ownership columns without
+creating or stamping anything. These are safeguards, not playable hosted Auth.
+See ADR0036 for integration requirements and limitations.
+
+Focused tests: 29 passed, four Windows file-symlink privilege skips. Actual Windows
+directory-junction escapes were tested and denied. File-symlink cases remain in
+Linux CI. Aggregate compatible API suite: 374 passed, 13 environment skips
+(four native-engine tests without STOCKFISH_PATH in that invocation, five native
+PostgreSQL/restore cases, four file-symlink cases). Full collection was blocked by
+two Unix-only performance modules importing resource; they were explicitly excluded
+from the compatible run, not reported passing. Ruff/format/diff checks passed.
+The running loopback app now returns 404 for the original encoded escape, serves
+the board with 200, and still reports native Stockfish19. Original saved-game FEN,
+version8, already-timeout status and move history remain unchanged. New head needs
+its own CI result. No container build was run because Docker is unavailable here.
+
+Recovery status changed: the parent cloud task recovered exact patch a766a78,
+24990 bytes, SHA256 a8fc654d45dd851632d02c2c4817bc14b0cc5bfb55d2f1db1f7c9d523b8666e7.
+It has NOT been installed or applied on this Windows checkout. The current Library
+helper fails applying metadata because native Windows Python lacks os.setxattr.
+Both installed Python versions lack it. WSL inspection returned E_ACCESSDENIED;
+no retry/bypass. Browser control fails before startup with HRESULT 0x80070003
+(missing Windows platform directory). No Supabase connector/CLI or authenticated
+Cloudflare configuration/session was verified. Preserve the recovered foundation's
+deny boundary when merging; the present guards deliberately block hosted startup.
+
+## October 9 - single-game agent advice stage
+
+Base `19deddeffaa8df225aa714e63a2a3886d794ec7b` is pushed on
+`feat/wooden-move-audio`, PR36. Stockfish strength CI140/38004749469 passed;
+native Stockfish19 advertises UCI_Elo 1320-3190. Its local runtime proof and
+engine tests remain separate from credential-free model fixture acceptance.
+
+This stage adds paused human-to-AI legal move suggestions through board dragging
+or square selection. Advice survives reload, does not move a piece, and is passed
+as optional context when the AI resumes. Position/revision/seat checks fence stale
+advice. The model may choose differently. Existing AI-to-human advice remains.
+PGN, events, move metadata and comparison exclusions disclose assistance. Uses the
+existing consultation JSON projection; no database migration or runner protocol
+change. Stockfish and remote runner advice remain unavailable by design.
+
+Lounge creation opts into one-live-game checks within the local API process;
+start-paused enables inspection before dispatch. Independent provider/model/effort
+selectors are preserved. Game/per-move usage shows known subtotals and coverage,
+keeps missing values unknown and does not double-count reasoning. OpenRouter
+reported finite nonnegative response cost is retained. No paid inference was run.
+
+Validation: 134 backend checks passed, one PostgreSQL environment skip, covering
+advice, persistence, lifecycle, both advice directions, two independent fixture
+agents through checkmate, provider payloads, cost normalization and comparison
+behavior. Ten new/strength browser checks passed across all five widths; a tablet
+drag fixture initially needed explicit board scrolling, corrected before the full
+ten-check rerun passed. Build/typecheck, Ruff and diff checks passed. Additional
+desktop/phone compatibility checks passed 11 cases, with three existing desktop-only
+skips. New head needs its
+own CI; do not attribute CI140 to these later changes.
+
+See SINGLE_GAME_AGENTS.md and ADR0035 for bounds and next gates. The preview has
+native Stockfish/practice agents; direct providers report credentials_missing and
+Ollama/vLLM have no configured models. Next: select an already authorized model
+path, verify its current effort metadata and approve bounded live inference if
+paid. Live catalog discovery, complete retry/cancellation billing and enforceable
+monetary budgets remain follow-up work; the display is not a spend cap. Existing
+Model Lab/legacy API concurrency is unchanged, not a production one-game quota.
+
+Shared hosted play remains blocked on exact a766a78 patch recovery, ownership,
+seat/runner authorization, sign-in/isolation acceptance and approved external
+hosting. Transcript-only ADR0034/HOSTED_PRIVATE_BETA copies are evidence, not
+recovered patch bytes. No credentials, access, migration, deployment or merge.
+
+## October 9 - native Stockfish strength controls
+
+Curtis requested the complete supported strength range, then optional 25-Elo slider
+steps and proof the runtime is real Stockfish. The previous selector had five
+hard-coded choices, always reset to 1600 after reload, and did not explain its
+next-match scope. The UCI adapter silently clamped requests and disabled the Elo
+limit at the maximum. These behaviors are corrected.
+
+The local preview now uses the official portable Stockfish 19 Windows engine,
+verified against the release archive SHA-256. Its actual UCI handshake advertises
+1320-3190 inclusive. `/api/engine/strength` publishes the installed runtime's limits.
+The UI offers exact integer entry, a collapsible slider with 1/25-Elo increments
+and both endpoints, and a separate Full strength option. Rated 3190 keeps
+UCI_LimitStrength enabled; Full strength disables it and resets Skill Level to its
+advertised maximum. Values outside the runtime range return validation errors.
+
+The chosen next-match setting persists locally. Current match strength is shown
+separately; existing games require the established pause/apply-seat workflow.
+Full-strength flags persist in player settings, engine summaries and comparison
+conditions without a database migration. Approved pieces, selected original
+single-tap sound, board colors and the user's original match are preserved.
+
+Verification: 106 backend/API/persistence/lifecycle/identity checks passed, with
+two environment skips (native-process recovery without STOCKFISH_PATH in that
+test invocation and PostgreSQL without TEST_POSTGRES_URL). Separate tests against
+the real Stockfish19 executable passed all three engine checks, including both
+Elo boundaries and full strength. Thirteen focused strength tests passed, including
+reset persistence and paused-seat validation. Five browser checks passed across
+all viewport widths, including exact input, optional 25-Elo steps, reloads, new
+matches and unchanged active configurations. Build/typecheck, Ruff and diff checks
+passed. See `STOCKFISH_STRENGTH.md` for runtime provenance and behavior.
+
+The actual app also completed a disposable 3100-target match turn: e2e4 received
+native Stockfish c7c5, with runtime version19 and108ms latency. This was a separate
+test game; the user's existing match was not reset. Contributor remains
+`feat/wooden-move-audio`, draft PR36. Baseline97b9c43 passed CI139; this change
+requires a fresh CI result. Hosted beta remains blocked on the exact patch.
+
+## October 9 - approved pieces applied to the actual board
+
+Curtis approved the proposed original SVG set, confirmed the knight is recognizable,
+and explicitly renewed the request to apply it to the actual board with the chosen
+single-tap sound, then push. `ChessBoard` and `ChessPiece` now default to the exact
+approved classic set; the promotion picker inherits the same renderer. The SVG
+paths, selected original wood WAV and board colors are unchanged. Previous pieces
+remain available only in the studio's explicit comparison. No Git main merge or
+hosted deployment is authorized or performed.
+
+The existing local match's position, version, status and move history were verified
+unchanged across the frontend rebuild. It was already timed out; it was not reset.
+Actual board: `http://127.0.0.1:8000/games/aa665dea-b888-499a-a4e7-3eabc55bb59a`.
+Refresh an existing tab with Ctrl+Shift+R to load the new built assets. Test sound
+plays the selected single tap; a new match is needed to continue playing after a
+timeout. This remains a local preview, not a hosted beta release.
+
+Production build/typecheck and 67 focused browser checks passed: 65 sound/board/
+piece checks across five viewports plus both-color promotion, underpromotion and
+keyboard cancellation on desktop and phone. A reload-layout assertion initially
+ran before the live connection; it now waits for that readiness state, and the
+entire 65-check suite passed again without retries. Approved SVG and audio bytes
+remain unchanged; desktop board and phone promotion screenshots were inspected.
+
+The preceding review-only commit `5b00edf5bd23263fb56f91f2c5e334ec373184e1`
+passed full Linux CI run138/38000111473. The actual-board adoption commit needs
+its own CI result. Hosted-beta exact-patch recovery is still blocked.
+
+## October 9 - original piece comparison ready for review
+
+Audio/default/mute and four-board preview commit
+`d5ab254196a6e6fc6f7f1b69a9902533c9ca7903` passed full Linux CI run137,
+37999350235. This closes the prior mute failure; both migrations, API/domain,
+performance, SDK, build and responsive browser steps succeeded.
+
+Curtis then requested clearer pieces. The original SVG set in `ClassicPiece.tsx`
+is review-only at `/board-studio?pieces=compare`, alongside the current set.
+The knight has a long side-profile muzzle, single dominant ear and concave throat;
+the full set shares outlines and stepped bases. No proprietary assets were copied
+and no Figma tooling was used. `ChessPiece` and `ChessBoard` accept an optional
+design, defaulting to the existing set; the live game and promotion picker retain
+their current appearance. Audio and board finishes are preserved.
+
+The studio shows all 12 proposed pieces on both square colors at 32, 40 and 64 px,
+with all four board finishes and a silhouette toggle. Ten board/piece browser
+checks passed across five viewports, with no skips/failures/retries; production
+build and diff checks passed. Desktop, silhouette and minimum-phone screenshots
+were inspected. This later artwork commit requires its own CI result; do not
+attribute the earlier green run to a different head. Next: Curtis reviews the
+proposed piece set before changing the live game. Exact hosted-beta patch recovery
+remains blocked, independently of these visual changes.
+
+## October 9 - selected original tap, mute fix and board comparison (in progress)
+
+Curtis selected the supplied original single-tap WAV, Sound 13, as the normal
+move baseline. It is now the default for moves, captures and Test sound. The
+four-tap demo repeats exactly the same PCM tap four times at identical gain;
+it is not used by the game. Existing candidates 1-12 and completed variants
+14-19 are preserved. Further sound expansion has stopped.
+
+PR36's previous head `d6c84446619b7eedf0703328a8c71557b147e24c` failed the mute
+assertion in Linux CI run 37997688759. The implementation now cancels gain
+automation, sets gain to zero immediately and stops active sources. The original
+assertion remains, with a new native suspended-clock regression test.
+
+The `/board-studio` route compares current, wood, glass-inspired and metallic
+boards with shared position, flip and highlight controls. Live board appearance
+has not changed; Curtis's selection is pending. See `BOARD_SOUND.md` for details.
+
+Local production build and 60 focused Chrome checks passed across five viewports
+with no skips, failures or retries. Desktop and minimum-phone screenshots were
+inspected. Current-head Linux CI must be verified separately from this local
+result and the earlier failed run. Continue on `feat/wooden-move-audio`, draft
+PR36, based on PR35 source `ccef4d7d58edc599995bcece1bf06dec0435adbe`.
+
+Hosted beta remains blocked: exact patch `a766a78` bytes have not been recovered
+and hash-verified. Do not reconstruct or claim hosted completion. No merge,
+deployment, production migration, credential/access changes or spend occurred.
+The entries below record earlier checkpoints and their then-current defaults.
+
+## October 9 — wooden move audio and audition dashboard
+
+Contributor `feat/wooden-move-audio` starts from verified PR35 source
+`ccef4d7d58edc599995bcece1bf06dec0435adbe`. Curtis prioritized local sound and
+then requested twelve numbered wood-contact auditions. Existing code had no audio.
+The branch adds original live move/capture audio, gesture unlock, mute/volume,
+an explicit test button and `/sound-lab`; Sound 1 remains the board default.
+Auditioning does not change that default. Other candidates are new original
+variants, not copies or claimed matches of the unidentified earlier reference.
+See `BOARD_SOUND.md` for behavior, test instructions and boundaries.
+
+Local production build/typecheck and 30 native Chrome audio/browser checks pass
+across all five viewports; desktop and minimum-phone screenshots were inspected.
+Distinguish browser signal measurements from actual owner listening.
+Published-head CI must be checked independently. No merge
+or hosted-beta completion is claimed. Exact beta patch recovery remains pending;
+the local preview uses a fresh SQLite database and is bound to loopback only.
+Keep the external/non-OpenAI hosting requirement and all live-release approvals.
+
+Published draft PR36: https://github.com/curtistheconqueror/ai-chess-lounge/pull/36
+Source `5277f3fd19a0b6a0f52fb88ce6c8da7abcb16861` was pushed and its GitHub ref
+verified exactly. Five additional dashboard checks with explicit single-active-
+source assertions also passed. This publication-note commit changes docs only;
+full current-head CI remains a separate gate. Retain this contributor branch.
+
 ## Current integration checkpoint — October 8, 2026
 
 GitHub `main` is `3b2cb0bd9bf02e130f56d19e6a2995cbf52424dc`. The

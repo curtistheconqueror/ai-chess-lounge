@@ -1,5 +1,11 @@
 # Lounge UI quality and regression matrix
 
+The October 10 phone increment adds a separate Chromium/WebKit matrix at
+320/390/430 CSS px, pointer/tap input, large square-entry controls, foreground
+resynchronization and home-screen/offline assets. See
+[phone acceptance](PHONE_ACCEPTANCE.md) for measured results and physical-device
+gates; browser emulation does not complete those gates.
+
 The Lounge should feel like a premium chess broadcast, not a developer console. This
 matrix is a release gate for every change that can affect snapshots, clocks, moves,
 the board, WebSockets, or responsive layout. Stage 4F now runs the five required
@@ -37,6 +43,7 @@ viewports as Playwright projects and uploads full-page screenshot artifacts from
 | Rapid double action | One move effect and one `move.accepted` event |
 | Lost-response retry | Same idempotency key succeeds without applying the move again |
 | Stale response | Lower generation/revision snapshot cannot roll the UI backward |
+| Match navigation | Late snapshots and socket errors from the previous match cannot replace the selected match, its URL/storage, or its connection state; new-match moves still work |
 | WebSocket interruption | Offline state appears, reconnect uses backoff, fresh snapshot restores live state |
 | Cross-process commit | Socket connected to another API process still observes the durable revision |
 | Provider recovery | Paused agent position stays unchanged; recovery banner and retry control appear; one `agent.retry_requested` event is recorded |

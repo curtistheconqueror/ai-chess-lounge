@@ -34,6 +34,7 @@ from .adapters import (
 from .anthropic_adapter import AnthropicMessagesAdapter
 from .comparison_identity import snapshot as comparison_snapshot
 from .consultation import ConsultationService
+from .deployment_guard import require_local_runtime
 from .domain import (
     ClockExpired,
     GameSession,
@@ -65,8 +66,8 @@ from .persistence import (
     RunnerTrustError,
     TurnLeaseUnavailable,
 )
+from .player_protocol import AssistanceDivision, PlayerConfiguration, PlayerMoveMetadata
 from .player_protocol import MoveRequest as PlayerMoveRequest
-from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 from .provider_reliability import (
     ProviderRecoveryRequired,
     ProviderReliabilityController,
@@ -155,6 +156,7 @@ class GameManager:
         self.experiment_queue = ExperimentQueue(self.store)
 
     async def start(self) -> None:
+        require_local_runtime()
         self._closed = False
         await self.store.initialize()
         self._experiment_tokens.clear()
@@ -182,12 +184,25 @@ class GameManager:
                 "black",
                 target_elo=request.stockfish_elo,
                 move_time_ms=request.engine_move_time_ms,
+                full_strength=request.stockfish_full_strength,
+                skill_level=request.stockfish_skill_level,
             )
             if request.opponent is OpponentKind.STOCKFISH
             else PlayerConfiguration.human("black")
         )
         self.adapters.validate(white_player)
         self.adapters.validate(black_player)
+        for player in (white_player, black_player):
+            if player.adapter_id == "stockfish":
+                await self.engine.validate_strength(
+                    player.settings.get("target_elo", 1600),
+                    player.settings.get("full_strength", False),
+                    **(
+                        {"skill_level": player.settings["skill_level"]}
+                        if "skill_level" in player.settings
+                        else {}
+                    ),
+                )
         remote_players = [
             p for p in (white_player, black_player) if p.adapter_id == "remote_runner"
         ]
@@ -235,6 +250,10 @@ class GameManager:
             game.engine_summary = await self.engine.summary(
                 game.stockfish_elo, game.engine_move_time_ms
             )
+            game.engine_summary.full_strength = stockfish_player.settings.get(
+                "full_strength", False
+            )
+            game.engine_summary.skill_level = stockfish_player.settings.get("skill_level")
         game.comparison_snapshot = comparison_snapshot(game, self.adapters)
         now = self._clock()
         events = [
@@ -256,6 +275,9 @@ class GameManager:
         ]
         game.start(now=now)
         events.append(game.event("match.started", self._clock_payload(game, now), now=now))
+        if request.start_paused:
+            game.transition(MatchState.PAUSED, now=now)
+            events.append(game.event("match.paused", self._clock_payload(game, now), now=now))
         await self.store.create_game(
             game, events, experiment_token=experiment_job["lease_token"] if experiment_job else None
         )
@@ -298,9 +320,13 @@ class GameManager:
                 game = self.games[game_id]
             return game.snapshot(now=self._clock())
 
-    async def latest_live_snapshot(self) -> GameSnapshot | None:
+    async def latest_live_snapshot(
+        self, *, exclude_game_id: str | None = None
+    ) -> GameSnapshot | None:
         """The newest match still in play, so a first-time visitor can spectate it."""
         for game_id in await self.store.latest_live_match_ids():
+            if game_id == exclude_game_id:
+                continue
             try:
                 snapshot = await self.snapshot(game_id)
             except GameNotFound:
@@ -405,18 +431,33 @@ class GameManager:
                     "Experiment identity is immutable; control the batch or create a new run."
                 )
 
-    async def reset(self, game_id: str) -> GameSnapshot:
+    async def reset(self, game_id: str, *, allow_terminal: bool = True) -> GameSnapshot:
         await self._reject_experiment_edit(game_id)
+        if not allow_terminal:
+            current = await self.snapshot(game_id)
+            if current.lifecycle not in {MatchState.RUNNING, MatchState.PAUSED}:
+                raise MatchTransitionRejected(
+                    "This match has ended. Its archive is preserved; start a new match."
+                )
         self._cancel_agent_runner(game_id)
         await self.get(game_id)
         async with self._game_locks[game_id]:
             game = deepcopy(await self._reload(game_id))
+            if not allow_terminal and game.lifecycle not in {MatchState.RUNNING, MatchState.PAUSED}:
+                raise MatchTransitionRejected(
+                    "This match has ended. Its archive is preserved; start a new match."
+                )
             expected_revision = game.revision
             if any(p.adapter_id == "stockfish" for p in (game.white_player, game.black_player)):
+                stockfish = next(
+                    p for p in (game.white_player, game.black_player) if p.adapter_id == "stockfish"
+                )
                 # A new generation records the current UCI runtime, not a pre-restart label.
                 game.engine_summary = await self.engine.summary(
                     game.stockfish_elo, game.engine_move_time_ms
                 )
+                game.engine_summary.full_strength = stockfish.settings.get("full_strength", False)
+                game.engine_summary.skill_level = stockfish.settings.get("skill_level")
             now = self._clock()
             game.reset(now=now)
             game.comparison_snapshot = comparison_snapshot(game, self.adapters)
@@ -521,6 +562,16 @@ class GameManager:
             if game.lifecycle is not MatchState.PAUSED:
                 raise MatchTransitionRejected("Pause the match before changing a seat.")
             self.adapters.validate(player)
+            if player.adapter_id == "stockfish":
+                await self.engine.validate_strength(
+                    player.settings.get("target_elo", 1600),
+                    player.settings.get("full_strength", False),
+                    **(
+                        {"skill_level": player.settings["skill_level"]}
+                        if "skill_level" in player.settings
+                        else {}
+                    ),
+                )
             if player.adapter_id == "remote_runner":
                 other = game.player_for_color("black" if color == "white" else "white")
                 if other.player_id == player.player_id:
@@ -539,6 +590,8 @@ class GameManager:
                 game.engine_summary = await self.engine.summary(
                     game.stockfish_elo, game.engine_move_time_ms
                 )
+                game.engine_summary.full_strength = stockfish.settings.get("full_strength", False)
+                game.engine_summary.skill_level = stockfish.settings.get("skill_level")
             else:
                 game.engine_summary = None
             event = game.event("seat.changed", change.model_dump(mode="json"), now=game.updated_at)
@@ -613,9 +666,16 @@ class GameManager:
             self._schedule_agent_runner(game)
             return snapshot
 
-    async def abort(self, game_id: str) -> GameSnapshot:
+    async def abort(self, game_id: str, expected_generation: int | None = None) -> GameSnapshot:
+        if expected_generation is not None:
+            current = await self.snapshot(game_id)
+            if current.generation != expected_generation:
+                raise MatchTransitionRejected("This match was reset. Review it before ending it.")
+        # Interrupt a pending agent before waiting for its game lock.
         self._cancel_agent_runner(game_id)
-        return await self._transition(game_id, MatchState.ABORTED, "match.aborted")
+        return await self._transition(
+            game_id, MatchState.ABORTED, "match.aborted", client_generation=expected_generation
+        )
 
     async def adjudicate(self, game_id: str, result: str) -> GameSnapshot:
         await self._reject_experiment_edit(game_id)
@@ -872,6 +932,10 @@ class GameManager:
                     division=player.division,
                 )
                 request._match_revision = expected_revision
+                suggestion = game.current_human_suggestion()
+                if suggestion:
+                    request._human_suggestion = suggestion.move
+                    request.division = AssistanceDivision.HUMAN_AI_TEAM
                 started = perf_counter()
                 provider_call_started = player.adapter_id in PROVIDER_RETRY_ADAPTERS
                 if provider_call_started:
@@ -927,7 +991,7 @@ class GameManager:
                     provider=player.provider,
                     model=player.model,
                     effort=player.effort,
-                    division=player.division,
+                    division=request.division,
                     latency_ms=elapsed_ms,
                     plan=proposal.plan,
                     threat=proposal.threat,
@@ -942,6 +1006,9 @@ class GameManager:
                     player_metadata=metadata,
                 )
                 move.elapsed_ms = elapsed_ms
+                if suggestion:
+                    # Delivered advice is disclosed even if the AI chose another move.
+                    suggestion.status = "played"
                 events = [game.event("move.accepted", self._move_payload(move), now=now)]
                 if game.lifecycle is MatchState.COMPLETED:
                     events.append(self._completed_event(game, now))
@@ -1252,15 +1319,26 @@ class GameManager:
         event_type: str,
         *,
         client_revision: int | None = None,
+        client_generation: int | None = None,
     ) -> GameSnapshot:
         await self.get(game_id)
         async with self._game_locks[game_id]:
             game = deepcopy(await self._reload(game_id))
+            if client_generation is not None and game.generation != client_generation:
+                raise MatchTransitionRejected("This match was reset. Review it before ending it.")
+            if target is MatchState.ABORTED and game.lifecycle in {
+                MatchState.ABORTED,
+                MatchState.COMPLETED,
+                MatchState.ADJUDICATED,
+            }:
+                return game.snapshot(now=self._clock())
             if client_revision is not None and game.revision != client_revision:
                 raise MatchTransitionRejected("The match changed. Refresh before continuing.")
             expected_revision = game.revision
             now = self._clock()
             if await self._expire_locked(game, now, expected_revision=expected_revision):
+                if target is MatchState.ABORTED:
+                    return game.snapshot(now=now)
                 raise ClockExpired(f"{game.timed_out_by.title()} lost on time.")
             game.transition(target, now=now)
             event = game.event(event_type, self._clock_payload(game, now), now=now)

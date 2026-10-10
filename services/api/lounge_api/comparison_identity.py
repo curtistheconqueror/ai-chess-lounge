@@ -90,6 +90,7 @@ def snapshot(game, adapters=None):
                             "move_timeout_ms",
                             "max_output_tokens",
                             "target_elo",
+                            "skill_level",
                             "move_time_ms",
                         )
                         if k in player.settings
@@ -116,7 +117,15 @@ def snapshot(game, adapters=None):
             )
             engines.append(
                 {
-                    "target_elo": player.settings.get("target_elo", game.stockfish_elo),
+                    "target_elo": None
+                    if "skill_level" in player.settings
+                    else player.settings.get("target_elo", game.stockfish_elo),
+                    **(
+                        {"skill_level": player.settings["skill_level"]}
+                        if "skill_level" in player.settings
+                        else {}
+                    ),
+                    **({"full_strength": True} if player.settings.get("full_strength") else {}),
                     "move_time_ms": player.settings.get("move_time_ms", game.engine_move_time_ms),
                     "version": seats[color]["version"],
                 }
@@ -157,7 +166,9 @@ def outcome(game):
         "status": game.status.value,
         "result": game.result,
         "takeover": bool(game.seat_history),
-        "consultation": any(c.status == "played" for c in game.consultations),
+        "consultation": any(
+            c.status == "played" or c.direction == "human_to_ai" for c in game.consultations
+        ),
         "moves": len(game.moves),
         "observed_models": {
             c: sorted(

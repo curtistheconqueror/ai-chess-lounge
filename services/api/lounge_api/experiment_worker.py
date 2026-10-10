@@ -8,6 +8,7 @@ from time import monotonic
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from .deployment_guard import require_local_runtime
 from .domain import MatchTransitionRejected
 from .experiment_queue import QueueConflict
 from .experiments import ExperimentService, parse_configuration
@@ -28,6 +29,7 @@ class ExperimentWorker:
         self.last_success_at = None
 
     def start(self):
+        require_local_runtime()
         self.closed = False
         self.last_success_at = None
         self.task = asyncio.create_task(self._loop())

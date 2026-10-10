@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .adapters import AdapterConfigurationError
+from .deployment_guard import require_local_runtime
 from .domain import ClockExpired, MatchTransitionRejected, MoveRejected, StalePosition
 from .engine import EngineFailure
 from .experiment_metrics import ExperimentMetrics
@@ -25,6 +26,7 @@ from .experiments import ExperimentService, PlanConfiguration, SaveExperiment
 from .leaderboards import Leaderboards
 from .manager import AnalysisSuperseded, GameManager, GameNotFound
 from .models import (
+    AbortRequest,
     AdjudicateRequest,
     ConsultationRequest,
     CreateGameRequest,
@@ -32,6 +34,7 @@ from .models import (
     GameAnalysis,
     GameSnapshot,
     HealthResponse,
+    HumanSuggestionRequest,
     LifecycleRequest,
     MatchEvent,
     MoveRequest,
@@ -49,6 +52,8 @@ from .models import (
 from .operations import LocalOperations, OperationsMiddleware, Readiness
 from .persistence import ConcurrentGameUpdate, IdempotencyConflict
 from .player_protocol import PROTOCOL_VERSION
+from .private_network import NetworkSettings, PrivateNetworkMiddleware
+from .public_files import public_path
 from .remote_runner import (
     RunnerAuthenticationError,
     RunnerPairingError,
@@ -74,15 +79,18 @@ class ControlExperimentRun(BaseModel):
 
 
 def create_app(game_manager: GameManager | None = None) -> FastAPI:
+    network = NetworkSettings.from_environment()
     active_manager = game_manager or GameManager()
 
     batch_worker = ExperimentWorker(active_manager)
     export_slots = asyncio.Semaphore(2)
+    single_game_creation = asyncio.Lock()
     operations = LocalOperations()
     readiness = Readiness(active_manager, batch_worker)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        require_local_runtime()
         await active_manager.start()
         batch_worker.start()
         readiness.started = True
@@ -104,11 +112,13 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     application.add_middleware(OperationsMiddleware, operations=operations)
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=list(network.origins),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    if network.mode != "local":
+        application.add_middleware(PrivateNetworkMiddleware, settings=network)
 
     @application.get("/api/leaderboards")
     async def get_leaderboards(
@@ -246,6 +256,13 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             headers={"Cache-Control": "no-store"},
         )
 
+    @application.get("/api/engine/strength")
+    async def engine_strength():
+        try:
+            return await active_manager.engine.strength_capabilities()
+        except EngineFailure as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     @application.get("/api/player-adapters")
     async def player_adapters() -> dict[str, object]:
         return {
@@ -379,8 +396,19 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     @application.post("/api/games", response_model=GameSnapshot, status_code=201)
     async def create_game(request: CreateGameRequest) -> GameSnapshot:
         try:
-            game = await active_manager.create(request)
-        except AdapterConfigurationError as exc:
+            async with single_game_creation:
+                if request.single_game and await active_manager.latest_live_snapshot() is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "A match is already live. Finish or explicitly abort it "
+                            "before starting another."
+                        ),
+                    )
+                game = await active_manager.create(request)
+        except HTTPException:
+            raise
+        except (AdapterConfigurationError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -455,11 +483,23 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     @application.post("/api/games/{game_id}/reset", response_model=GameSnapshot)
     async def reset_game(game_id: str) -> GameSnapshot:
         try:
-            return await active_manager.reset(game_id)
+            async with single_game_creation:
+                blocking = await active_manager.latest_live_snapshot(exclude_game_id=game_id)
+                if blocking:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"Match {blocking.id} is still {blocking.lifecycle.value}. "
+                            "Open that table before starting over."
+                        ),
+                    )
+                return await active_manager.reset(game_id, allow_terminal=False)
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
         except ConcurrentGameUpdate as exc:
             raise HTTPException(status_code=409, detail="Concurrent match update.") from exc
+        except MatchTransitionRejected as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @application.post("/api/games/{game_id}/resign", response_model=GameSnapshot)
     async def resign_game(game_id: str, request: ResignRequest | None = None) -> GameSnapshot:
@@ -540,6 +580,15 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         except (MatchTransitionRejected, StalePosition, ConcurrentGameUpdate) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    @application.post("/api/games/{game_id}/human-suggestion", response_model=GameSnapshot)
+    async def human_suggestion(game_id: str, request: HumanSuggestionRequest):
+        try:
+            return await active_manager.consultation.suggest_to_agent(game_id, request)
+        except GameNotFound as exc:
+            raise HTTPException(status_code=404, detail="Game not found.") from exc
+        except (MatchTransitionRejected, StalePosition, ConcurrentGameUpdate) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     @application.post("/api/games/{game_id}/seats/{color}", response_model=GameSnapshot)
     async def change_seat(game_id: str, color: str, request: SeatTakeoverRequest) -> GameSnapshot:
         if color not in {"white", "black"}:
@@ -552,7 +601,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
         except (MatchTransitionRejected, ConcurrentGameUpdate) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except AdapterConfigurationError as exc:
+        except (AdapterConfigurationError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @application.post("/api/games/{game_id}/retry-agent", response_model=GameSnapshot)
@@ -560,8 +609,13 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         return await lifecycle_action(active_manager.retry_agent_turn, game_id)
 
     @application.post("/api/games/{game_id}/abort", response_model=GameSnapshot)
-    async def abort_game(game_id: str) -> GameSnapshot:
-        return await lifecycle_action(active_manager.abort, game_id)
+    async def abort_game(game_id: str, request: AbortRequest | None = None) -> GameSnapshot:
+        async with single_game_creation:
+            return await lifecycle_action(
+                active_manager.abort,
+                game_id,
+                expected_generation=request.expected_generation if request else None,
+            )
 
     @application.post("/api/games/{game_id}/adjudicate", response_model=GameSnapshot)
     async def adjudicate_game(game_id: str, request: AdjudicateRequest) -> GameSnapshot:
@@ -609,7 +663,8 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             await websocket.close(code=4401, reason="Runner authentication failed")
 
     if web_dist.is_dir():
-        assets = web_dist / "assets"
+        public_root = web_dist.resolve()
+        assets = public_path(public_root, "assets")
         if assets.is_dir():
             application.mount("/assets", StaticFiles(directory=assets), name="assets")
 
@@ -618,10 +673,10 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             if path == "api" or path.startswith(("api/", "ws/")):
                 # Unknown API routes are errors, not the web app.
                 raise HTTPException(status_code=404, detail="Not found.")
-            candidate = web_dist / path
+            candidate = public_path(public_root, path)
             if path and candidate.is_file():
                 return FileResponse(candidate)
-            return FileResponse(web_dist / "index.html")
+            return FileResponse(public_path(public_root, "index.html"))
 
     return application
 

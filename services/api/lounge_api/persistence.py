@@ -16,11 +16,13 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     delete,
+    inspect,
     or_,
     select,
     text,
     update,
 )
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -31,6 +33,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
 
 from .comparison_identity import outcome as comparison_outcome
+from .deployment_guard import require_local_runtime
 from .domain import GameSession
 from .models import (
     Consultation,
@@ -317,6 +320,7 @@ class DatabaseStore:
         self._initialized = False
 
     async def initialize(self) -> None:
+        require_local_runtime()
         if self._initialized:
             return
         async with self.engine.begin() as connection:
@@ -335,6 +339,38 @@ class DatabaseStore:
                     text(f"INSERT INTO alembic_version (version_num) VALUES ('{SCHEMA_REVISION}')")
                 )
         self._initialized = True
+
+    async def validate_existing_schema(
+        self, expected_revision: str, extra_columns: dict[str, set[str]] | None = None
+    ) -> None:
+        """Read-only validation; never create/stamp tables or enable hosted mode.
+
+        The eventual ownership migration must supply its exact revision and its
+        required ownership/permission columns; today's schema is not that schema.
+        """
+        required = {table.name: set(table.columns.keys()) for table in Base.metadata.sorted_tables}
+        for table, columns in (extra_columns or {}).items():
+            required.setdefault(table, set()).update(columns)
+
+        def check_columns(connection):
+            inspector = inspect(connection)
+            tables = set(inspector.get_table_names())
+            for table, columns in required.items():
+                if table not in tables or not columns.issubset(
+                    {column["name"] for column in inspector.get_columns(table)}
+                ):
+                    raise RuntimeError("Required Lounge schema is missing; startup refused.")
+
+        try:
+            async with self.engine.connect() as connection:
+                revisions = list(
+                    await connection.scalars(text("SELECT version_num FROM alembic_version"))
+                )
+                if revisions != [expected_revision]:
+                    raise RuntimeError("Lounge schema revision mismatch; startup refused.")
+                await connection.run_sync(check_columns)
+        except SQLAlchemyError:
+            raise RuntimeError("Lounge schema cannot be verified; startup refused.") from None
 
     async def close(self) -> None:
         await self.engine.dispose()
@@ -961,7 +997,7 @@ class DatabaseStore:
             game.comparison_snapshot = comparison.identity if comparison else None
             return game
 
-    async def latest_live_match_ids(self, limit: int = 5) -> list[str]:
+    async def latest_live_match_ids(self, limit: int | None = None) -> list[str]:
         """Most recently updated running or paused exhibition matches (not batch jobs)."""
         await self.initialize()
         async with self.sessions() as session:

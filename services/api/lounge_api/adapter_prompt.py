@@ -8,6 +8,16 @@ SYSTEM_INSTRUCTION = (
 )
 
 
+def human_suggestion_prompt(request: MoveRequest) -> list[str]:
+    if not request._human_suggestion:
+        return []
+    return [
+        f"Human suggestion (UCI): {request._human_suggestion}. "
+        "Consider this optional suggestion; you retain final move authority and may "
+        "choose any legal move. This is Human-AI Team exhibition assistance."
+    ]
+
+
 def move_prompt(request: MoveRequest) -> str:
     lines = [
         f"You are playing {request.color}.",
@@ -18,6 +28,7 @@ def move_prompt(request: MoveRequest) -> str:
     ]
     if request.legal_moves is not None:
         lines.append(f"Legal moves (UCI): {' '.join(request.legal_moves)}")
+    lines.extend(human_suggestion_prompt(request))
     lines.append(
         "Choose exactly one legal move. Provide only a concise public plan and threat; "
         "never reveal private chain-of-thought."
