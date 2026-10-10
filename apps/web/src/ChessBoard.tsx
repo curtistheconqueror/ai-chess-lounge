@@ -21,6 +21,9 @@ interface ChessBoardProps {
   transitionMs?: number;
   bufferMs?: number;
   motionPly?: number;
+  /** Whose pieces the player may pick up; defaults to the side to move. Premoves pass the player's color. */
+  movableColor?: "white" | "black";
+  premove?: { from: string; to: string } | null;
 }
 
 function ChessBoardView({
@@ -40,6 +43,8 @@ function ChessBoardView({
   transitionMs = 300,
   bufferMs = 0,
   motionPly,
+  movableColor,
+  premove = null,
 }: ChessBoardProps) {
   const board = useRef<HTMLDivElement>(null);
   const previous = useRef({ fen, motionContext, flipped, motionPly });
@@ -156,7 +161,8 @@ function ChessBoardView({
     const sprite = square.querySelector<HTMLElement>(".piece-motion");
     if (sprite) sprite.style.transform = "";
   };
-  const pointer = useRef<{ id: number; from: string; key: string; x: number; y: number; moved: boolean } | null>(null);
+  // cx/cy: the origin square's center. A lifted piece is centered under the pointer, as on chess.com.
+  const pointer = useRef<{ id: number; from: string; key: string; x: number; y: number; cx: number; cy: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
   const [dragFrom, setDragFrom] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -185,11 +191,13 @@ function ChessBoardView({
     : new Set<string>();
   const lastSquares = lastMove ? new Set([lastMove.slice(0, 2), lastMove.slice(2, 4)]) : new Set<string>();
   const checkedKingColor = fen.split(" ")[1] === "b" ? "black" : "white";
+  const pickupColor = movableColor ?? checkedKingColor;
+  const premoveSquares = premove ? new Set([premove.from, premove.to]) : null;
 
   return (
     <div className="board-input">
     <div className="board-frame">
-      <div ref={board} className="board" role="grid" aria-label="Chess board" aria-busy={moving} data-animating={moving}>
+      <div ref={board} className={dragFrom ? "board dragging" : "board"} role="grid" aria-label="Chess board" aria-busy={moving} data-animating={moving}>
         {Array.from({ length: 8 }, (_, row) => <div role="row" className="board-row" key={row}>
         {squares.slice(row * 8, row * 8 + 8).map((square, column) => {
           const displayIndex = row * 8 + column;
@@ -210,7 +218,7 @@ function ChessBoardView({
                 isSelected ? "selected" : ""
               } ${isTarget ? "legal-target" : ""} ${isLast ? "last-move" : ""} ${
                 isCheckedKing ? "in-check" : ""
-              }`}
+              } ${premoveSquares?.has(square.name) ? "premove" : ""}`}
               key={square.name}
               data-square={square.name}
               onClick={() => {
@@ -222,8 +230,10 @@ function ChessBoardView({
                 suppressClick.current = false;
                 if (!event.isPrimary || event.button !== 0) return;
                 settle();
-                if (disabled || square.piece?.color !== checkedKingColor) return;
-                pointer.current = { id: event.pointerId, from: square.name, key: positionKey, x: event.clientX, y: event.clientY, moved: false };
+                if (disabled || square.piece?.color !== pickupColor) return;
+                const rect = event.currentTarget.getBoundingClientRect();
+                pointer.current = { id: event.pointerId, from: square.name, key: positionKey, x: event.clientX, y: event.clientY,
+                  cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2, moved: false };
                 event.currentTarget.setPointerCapture(event.pointerId);
               }}
               onPointerMove={(event) => {
@@ -232,7 +242,7 @@ function ChessBoardView({
                 if (Math.hypot(event.clientX - active.x, event.clientY - active.y) > 6) {
                   active.moved = true;
                   setDragFrom(active.from);
-                  const offset = { x: event.clientX - active.x, y: event.clientY - active.y };
+                  const offset = { x: event.clientX - active.cx, y: event.clientY - active.cy };
                   // Paint now; waiting for React's render left the piece trailing the pointer.
                   const sprite = event.currentTarget.querySelector<HTMLElement>(".piece-motion");
                   if (sprite) sprite.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
@@ -243,18 +253,21 @@ function ChessBoardView({
                 const active = pointer.current;
                 pointer.current = null;
                 setDragFrom(null);
+                const sprite = event.currentTarget.querySelector<HTMLElement>(".piece-motion");
                 clearDrag(event.currentTarget);
                 if (!active || active.id !== event.pointerId || !active.moved) return;
                 suppressClick.current = true;
-                if (disabled || active.key !== positionKey) return;
+                const offset = { x: event.clientX - active.cx, y: event.clientY - active.cy };
                 const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-square]");
-                if (target && event.currentTarget.closest(".board")?.contains(target)) {
-                  dropped.current = { from: active.from, to: target.dataset.square! };
-                  if (legalMoves.some(move => move.startsWith(active.from + target.dataset.square))) {
-                    setReleased({ from: active.from, key: positionKey, x: event.clientX - active.x, y: event.clientY - active.y });
-                  }
-                  onMoveDrop(active.from, target.dataset.square!);
-                }
+                const to = target && event.currentTarget.closest(".board")?.contains(target) ? target.dataset.square! : null;
+                const legal = Boolean(to && legalMoves.some(move => move.startsWith(active.from + to)));
+                // An illegal or off-board drop glides home instead of teleporting.
+                if (!legal) sprite?.animate([{ transform: `translate(${offset.x}px, ${offset.y}px)` }, { transform: "translate(0, 0)" }],
+                  { duration: 140, easing: motionEasingCss });
+                if (disabled || active.key !== positionKey || !to) return;
+                dropped.current = { from: active.from, to };
+                if (legal) setReleased({ from: active.from, key: positionKey, ...offset });
+                onMoveDrop(active.from, to);
               }}
               onPointerCancel={(event) => {
                 pointer.current = null; setDragFrom(null); clearDrag(event.currentTarget); suppressClick.current = true;
@@ -268,6 +281,10 @@ function ChessBoardView({
             >
               {showRank && <span className="coordinate rank" aria-hidden="true">{square.rank}</span>}
               {showFile && <span className="coordinate file" aria-hidden="true">{square.file}</span>}
+              {square.piece && dragFrom === square.name && (
+                // Faint copy left on the origin square while the piece is carried.
+                <span className="piece-ghost" aria-hidden="true"><ChessPiece piece={square.piece} design={pieceDesign} /></span>
+              )}
               {square.piece && (
                 <span className="piece-motion" style={dragFrom === square.name ? { transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)` }
                   : released?.key === positionKey && released.from === square.name ? { transform: `translate(${released.x}px, ${released.y}px)` } : undefined}>

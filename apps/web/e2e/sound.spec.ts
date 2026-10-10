@@ -105,6 +105,9 @@ test("native audio unlock and one selected original tap per move or capture", as
   await page.getByRole("gridcell", { name: "e4 empty" }).click();
   await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeVisible();
   await expect.poll(() => count(page)).toBe(2); // HTTP + socket must not double play.
+  // The tap now sounds at submit; wait for the server to record it before Black replies.
+  await expect.poll(async () => (await (await page.request.get(`/api/games/${game.id}`)).json()).moves.length).toBe(1);
+  expect(await count(page)).toBe(2);
   let current = await (await page.request.get(`/api/games/${game.id}`)).json();
   await page.request.post(`/api/games/${game.id}/moves`, { data: { move: "d7d5", position_version: current.version } });
   await expect.poll(() => count(page)).toBe(3);

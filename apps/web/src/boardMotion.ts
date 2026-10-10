@@ -37,7 +37,7 @@ const promotionTypes: Record<string, string> = { q: "Q", r: "R", b: "B", n: "N" 
  * Never authoritative: the server snapshot replaces it, and a rejection discards it.
  * Only the placement and side to move are meaningful; castling/en passant fields are cleared.
  */
-export function previewMove(fen: string, uci: string): { fen: string; capture: boolean } {
+export function previewMove(fen: string, uci: string, keepTurn = false): { fen: string; capture: boolean } {
   const placement = new Map(parseFen(fen).map(s => [s.name, s.piece ? (s.piece.color === "white"
     ? pieceLetters[s.piece.type].toUpperCase() : pieceLetters[s.piece.type]) : null]));
   const from = uci.slice(0, 2), to = uci.slice(2, 4);
@@ -68,7 +68,7 @@ export function previewMove(fen: string, uci: string): { fen: string; capture: b
     rows.push(row + (empty || ""));
   }
   const parts = fen.split(" ");
-  const turn = parts[1] === "b" ? "w" : "b";
+  const turn = keepTurn ? parts[1] : parts[1] === "b" ? "w" : "b";
   return { fen: `${rows.join("/")} ${turn} - - ${parts[4] ?? 0} ${parts[5] ?? 1}`, capture };
 }
 

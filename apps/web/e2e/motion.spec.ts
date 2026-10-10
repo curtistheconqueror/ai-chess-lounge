@@ -50,8 +50,8 @@ test("drag follows the pointer, sends one move and does not replay the dragged p
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
-  const dragged = await page.locator('[data-square="e2"] .piece-motion').boundingBox();
-  expect(Math.abs(dragged!.y - to.y)).toBeLessThan(2);
+  // Pointer moves are frame-aligned (and coalesced under load): allow the last one a frame to land.
+  await expect.poll(async () => Math.abs((await page.locator('[data-square="e2"] .piece-motion').boundingBox())!.y - to.y), { timeout: 500 }).toBeLessThan(2);
   expect(posts).toBe(0);
   await page.mouse.up();
   await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeVisible();
@@ -59,6 +59,31 @@ test("drag follows the pointer, sends one move and does not replay the dragged p
   expect(posts).toBe(1);
   // The board previews the move instantly, so wait for the server to record it.
   await expect.poll(async () => (await (await page.request.get(`/api/games/${game.id}`)).json()).moves.length).toBe(1);
+});
+
+test("lifted piece centers under the pointer, leaves a ghost, and an illegal drop glides home", async ({ page }) => {
+  const game = await create(page);
+  await moving(page).scrollIntoViewIfNeeded();
+  const from = (await page.locator('[data-square="g1"]').boundingBox())!;
+  const bad = (await page.locator('[data-square="g4"]').boundingBox())!;
+  // Grab near a corner: the piece must still center under the pointer, not keep the grab offset.
+  await page.mouse.move(from.x + from.width * 0.2, from.y + from.height * 0.2);
+  await page.mouse.down();
+  await page.mouse.move(bad.x + bad.width / 2, bad.y + bad.height / 2, { steps: 10 });
+  const centerGap = async () => {
+    const carried = (await page.locator('[data-square="g1"] .piece-motion').boundingBox())!;
+    return Math.max(Math.abs(carried.x + carried.width / 2 - (bad.x + bad.width / 2)), Math.abs(carried.y + carried.height / 2 - (bad.y + bad.height / 2)));
+  };
+  await expect.poll(centerGap, { timeout: 500 }).toBeLessThan(2);
+  await expect(page.locator('[data-square="g1"] .piece-ghost')).toHaveCount(1);
+  await page.mouse.up();
+  // The knight cannot reach g4: it animates back rather than teleporting, and no move is sent.
+  expect(await page.locator('[data-square="g1"] .piece-motion').evaluate(el => el.getAnimations().length)).toBe(1);
+  await expect(page.locator(".piece-ghost")).toHaveCount(0);
+  await expect.poll(() => page.locator('[data-square="g1"] .piece-motion').evaluate(el => el.getAnimations().length)).toBe(0);
+  const home = (await page.locator('[data-square="g1"] .piece-motion').boundingBox())!;
+  expect(Math.abs(home.x - from.x)).toBeLessThan(2);
+  expect((await (await page.request.get(`/api/games/${game.id}`)).json()).moves).toHaveLength(0);
 });
 
 test("keyboard square activation plays once and restores input after translation", async ({ page }) => {

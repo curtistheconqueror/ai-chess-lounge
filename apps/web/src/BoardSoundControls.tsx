@@ -40,7 +40,7 @@ export function useBoardSound(preloadPrototype = true) {
     try { localStorage.setItem(soundStorageKey, JSON.stringify(settings)); } catch { /* Storage is optional. */ }
   }, [settings]);
 
-  const playMove = useCallback((kind: BoardSoundKind) => { audio.current?.play(kind); }, []);
+  const playMove = useCallback((kind: BoardSoundKind) => audio.current?.play(kind) ?? false, []);
 
   async function testSound(sampleId: number = originalPrototype.id) {
     const engine = audio.current;

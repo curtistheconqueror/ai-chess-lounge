@@ -24,6 +24,12 @@ body::before { display: none; }
 .square-entry { margin: 0; }
 .piece-motion { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; will-change: transform; }
 .piece-motion .piece-svg { width: 79%; height: 79%; }
+/* Drag: faint copy on the origin square; the carried piece may leave the board edge unclipped. */
+.piece-ghost { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; opacity: .3; }
+.piece-ghost .piece-svg { width: 79%; height: 79%; }
+/* min-size 0 keeps the board's grid sizing identical when overflow flips, so lifting a piece never resizes it. */
+.board { min-width: 0; min-height: 0; }
+.board.dragging { overflow: visible; }
 .board .square { overflow: visible; }
 .board .square:hover .piece-svg { transform: translateY(-1%); }
 .workspace-section { border-top: 1px solid var(--line); padding: 0; margin-top: 14px; min-width: 0; }

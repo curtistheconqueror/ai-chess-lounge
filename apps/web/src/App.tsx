@@ -195,6 +195,8 @@ function App() {
   const [optimistic, setOptimistic] = useState<{ gameId: string; generation: number; version: number; uci: string; fen: string } | null>(null);
   // The move sound already played at submit; its confirming snapshot stays silent.
   const announcedRef = useRef<{ gameId: string; generation: number; ply: number } | null>(null);
+  // A queued move for the player's next turn; client-held only, submitted through the normal path.
+  const [premove, setPremove] = useState<{ gameId: string; generation: number; from: string; to: string } | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const gameRef = useRef<GameSnapshot | null>(null);
   const clockSyncRef = useRef<ClockSync | null>(null);
@@ -655,6 +657,56 @@ function App() {
   const adviceSupported = !!activeSeat && ["scripted", "openai", "anthropic", "google", "openrouter", "ollama", "vllm"].includes(activeSeat.adapter_id);
   const canSuggest = Boolean(adviceMode && adviceSupported && game?.lifecycle === "paused" && followingLive && !busy && connection === "live");
   const boardCanInteract = playerCanMove || canSuggest;
+  // Exactly one human seat facing an automated opponent may queue a move while the opponent thinks.
+  const premoveColor: "white" | "black" | null = (() => {
+    if (!game || !followingLive || connection !== "live" || game.status !== "active" || game.lifecycle !== "running") return null;
+    const whiteHuman = game.white_player.adapter_id === "human";
+    if (whiteHuman === (game.black_player.adapter_id === "human")) return null;
+    const color = whiteHuman ? "white" : "black";
+    const toMove = pendingMove ? (game.turn === "white" ? "black" : "white") : game.turn;
+    return toMove === color ? null : color;
+  })();
+  const premoveMode = Boolean(premoveColor && !boardCanInteract);
+  // Still shown on the frame where the turn arrives, so the piece never pops back before it is played.
+  const shownPremove = premove && game && (premoveMode || playerCanMove) && premove.gameId === game.id
+    && premove.generation === game.generation ? premove : null;
+  const boardFen = shownPremove ? previewMove(displayFen, shownPremove.from + shownPremove.to, true).fen : displayFen;
+
+  useEffect(() => {
+    if (!premove || !game) return;
+    if (premove.gameId !== game.id || premove.generation !== game.generation || game.status !== "active") {
+      setPremove(null);
+      return;
+    }
+    if (!playerCanMove) return;
+    setPremove(null);
+    // Only a move that is legal in the new position is played; otherwise it is dropped, like chess.com.
+    const candidates = game.legal_moves.filter(move => move.startsWith(premove.from + premove.to));
+    if (candidates.length) void commitMove(candidates.find(move => move.length === 4 || move.endsWith("q")) ?? candidates[0]);
+    // commitMove is recreated each render; the snapshot and permission are the real triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [premove, game, playerCanMove]);
+
+  useEffect(() => {
+    if (!premove) return;
+    const cancel = (event: KeyboardEvent) => { if (event.key === "Escape") { setPremove(null); setSelected(null); } };
+    window.addEventListener("keydown", cancel);
+    return () => window.removeEventListener("keydown", cancel);
+  }, [premove]);
+
+  function premoveSquare(square: string) {
+    if (!game || !premoveColor) return;
+    const piece = parseFen(displayFen).find(candidate => candidate.name === square)?.piece;
+    if (premove) {
+      // Any tap clears a queued premove; tapping one of your pieces starts a new one.
+      setPremove(null);
+      setSelected(piece?.color === premoveColor ? square : null);
+      return;
+    }
+    if (piece?.color === premoveColor) { setSelected(square === selected ? null : square); return; }
+    if (selected) setPremove({ gameId: game.id, generation: game.generation, from: selected, to: square });
+    setSelected(null);
+  }
   const humanSuggestions = game?.consultations?.filter(c => c.direction === "human_to_ai") ?? [];
   const latestHumanSuggestion = humanSuggestions.at(-1);
   useEffect(() => { setAdviceMode(false); setSelected(null); setPromotion(null); }, [game?.id, game?.revision]);
@@ -694,8 +746,9 @@ function App() {
     setNotice(null);
     const preview = previewMove(game.fen, move);
     setOptimistic({ gameId: game.id, generation: game.generation, version: game.version, uci: move, fen: preview.fen });
-    announcedRef.current = { gameId: game.id, generation: game.generation, ply: game.moves.length + 1 };
-    playMoveSound(preview.capture ? "capture" : "move");
+    // Mark the confirmation silent only if the instant cue really played (audio may still be decoding).
+    announcedRef.current = playMoveSound(preview.capture ? "capture" : "move")
+      ? { gameId: game.id, generation: game.generation, ply: game.moves.length + 1 } : null;
     try {
       acceptSnapshot(await submitMove(game.id, move, game.version));
     } catch (error) {
@@ -720,6 +773,7 @@ function App() {
   const boardMoveDrop = useCallback((from: string, to: string) => void boardHandlers.current.onMoveDrop(from, to), []);
 
   async function onSquareClick(square: string) {
+    if (premoveMode) { premoveSquare(square); return; }
     if (!game || !boardCanInteract) return;
     const boardSquare = parseFen(game.fen).find((candidate) => candidate.name === square);
     if (!selected) {
@@ -734,6 +788,11 @@ function App() {
   }
 
   async function onMoveDrop(from: string, to: string) {
+    if (premoveMode && game) {
+      setSelected(null);
+      if (from !== to) setPremove({ gameId: game.id, generation: game.generation, from, to });
+      return;
+    }
     if (!game || !boardCanInteract) return;
     const candidates = game.legal_moves.filter(
       (move) => move.startsWith(from) && move.slice(2, 4) === to,
@@ -1147,7 +1206,12 @@ function App() {
           </section>
           <PlayerCard {...(flipped ? whitePlayer : blackPlayer)} />
 
-          <div className="board-broadcast-frame">
+          <div className="board-broadcast-frame" onContextMenu={event => {
+            if (!premove && !(premoveMode && selected)) return;
+            event.preventDefault();
+            setPremove(null);
+            setSelected(null);
+          }}>
             <div className={`evaluation-bar ${flipped ? "flipped" : ""}`} aria-label={`White evaluation share ${Math.round(evalShare)} percent`}>
               <div className="evaluation-white" style={{ height: `${evalShare}%` }} />
               <span>{formatEvaluation(selectedPoint)}</span>
@@ -1158,14 +1222,16 @@ function App() {
               transitionMs={motion.duration}
               bufferMs={followingLive && !game?.can_move && game?.moves.at(-1)?.player_metadata?.adapter_id !== "human" && game?.moves.at(-1)?.player_metadata ? motion.buffer : 0}
               showSquareEntry
-              fen={displayFen || "8/8/8/8/8/8/8/8 w - - 0 1"}
+              fen={boardFen || "8/8/8/8/8/8/8/8 w - - 0 1"}
               positionKey={`${game?.id}:${game?.version}:${game?.revision}`}
               flipped={flipped}
-              legalMoves={followingLive ? game?.legal_moves ?? noMoves : noMoves}
+              legalMoves={followingLive && !premoveMode ? game?.legal_moves ?? noMoves : noMoves}
               selected={selected}
               lastMove={displayLastMove}
               inCheck={Boolean(followingLive && !pendingMove && game?.in_check)}
-              disabled={!boardCanInteract}
+              disabled={!boardCanInteract && !premoveMode}
+              movableColor={premoveMode ? premoveColor! : undefined}
+              premove={shownPremove}
               onSquareClick={boardSquareClick}
               onMoveDrop={boardMoveDrop}
             />
