@@ -51,6 +51,7 @@ from .models import (
 from .operations import LocalOperations, OperationsMiddleware, Readiness
 from .persistence import ConcurrentGameUpdate, IdempotencyConflict
 from .player_protocol import PROTOCOL_VERSION
+from .private_network import NetworkSettings, PrivateNetworkMiddleware
 from .public_files import public_path
 from .remote_runner import (
     RunnerAuthenticationError,
@@ -77,6 +78,7 @@ class ControlExperimentRun(BaseModel):
 
 
 def create_app(game_manager: GameManager | None = None) -> FastAPI:
+    network = NetworkSettings.from_environment()
     active_manager = game_manager or GameManager()
 
     batch_worker = ExperimentWorker(active_manager)
@@ -109,11 +111,13 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     application.add_middleware(OperationsMiddleware, operations=operations)
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=list(network.origins),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    if network.mode != "local":
+        application.add_middleware(PrivateNetworkMiddleware, settings=network)
 
     @application.get("/api/leaderboards")
     async def get_leaderboards(

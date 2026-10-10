@@ -1,5 +1,27 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - Stage 1 trusted Tailscale preparation
+
+Curtis's current direction replaces tonight's hosted rollout with two-person
+private practice; paid hosting/Supabase integration is deferred. Baseline
+`8de33355290de6b85cf3944421a8a7142c92870c` passed CI143/38009452464.
+New `python -m lounge_api.serve` launcher defaults to loopback; explicit direct
+Tailscale mode validates exact source peers and bind address. Loopback Serve mode
+allows at most two exact Tailscale login headers. Both modes independently check
+Host/Origin for HTTP and WebSockets, block administrative/credential/batch routes,
+and leave the hosted startup guard intact. See PRIVATE_TAILSCALE.md and ADR0037.
+
+Stage 1 local gate passed: focused 57 passed/four Windows symlink privilege skips;
+compatible API suite 402 passed/13 environment skips. Two Unix-only performance
+modules remain excluded on Windows. Ruff format/check, diff check and the guide's
+real --check command passed. A secret canary stayed absent from catalog, health,
+game/event and socket responses. Tailscale 1.102.2 CLI help confirms Serve flags,
+but status could not reach its daemon. No installation, sign-in, invite, ACL,
+firewall, Serve activation or two-device connection was performed. Those need
+approval and live verification; no public exposure or provider calls occurred.
+Next phase: pointer/tap input, safe areas, home-screen assets, sound/foreground
+recovery, mobile Chromium/WebKit and Lighthouse; physical phones remain a user gate.
+
 ## October 10 - keep new-match navigation stable
 
 Continues from `5edf9b97fc6291cbfef71292a403ae5ef8adb478` on

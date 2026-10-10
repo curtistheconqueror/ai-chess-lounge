@@ -115,6 +115,10 @@ operator-configured local endpoint.
 
 ## Run the Lounge
 
+For opt-in private practice with one trusted colleague, see the
+[Tailscale guide](docs/PRIVATE_TAILSCALE.md). This keeps the public hosted guard
+blocked and requires explicit device-sharing/Serve approval; there is no app sign-in.
+
 With Docker installed, Compose starts PostgreSQL and the Lounge:
 
 ```bash
