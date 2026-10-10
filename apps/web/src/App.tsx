@@ -147,6 +147,17 @@ function App() {
   const [flipped, setFlipped] = useState(false);
   const [stockfishElo, setStockfishElo] = useState<StockfishChoice>(readStockfishChoice);
   const stockfishCaps = useStockfishCapabilities();
+  const savedEloChecked = useRef(false);
+  useEffect(() => {
+    // Once, when the engine range is known: a saved Elo outside it (e.g. 3200 vs a 3190 cap) is clamped.
+    // Never while typing; partial input like "1" must stay editable and show the range message.
+    if (savedEloChecked.current || stockfishCaps?.elo_min == null || stockfishCaps.elo_max == null) return;
+    savedEloChecked.current = true;
+    if (typeof stockfishElo === "number") {
+      const clamped = Math.min(stockfishCaps.elo_max, Math.max(stockfishCaps.elo_min, stockfishElo));
+      if (clamped !== stockfishElo) setStockfishElo(clamped);
+    }
+  }, [stockfishElo, stockfishCaps]);
   useEffect(() => {
     if (validStrength(stockfishElo, stockfishCaps)) {
       try { localStorage.setItem(stockfishChoiceKey, JSON.stringify(stockfishElo)); } catch { /* Optional storage. */ }
@@ -181,6 +192,8 @@ function App() {
   const [matchControlBusy, setMatchControlBusy] = useState(false);
   const [humanAction, setHumanAction] = useState<"white" | "black" | "draw" | null>(null);
   const [matchAction, setMatchAction] = useState<MatchAction | null>(null);
+  // Focus returns to the button that opened the dialog when it is dismissed.
+  const matchActionTrigger = useRef<HTMLElement | null>(null);
   const matchActionTarget = useRef<{ id: string; generation: number; label: string } | null>(null);
   const [pauseReason, setPauseReason] = useState<string | null>(null);
   const [promotion, setPromotion] = useState<PromotionRequest | null>(null);
@@ -397,7 +410,6 @@ function App() {
       }
     } finally {
       setBusy(false);
-      boardControlsRef.current?.scrollIntoView({ block: "start" });
     }
   }, [
     startPaused,
@@ -870,6 +882,7 @@ function App() {
 
   function openMatchAction(action: MatchAction) {
     if (!game) return;
+    matchActionTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     matchActionTarget.current = {
       id: game.id, generation: game.generation,
       label: `Match ${game.id.slice(0, 8).toUpperCase()} · ${game.white_player.display_name} vs ${game.black_player.display_name}`,
@@ -927,7 +940,6 @@ function App() {
       try { acceptSnapshot(await fetchGame(game.id)); } catch { /* Preserve action error. */ }
     } finally {
       setMatchControlBusy(false);
-      boardControlsRef.current?.scrollIntoView({ block: "start" });
     }
   }
 
@@ -959,7 +971,6 @@ function App() {
       try { acceptSnapshot(await fetchGame(game.id)); } catch { /* Preserve action error. */ }
     } finally {
       setMatchControlBusy(false);
-      boardControlsRef.current?.scrollIntoView({ block: "start" });
     }
   }
 
@@ -1122,6 +1133,16 @@ function App() {
     || (whiteSeat === "remote_runner" && !whiteRunnerId)
     || (blackSeat === "remote_runner" && !blackRunnerId);
   const matchEnded = Boolean(game && ["completed", "aborted", "adjudicated"].includes(game.lifecycle));
+  const nextMatchLabel = `Next match: ${seatChoiceLabel(whiteSeat)} vs ${seatChoiceLabel(blackSeat)}`;
+  const controlStatus: { title: string; detail: string } = !game
+    ? { title: busy ? "Checking the table" : "Ready to start", detail: nextMatchLabel }
+    : connection !== "live" ? { title: "Reconnecting to the board", detail: "Moves are disabled until the current position arrives." }
+    : matchEnded ? { title: game.status === "aborted" ? "Match aborted" : "Match finished", detail: `The final position and history are saved. ${nextMatchLabel}` }
+    : !followingLive ? { title: "Viewing replay", detail: "Return to the current position before playing." }
+    : game.lifecycle === "paused" ? { title: "Match paused", detail: pauseReason ?? "Clocks and moves are paused." }
+    : game.lifecycle === "created" || game.lifecycle === "waiting" ? { title: "Waiting for players", detail: "This match is not running yet." }
+    : { title: `${capitalize(game.turn)} to move`, detail: activePlayer?.adapter_id === "human"
+      ? "Tap or drag a piece." : `Waiting for ${activePlayer?.display_name ?? "the player"}…` };
   const broadcastLabel = !game ? (busy ? "CHECKING TABLE" : "READY TO START") : game.status === "active"
     ? "LIVE EXHIBITION"
     : game?.lifecycle === "paused"
@@ -1169,43 +1190,36 @@ function App() {
       <section className="arena-layout">
         <div className="match-stage">
           <section ref={boardControlsRef} className="board-play-controls" aria-label="Board play controls">
-            {game && <small>Viewing match {game.id.slice(0, 8).toUpperCase()} · {game.white_player.display_name} vs {game.black_player.display_name}</small>}
-            {!game ? <>
-                <strong>{busy ? "Checking the table" : "Ready to start"}</strong>
-                <p>Choose Seats & game setup, then start a match. Nothing starts until you choose to play.</p>
-                <button className="primary-button" disabled={newMatchDisabled} onClick={() => void startNewGame()}>Play a new match</button>
-                <small>Next match: {seatChoiceLabel(whiteSeat)} vs {seatChoiceLabel(blackSeat)}. Change players in Seats & game setup.</small>
-                <a href="/">Open current table</a>
-              </>
-              : connection !== "live" ? <><strong>Reconnecting to the board</strong><p>Moves are disabled until the current position arrives.</p></>
-              : matchEnded ? <>
-                <strong>{game.status === "aborted" ? "Match aborted" : "Match finished"}</strong>
-                <p>This match has ended. Its final position and history are saved. Start a new match to play.</p>
-                <button className="primary-button" disabled={newMatchDisabled} onClick={() => void startNewGame()}>Play a new match</button>
-                <small>Next match: {seatChoiceLabel(whiteSeat)} vs {seatChoiceLabel(blackSeat)}. Change players in Seats & game setup.</small>
-                <a href="/">Open current table</a>
-              </> : !followingLive ? <>
-                <strong>Viewing replay</strong><p>Return to the current position before playing.</p>
-                <button onClick={() => { setReplayRunning(false); setReplayPly(null); }}>Return to live board</button>
-              </> : game.lifecycle === "paused" ? <>
-                <strong>Match paused</strong><p>{pauseReason ?? "The clocks and moves are paused."} Resume to continue from this position.</p>
-                <button className="primary-button" disabled={matchControlBusy || busy} onClick={() => void onMatchControl("resume")}>Resume play</button>
-              </> : game.lifecycle === "created" || game.lifecycle === "waiting" ? <>
-                <strong>Waiting for players</strong><p>This match is not running yet.</p>
-              </> : <>
-                <strong>{capitalize(game.turn)} to move</strong>
-                <p>{activePlayer?.adapter_id === "human" ? `Move a ${game.turn} piece: tap its square and destination, or drag it.` : `Waiting for ${activePlayer?.display_name ?? "the player"} to move.`}</p>
-              </>}
-            {game && !matchEnded && <div className="secondary-actions">
-              <button disabled={busy || matchControlBusy || !followingLive || connection !== "live"} onClick={() => openMatchAction("abort")}>End match…</button>
-              <button disabled={newMatchDisabled || !followingLive || connection !== "live"} onClick={() => openMatchAction("restart")}>End and start new…</button>
-            </div>}
-            <button className="setup-shortcut" onClick={() => {
-              const section = document.getElementById("seats-setup") as HTMLDetailsElement;
-              section.open = true; section.querySelector("summary")?.focus(); section.scrollIntoView({ block: "nearest" });
-            }}>Seats &amp; game setup</button>
-            {game?.lifecycle === "running" && <button disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => void onMatchControl("pause")}>Pause play</button>}
-            {notice && <p className="board-notice" role="alert">{notice}</p>}
+            {/* Fixed layout: one status line and four action slots that never reorder or change size,
+                so pausing, resuming, ending or starting a match never moves the board or the page. */}
+            <div className="match-status">
+              <div className="match-status-title"><strong>{controlStatus.title}</strong>
+                {game && <small className="match-id">Match {game.id.slice(0, 8).toUpperCase()}</small>}</div>
+              <p>{controlStatus.detail}</p>
+            </div>
+            <div className="match-actions">
+              {!game || matchEnded
+                ? <button className="primary-button" disabled={newMatchDisabled} onClick={() => void startNewGame()}>Play a new match</button>
+                : connection !== "live" ? <button className="primary-button" disabled>Reconnecting…</button>
+                : !followingLive ? <button className="primary-button" onClick={() => { setReplayRunning(false); setReplayPly(null); }}>Return to live board</button>
+                : game.lifecycle === "paused" ? <button className="primary-button" disabled={matchControlBusy || busy} onClick={() => void onMatchControl("resume")}>Resume play</button>
+                : game.lifecycle === "running" ? <button className="primary-button" disabled={matchControlBusy} onClick={() => void onMatchControl("pause")}>Pause play</button>
+                : <button className="primary-button" disabled>Waiting…</button>}
+              {game && !matchEnded
+                ? <button disabled={busy || matchControlBusy || !followingLive || connection !== "live"} onClick={() => openMatchAction("abort")}>End match…</button>
+                : <a className="table-link" href="/">Open current table</a>}
+              {game && !matchEnded
+                ? <button disabled={newMatchDisabled || !followingLive || connection !== "live"} onClick={() => openMatchAction("restart")}>End and start new…</button>
+                : <span className="action-slot" aria-hidden="true" />}
+              <button className="setup-shortcut" onClick={() => {
+                const section = document.getElementById("seats-setup") as HTMLDetailsElement;
+                // An explicit "go to setup" request: scrolling there is what the user asked for.
+                section.open = true; section.querySelector("summary")?.focus(); section.scrollIntoView({ block: "nearest" });
+              }}>Seats &amp; game setup</button>
+            </div>
+            {/* Floats over the page instead of inserting a line that pushes the board down. */}
+            {notice && <p className="board-notice" role="alert">{notice}
+              <button className="notice-dismiss" aria-label="Dismiss message" onClick={() => setNotice(null)}>×</button></p>}
           </section>
           <PlayerCard {...(flipped ? whitePlayer : blackPlayer)} />
 
@@ -1433,7 +1447,7 @@ function App() {
             <button
               className="primary-button"
               onClick={() => void startNewGame()}
-              disabled={newMatchDisabled}
+              disabled={newMatchDisabled || game?.lifecycle === "running" || game?.lifecycle === "paused"}
             >
               New match
             </button>
@@ -1609,7 +1623,7 @@ function App() {
             <button onClick={() => setHumanAction("draw")} disabled={!playerCanMove || (!game?.can_claim_draw && !game?.draw_claim_moves?.length)} title="Available for threefold repetition or the fifty-move rule">
               Claim draw
             </button>
-            <button onClick={() => game && void copyText(permalink(game.id), "Match link")}>Copy link</button>
+            <button disabled={!game} onClick={() => game && void copyText(permalink(game.id), "Match link")}>Copy link</button>
             <button onClick={() => downloadGame("pgn")} disabled={!game}>Export PGN</button>
           </div>
 
@@ -1628,7 +1642,7 @@ function App() {
       <footer className="lounge-footer"><span>AI Chess Lounge</span><span>Provider-neutral broadcast shell</span><span>PGN · FEN · JSON · Replay</span></footer>
       {promotion && <PromotionPicker color={promotion.color} onChoose={choosePromotion} onCancel={cancelPromotion} />}
       {takeover && game && <SeatTakeoverDialog color={takeover.color} current={game[`${takeover.color}_player`]} player={takeover.player} busy={matchControlBusy} onConfirm={() => void confirmTakeover()} onCancel={() => setTakeover(null)} />}
-      {matchAction && game && <MatchActionDialog action={matchAction} targetLabel={matchActionTarget.current?.label} nextMatchLabel={`${seatChoiceLabel(whiteSeat)} vs ${seatChoiceLabel(blackSeat)}`} busy={busy || matchControlBusy} onCancel={() => setMatchAction(null)} onConfirm={(result) => void onMatchAction(result)} />}
+      {matchAction && game && <MatchActionDialog action={matchAction} targetLabel={matchActionTarget.current?.label} nextMatchLabel={`${seatChoiceLabel(whiteSeat)} vs ${seatChoiceLabel(blackSeat)}`} busy={busy || matchControlBusy} onCancel={() => { setMatchAction(null); matchActionTrigger.current?.focus({ preventScroll: true }); }} onConfirm={(result) => void onMatchAction(result)} />}
       {humanAction && game && <HumanActionDialog action={humanAction} claimMoves={game.draw_claim_moves ?? []} busy={busy} onCancel={() => setHumanAction(null)} onConfirm={(move) => void onHumanAction(move)} />}
       <div className="sr-only" aria-live="polite">Position {displayPly}. {selectedPoint ? formatEvaluation(selectedPoint) : "Evaluation pending"}.</div>
     </main>

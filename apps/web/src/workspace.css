@@ -85,3 +85,29 @@ summary:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid
 @media (prefers-reduced-motion: reduce) {
   .evaluation-white, .piece-svg { transition: none; }
 }
+
+/* Match bar: fixed geometry in every state so controls never jump and the board never moves. */
+.board-play-controls { gap: 10px; }
+.board-play-controls .match-status { height: calc(1.3rem + 2 * .85rem * 1.45 + 2px); display: grid; grid-template-rows: 1.3rem auto; align-content: start; gap: 2px; overflow: hidden; }
+.board-play-controls .match-status-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.board-play-controls .match-status strong { line-height: 1.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board-play-controls .match-id { flex: none; font-size: .72rem; color: #9fb0a5; letter-spacing: .02em; }
+.board-play-controls .match-status p { line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.board-play-controls .match-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.board-play-controls .match-actions > * {
+  height: 44px; min-height: 44px; width: 100%; justify-self: stretch; justify-content: center; align-items: center; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-inline: 8px;
+}
+.board-play-controls .action-slot { visibility: hidden; }
+@media (max-width: 560px) {
+  .board-play-controls .match-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .board-play-controls .match-actions > * { font-size: .82rem; }
+}
+.board-play-controls .board-notice {
+  position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50;
+  width: min(560px, calc(100vw - 32px)); margin: 0; padding: 12px 44px 12px 14px; border: 1px solid #8a6b3a; border-radius: 12px;
+  background: #1d1a12; color: #ffcf9b; box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+}
+.board-play-controls .notice-dismiss {
+  position: absolute; top: 6px; right: 6px; min-height: 32px; width: 32px; padding: 0; border: 0; background: transparent; color: inherit; font-size: 1.2rem;
+}

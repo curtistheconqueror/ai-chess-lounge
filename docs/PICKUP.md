@@ -1,5 +1,51 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - chess.com feel pass and smoke-test Phase A
+
+Owner goal: chess.com-level smoothness, minimalist and production-ready.
+
+Shipped on PR36 (each verified locally; CI green through `543b885`):
+
+- **Clocks** (`e61bb7f`): each player card owns a `LiveClock`, so the app no longer
+  re-renders 10 times a second. `ChessBoard` is memoized.
+- **Instant own move** (`36038e8`, ADR0040): a display-only preview, with rollback on
+  rejection.
+- **Premoves and drag** (`30a16cf`): premoves for a single human seat vs an automated
+  opponent. Drag centers the piece, leaves a ghost, and glides home on an illegal drop.
+- **Varied cues** (`543b885`): check, castle, capture, promote and end cues, all built
+  from the approved tap. The "Varied cues" toggle restores the single tap.
+
+**Phase A smoke fixes** (this checkpoint). A Sonnet smoke suite in
+`apps/web/e2e-smoke` (14 device/browser projects; run via `playwright.smoke.config.ts`
+against a Stockfish-enabled fixture) found these root causes:
+
+- three forced `scrollIntoView` calls after Pause/Resume/End/Start
+- a control strip that reordered and resized per state
+- a setup "New match" that stayed enabled during a live match (409, then the old 3100
+  game was re-shown: the "stuck at 3100" report)
+
+Fixes:
+
+- The scrolls are removed.
+- The strip now has a fixed-height status and four fixed action slots. Primary is
+  Play/Resume/Pause in one place.
+- Notices float instead of reflowing.
+- New match is disabled while a match is live.
+- Dialog focus returns to its trigger.
+- Copy link is disabled with no game.
+- A saved Elo is clamped to the engine caps.
+- An ended game reads "Last match".
+
+Smoke S01-S11, S20, S28-S30 pass on desktop, phone (390/320) and iPad touch.
+
+**Open design decisions, for Phase B:**
+
+- **S21:** two strength controls (next vs current) confuse.
+- **S27:** next-match strength is per-device localStorage.
+- **S54:** Resign/Draw are hidden in a disclosure.
+- **S50/S53:** clutter and duplicate controls in Match control.
+- **Full-screen board mode.**
+
 ## October 10 - motion gaps closed and phone/iPad suites restored to CI
 
 Continues from `e3b1393` (CI154 green). Closes the three motion gaps recorded in
