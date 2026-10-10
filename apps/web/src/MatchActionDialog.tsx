@@ -6,7 +6,7 @@ export type AdjudicatedResult = "1-0" | "0-1" | "1/2-1/2";
 const copy: Record<MatchAction, { title: string; body: string; confirm: string }> = {
   abort: {
     title: "Abort this match?",
-    body: "The match ends with no result (*). Moves and history are kept. This cannot be undone.",
+    body: "The match ends with no result (*). Moves and history are kept. This cannot be undone. Afterward, choose Play a new match for a fresh board.",
     confirm: "Abort match",
   },
   adjudicate: {

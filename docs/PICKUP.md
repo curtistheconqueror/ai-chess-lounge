@@ -1,5 +1,46 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - phone paused/aborted board recovery
+
+Baseline `327b19b6c83c2821cb336a961dccd2fcb06a1206` passed
+[CI145](https://github.com/curtistheconqueror/ai-chess-lounge/actions/runs/38020934236).
+Curtis reported that the iPhone private board stayed on its first move even after
+Abort. Read-only evidence showed the shared practice game had been paused, a New
+match attempt returned409 while it was live, and Abort then returned200. The game
+was correctly terminal at version1/revision6 with e2e4 saved; retaining its final
+board looked like a failed action because recovery controls were far below it.
+The served bundle was current, the worker caches only a generic offline page,
+and real HTTPS/WebSocket mutation tests succeeded. No gesture or transport failure
+was reproduced; actual iPhone acceptance still needs Curtis's confirmation.
+
+Board-adjacent controls now explain paused, aborted, replay, reconnecting and
+side-to-move states. Resume play and Play a new match provide direct recovery;
+Abort explicitly explains the saved final position. Action completion returns
+the view to these controls, and failures appear there. Runner403 responses stop
+the unavailable pairing panel/poll instead of repeating every3seconds; access
+checks remain unchanged. Existing browser selectors now distinguish the original
+New match/LIVE controls from the new board-adjacent alternatives.
+
+New regressions:18 passed across mobile Chromium/WebKit at320/390/430px,
+including resume→touch move→abort→new match, archive preservation, denied runner
+polling and visible failed-resume feedback. Error mocking blocks service workers
+only for that mocked-response case; real worker/play acceptance remains enabled.
+Existing mobile compatibility: 33 passed, three Windows native-audio skips. The
+responsive aggregate had 138 passed, 95 viewport-scope skips and two ambiguous
+selector errors; both affected tests passed after exact-selector corrections.
+Build/typecheck and diff check passed. Real private HTTPS mobile-WebKit acceptance
+passed the complete flow on two newly created fixture games; only those fixtures
+were ended. The user's original FEN, history, status, version and revision were
+verified unchanged (timestamps compared by instant, not timezone spelling).
+
+The private static frontend was refreshed without restarting the backend or
+changing Serve, access rules or data. Reload once on the phone, then use Play a
+new match for the already-aborted game, or Resume play for a paused one. Archived
+games are never silently reset or revived. No workflow changes, paid calls,
+production migration, merge or public deployment. Local handoff evidence lives
+in phone-state-mobile.xml and phone-fix-private-verification.json with an updated
+phone-original-aborted-fixed.png. Check this new head's CI before any merge.
+
 ## October 10 - app-only publication and approved private HTTPS
 
 Curtis approved publishing ordinary app changes separately from the CI workflow.

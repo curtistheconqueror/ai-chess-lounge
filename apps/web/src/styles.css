@@ -2239,6 +2239,12 @@ select {
 .stockfish-strength .stockfish-current { color: #e8c778; }
 
 .board-input { min-width: 0; }
+.board-play-controls { display: grid; gap: 8px; margin-bottom: 12px; padding: 12px; border: 1px solid #526748; border-radius: 12px; background: #101b15; scroll-margin-top: 12px; }
+.board-play-controls strong { color: #edcc80; font-size: 1rem; }
+.board-play-controls p { margin: 0; line-height: 1.45; color: #d4ded6; font-size: .85rem; }
+.board-play-controls small { color: #b8c5bc; overflow-wrap: anywhere; }
+.board-play-controls button { min-height: 44px; justify-self: start; }
+.board-play-controls .board-notice { padding-top: 8px; border-top: 1px solid #526748; color: #ffcf9b; }
 .board-row { display: contents; }
 .board-broadcast-frame > .board-input { display: contents; }
 .board-broadcast-frame .board-frame { grid-column: 2; }

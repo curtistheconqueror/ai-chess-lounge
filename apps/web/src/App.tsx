@@ -6,6 +6,7 @@ import { ModelLab } from "./ModelLab";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import {
+  ApiRequestError,
   abortGame,
   adjudicateGame,
   claimDraw,
@@ -147,6 +148,7 @@ function App() {
   const [whiteEffort, setWhiteEffort] = useState<EffortLevel>("balanced");
   const [blackEffort, setBlackEffort] = useState<EffortLevel>("balanced");
   const [runnerSessions, setRunnerSessions] = useState<RunnerSessionStatus[]>([]);
+  const [runnerAccessDenied, setRunnerAccessDenied] = useState(false);
   const [whiteRunnerId, setWhiteRunnerId] = useState("");
   const [blackRunnerId, setBlackRunnerId] = useState("");
   const [runnerMaxTurns, setRunnerMaxTurns] = useState(500);
@@ -175,6 +177,7 @@ function App() {
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const boardControlsRef = useRef<HTMLElement | null>(null);
   const [clockTick, setClockTick] = useState(Date.now());
   const socketRef = useRef<WebSocket | null>(null);
   const gameRef = useRef<GameSnapshot | null>(null);
@@ -214,16 +217,18 @@ function App() {
   const refreshRunnerSessions = useCallback(async () => {
     try {
       setRunnerSessions(await fetchRunnerSessions());
-    } catch {
+    } catch (error) {
       setRunnerSessions([]);
+      if (error instanceof ApiRequestError && error.status === 403) setRunnerAccessDenied(true);
     }
   }, []);
 
   useEffect(() => {
+    if (runnerAccessDenied) return;
     void refreshRunnerSessions();
     const timer = window.setInterval(() => void refreshRunnerSessions(), 3_000);
     return () => window.clearInterval(timer);
-  }, [refreshRunnerSessions]);
+  }, [refreshRunnerSessions, runnerAccessDenied]);
 
   useEffect(() => {
     if (activeRunnerSessions.length) {
@@ -360,6 +365,7 @@ function App() {
       setNotice(error instanceof Error ? error.message : "Unable to create game.");
     } finally {
       setBusy(false);
+      boardControlsRef.current?.scrollIntoView({ block: "start" });
     }
   }, [
     startPaused,
@@ -801,7 +807,10 @@ function App() {
       setMatchAction(null);
       setNotice(error instanceof Error ? error.message : "Match action failed.");
       try { acceptSnapshot(await fetchGame(game.id)); } catch { /* Preserve action error. */ }
-    } finally { setMatchControlBusy(false); }
+    } finally {
+      setMatchControlBusy(false);
+      boardControlsRef.current?.scrollIntoView({ block: "start" });
+    }
   }
 
   async function onHumanAction(intendedMove: string | null) {
@@ -830,7 +839,10 @@ function App() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Match control failed.");
       try { acceptSnapshot(await fetchGame(game.id)); } catch { /* Preserve action error. */ }
-    } finally { setMatchControlBusy(false); }
+    } finally {
+      setMatchControlBusy(false);
+      boardControlsRef.current?.scrollIntoView({ block: "start" });
+    }
   }
 
   function prepareTakeover(color: Color, restore = false) {
@@ -969,6 +981,11 @@ function App() {
   const canRetryAgent = Boolean(
     game?.lifecycle === "paused" && activePlayer && activePlayer.adapter_id !== "human",
   );
+  const newMatchDisabled = busy
+    || ((whiteSeat === "stockfish" || blackSeat === "stockfish") && !validStrength(stockfishElo, stockfishCaps))
+    || (whiteSeat === "remote_runner" && !whiteRunnerId)
+    || (blackSeat === "remote_runner" && !blackRunnerId);
+  const matchEnded = Boolean(game && ["completed", "aborted", "adjudicated"].includes(game.lifecycle));
   const broadcastLabel = game?.status === "active"
     ? "LIVE EXHIBITION"
     : game?.lifecycle === "paused"
@@ -1011,6 +1028,28 @@ function App() {
 
       <section className="arena-layout">
         <div className="match-stage">
+          <section ref={boardControlsRef} className="board-play-controls" aria-label="Board play controls">
+            {!game ? <><strong>No match selected</strong><p>Choose your seats below, then start a match.</p></>
+              : connection !== "live" ? <><strong>Reconnecting to the board</strong><p>Moves are disabled until the current position arrives.</p></>
+              : matchEnded ? <>
+                <strong>{game.status === "aborted" ? "Match aborted" : "Match finished"}</strong>
+                <p>This match has ended. Its final position and history are saved. Start a new match to play.</p>
+                <button className="primary-button" disabled={newMatchDisabled} onClick={() => void startNewGame()}>Play a new match</button>
+                <small>Next match: {seatChoiceLabel(whiteSeat)} vs {seatChoiceLabel(blackSeat)}. Change seats below.</small>
+              </> : !followingLive ? <>
+                <strong>Viewing replay</strong><p>Return to the current position before playing.</p>
+                <button onClick={() => { setReplayRunning(false); setReplayPly(null); }}>Return to live board</button>
+              </> : game.lifecycle === "paused" ? <>
+                <strong>Match paused</strong><p>{pauseReason ?? "The clocks and moves are paused."} Resume to continue from this position.</p>
+                <button className="primary-button" disabled={matchControlBusy || busy} onClick={() => void onMatchControl("resume")}>Resume play</button>
+              </> : game.lifecycle === "created" || game.lifecycle === "waiting" ? <>
+                <strong>Waiting for players</strong><p>This match is not running yet.</p>
+              </> : <>
+                <strong>{capitalize(game.turn)} to move</strong>
+                <p>{activePlayer?.adapter_id === "human" ? `Move a ${game.turn} piece: tap its square and destination, or drag it.` : `Waiting for ${activePlayer?.display_name ?? "the player"} to move.`}</p>
+              </>}
+            {notice && <p className="board-notice" role="alert">{notice}</p>}
+          </section>
           <PlayerCard {...(flipped ? whitePlayer : blackPlayer)} />
 
           <StrategyChannel
@@ -1072,7 +1111,7 @@ function App() {
               <h2>{game?.white_player.display_name ?? seatChoiceLabel(whiteSeat)} <span>vs</span> {game?.black_player.display_name ?? seatChoiceLabel(blackSeat)}</h2>
               <small>{game?.id ? `Match ${game.id.slice(0, 8).toUpperCase()}${game.termination_reason ? ` · ${terminationLabel(game.termination_reason)}` : ""}` : "No match loaded"}</small>
             </div>
-            <span className={`result-badge ${game?.status ?? "loading"}`}>{game?.status === "active" ? "LIVE" : game?.result ?? "LOADING"}</span>
+            <span className={`result-badge ${game?.status ?? "loading"}`}>{game?.status === "active" ? "LIVE" : game?.status === "paused" ? "PAUSED" : game?.status === "aborted" ? "ABORTED" : game?.result ?? "LOADING"}</span>
           </div>
 
           <p>One game at a time. Select each seat independently: Human to play, or two agents to watch. Effort choices come from each model's supported capabilities. API access is separate from ordinary consumer subscriptions.</p>
@@ -1163,7 +1202,7 @@ function App() {
             <button
               className="primary-button"
               onClick={() => void startNewGame()}
-              disabled={busy || ((whiteSeat === "stockfish" || blackSeat === "stockfish") && !validStrength(stockfishElo, stockfishCaps)) || (whiteSeat === "remote_runner" && !whiteRunnerId) || (blackSeat === "remote_runner" && !blackRunnerId)}
+              disabled={newMatchDisabled}
             >
               New match
             </button>
@@ -1201,7 +1240,7 @@ function App() {
             enabled={followingLive && connection === "live" && !busy}
             onSnapshot={snapshot => { if (gameRef.current?.id === snapshot.id) acceptSnapshot(snapshot); }} />}
 
-          <div className="runner-pairing-panel" aria-label="Remote runner pairing">
+          {!runnerAccessDenied && <div className="runner-pairing-panel" aria-label="Remote runner pairing">
             <div className="runner-pairing-heading">
               <div>
                 <span>{runnerConnectionMode === "subscription_bridge" ? "SUBSCRIPTION BRIDGE · EXPERIMENTAL" : "REMOTE RUNNER"}</span>
@@ -1306,8 +1345,7 @@ function App() {
                 </small>
               ))}
             </div>
-          </div>
-
+          </div>}
           <div className="panel-tabs" role="tablist" aria-label="Match details">
             {(["moves", "analysis", "pgn", "fen"] as const).map((tab) => (
               <button key={tab} role="tab" aria-selected={panelTab === tab} className={panelTab === tab ? "active" : ""} onClick={() => setPanelTab(tab)}>
@@ -1384,7 +1422,6 @@ function App() {
       {takeover && game && <SeatTakeoverDialog color={takeover.color} current={game[`${takeover.color}_player`]} player={takeover.player} busy={matchControlBusy} onConfirm={() => void confirmTakeover()} onCancel={() => setTakeover(null)} />}
       {matchAction && game && <MatchActionDialog action={matchAction} busy={busy || matchControlBusy} onCancel={() => setMatchAction(null)} onConfirm={(result) => void onMatchAction(result)} />}
       {humanAction && game && <HumanActionDialog action={humanAction} claimMoves={game.draw_claim_moves ?? []} busy={busy} onCancel={() => setHumanAction(null)} onConfirm={(move) => void onHumanAction(move)} />}
-      {notice && <div className="toast" role="alert">{notice}</div>}
       <div className="sr-only" aria-live="polite">Position {displayPly}. {selectedPoint ? formatEvaluation(selectedPoint) : "Evaluation pending"}.</div>
     </main>
   );

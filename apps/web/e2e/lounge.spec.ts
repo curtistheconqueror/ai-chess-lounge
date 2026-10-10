@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
   const created = page.waitForResponse((response) =>
     response.url().endsWith("/api/games") && response.request().method() === "POST");
   await finishFixtureGames(page.request);
-  await page.getByRole("button", { name: "New match" }).click();
+  await page.getByRole("button", { name: "New match", exact: true }).click();
   const game = await (await created).json() as { id: string };
   await expect(page).toHaveURL(new RegExp(`/games/${game.id}$`));
 });
@@ -68,7 +68,7 @@ test("operators can adjudicate or abort a match after confirming", async ({ page
   const created = page.waitForResponse((response) =>
     response.url().endsWith("/api/games") && response.request().method() === "POST");
   await finishFixtureGames(page.request);
-  await page.getByRole("button", { name: "New match" }).click();
+  await page.getByRole("button", { name: "New match", exact: true }).click();
   await created;
   await page.getByRole("button", { name: "Abort match" }).click();
   await page.getByRole("button", { name: "Cancel" }).click();
@@ -142,7 +142,7 @@ test("move, replay, analysis, and permalink flows remain coherent", async ({ pag
 
   await page.getByRole("button", { name: "First position" }).click();
   await expect(page.locator(".broadcast-ribbon")).toContainText("LOCAL REPLAY");
-  await page.getByRole("button", { name: "LIVE" }).click();
+  await page.getByRole("button", { name: "LIVE", exact: true }).click();
   await expect(page.locator(".broadcast-ribbon")).not.toContainText("LOCAL REPLAY");
 
   await page.getByRole("tab", { name: "ANALYSIS" }).click();
@@ -155,7 +155,7 @@ test("two credential-free agents start an unattended match", async ({ page }, te
   await page.getByLabel("White seat").selectOption("scripted");
   await page.getByLabel("Black seat").selectOption("scripted");
   await finishFixtureGames(page.request);
-  await page.getByRole("button", { name: "New match" }).click();
+  await page.getByRole("button", { name: "New match", exact: true }).click();
 
   await expect(page.locator(".move-row").first()).toBeVisible({ timeout: 10_000 });
   await expect(page.locator(".player-card")).toContainText([
@@ -218,7 +218,7 @@ test("a remote agent pairs once and becomes a selectable seat", async ({ page },
     await route.continue();
   });
   await finishFixtureGames(page.request);
-  await page.getByRole("button", { name: "New match" }).click();
+  await page.getByRole("button", { name: "New match", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Remote runner payload captured");
   expect(submitted).toMatchObject({
     white_player: {
@@ -430,7 +430,7 @@ test("OpenAI seats use catalog models, selected effort, and only public settings
   await page.getByLabel("Black OpenAI model").selectOption("gpt-compact-latest");
   await page.getByLabel("Black effort").selectOption("deep");
   await finishFixtureGames(page.request);
-  await page.getByRole("button", { name: "New match" }).click();
+  await page.getByRole("button", { name: "New match", exact: true }).click();
 
   await expect(page.getByRole("alert")).toContainText("Provider setup payload captured");
   expect(submitted).toMatchObject({
@@ -558,7 +558,7 @@ test("Claude and OpenAI can be configured as opposing provider seats", async ({ 
   await page.getByLabel("Black OpenAI model").selectOption("gpt-frontier-latest");
   await page.getByLabel("Black effort").selectOption("deep");
   await finishFixtureGames(page.request);
-  await page.getByRole("button", { name: "New match" }).click();
+  await page.getByRole("button", { name: "New match", exact: true }).click();
 
   await expect(page.getByRole("alert")).toContainText("Cross-provider payload captured");
   expect(submitted).toMatchObject({
@@ -685,7 +685,7 @@ test("Gemini exposes model-specific effort and can face Claude", async ({ page }
   await page.getByLabel("Black Claude model").selectOption("claude-opus-5-5");
   await page.getByLabel("Black effort").selectOption("maximum");
   await finishFixtureGames(page.request);
-  await page.getByRole("button", { name: "New match" }).click();
+  await page.getByRole("button", { name: "New match", exact: true }).click();
 
   await expect(page.getByRole("alert")).toContainText("Gemini payload captured");
   expect(submitted).toMatchObject({
@@ -784,7 +784,7 @@ test("OpenRouter can face a local Ollama model without invented effort", async (
   await expect(page.getByLabel("Black effort")).toBeDisabled();
   await expect(page.getByLabel("Black effort")).toHaveValue("");
   await finishFixtureGames(page.request);
-  await page.getByRole("button", { name: "New match" }).click();
+  await page.getByRole("button", { name: "New match", exact: true }).click();
 
   await expect(page.getByRole("alert")).toContainText("Open ecosystem payload captured");
   expect(submitted).toMatchObject({
@@ -917,7 +917,7 @@ test("paused seat takeover preserves the board and restores the human", async ({
   test.skip(!["desktop", "phone"].includes(testInfo.project.name), "Takeover smoke on desktop and phone.");
   await page.getByLabel("Black seat").selectOption("human");
   await finishFixtureGames(page.request);
-  await page.getByRole("button", { name: "New match" }).click();
+  await page.getByRole("button", { name: "New match", exact: true }).click();
   await page.getByRole("gridcell", { name: "e2 white pawn" }).click();
   await page.getByRole("gridcell", { name: "e4 empty" }).click();
   await expect(page.locator(".move-row").first()).toContainText("e4");

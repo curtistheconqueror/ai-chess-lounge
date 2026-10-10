@@ -4,6 +4,13 @@ October 10, 2026: phone support is implemented for local/private practice.
 This is browser-emulation acceptance, not physical iPhone/Android certification.
 Public hosted startup remains blocked; private access follows PRIVATE_TAILSCALE.md.
 
+The follow-up iPhone report was traced to a paused practice game, then a successful
+Abort retaining its saved final position. Board-adjacent Resume play / Play a new
+match controls now explain how to continue; an aborted game itself cannot move.
+Reload the page to load the update. Eighteen new Chromium/WebKit checks passed
+across all three widths, plus a real private HTTPS mobile-WebKit fixture flow.
+The user's game was preserved; physical iPhone confirmation is still required.
+
 ## What changed
 
 The board uses pointer capture and position-fenced pointer gestures instead of

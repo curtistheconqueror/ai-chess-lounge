@@ -17,6 +17,10 @@ import type {
 
 const apiBase = import.meta.env.VITE_API_BASE ?? "";
 
+export class ApiRequestError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
@@ -36,7 +40,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // Keep the HTTP status when the response is not JSON.
     }
-    throw new Error(message);
+    throw new ApiRequestError(message, response.status);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
