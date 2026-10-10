@@ -34,6 +34,7 @@ from .adapters import (
 from .anthropic_adapter import AnthropicMessagesAdapter
 from .comparison_identity import snapshot as comparison_snapshot
 from .consultation import ConsultationService
+from .deployment_guard import require_local_runtime
 from .domain import (
     ClockExpired,
     GameSession,
@@ -155,6 +156,7 @@ class GameManager:
         self.experiment_queue = ExperimentQueue(self.store)
 
     async def start(self) -> None:
+        require_local_runtime()
         self._closed = False
         await self.store.initialize()
         self._experiment_tokens.clear()

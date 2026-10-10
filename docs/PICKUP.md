@@ -1,5 +1,43 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - public-file containment and hosted startup safeguards
+
+Continues from `cdf8abb62256e3911ce56a6cdfd9fb3b5d70f01f` on the same PR36 branch.
+A read-only fixture showed the SPA returning the public repository README via
+encoded parent traversal. Public paths now reject parent/absolute/drive/stream
+forms and require resolved containment, including symlinks, index fallback and
+asset-root mounting. Normal assets and game permalinks remain supported.
+
+Hosted or malformed deployment modes now stop before app/manager/worker startup
+and database initialization. The container defaults to hosted (blocked in this
+unfinished build); loopback Compose explicitly uses local mode. Container startup
+no longer runs Alembic. Read-only schema validation checks every revision head,
+all mapped tables/columns and caller-specified future ownership columns without
+creating or stamping anything. These are safeguards, not playable hosted Auth.
+See ADR0036 for integration requirements and limitations.
+
+Focused tests: 29 passed, four Windows file-symlink privilege skips. Actual Windows
+directory-junction escapes were tested and denied. File-symlink cases remain in
+Linux CI. Aggregate compatible API suite: 374 passed, 13 environment skips
+(four native-engine tests without STOCKFISH_PATH in that invocation, five native
+PostgreSQL/restore cases, four file-symlink cases). Full collection was blocked by
+two Unix-only performance modules importing resource; they were explicitly excluded
+from the compatible run, not reported passing. Ruff/format/diff checks passed.
+The running loopback app now returns 404 for the original encoded escape, serves
+the board with 200, and still reports native Stockfish19. Original saved-game FEN,
+version8, already-timeout status and move history remain unchanged. New head needs
+its own CI result. No container build was run because Docker is unavailable here.
+
+Recovery status changed: the parent cloud task recovered exact patch a766a78,
+24990 bytes, SHA256 a8fc654d45dd851632d02c2c4817bc14b0cc5bfb55d2f1db1f7c9d523b8666e7.
+It has NOT been installed or applied on this Windows checkout. The current Library
+helper fails applying metadata because native Windows Python lacks os.setxattr.
+Both installed Python versions lack it. WSL inspection returned E_ACCESSDENIED;
+no retry/bypass. Browser control fails before startup with HRESULT 0x80070003
+(missing Windows platform directory). No Supabase connector/CLI or authenticated
+Cloudflare configuration/session was verified. Preserve the recovered foundation's
+deny boundary when merging; the present guards deliberately block hosted startup.
+
 ## October 9 - single-game agent advice stage
 
 Base `19deddeffaa8df225aa714e63a2a3886d794ec7b` is pushed on

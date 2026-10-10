@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .adapters import AdapterConfigurationError
+from .deployment_guard import require_local_runtime
 from .domain import ClockExpired, MatchTransitionRejected, MoveRejected, StalePosition
 from .engine import EngineFailure
 from .experiment_metrics import ExperimentMetrics
@@ -50,6 +51,7 @@ from .models import (
 from .operations import LocalOperations, OperationsMiddleware, Readiness
 from .persistence import ConcurrentGameUpdate, IdempotencyConflict
 from .player_protocol import PROTOCOL_VERSION
+from .public_files import public_path
 from .remote_runner import (
     RunnerAuthenticationError,
     RunnerPairingError,
@@ -85,6 +87,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        require_local_runtime()
         await active_manager.start()
         batch_worker.start()
         readiness.started = True
@@ -638,7 +641,8 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             await websocket.close(code=4401, reason="Runner authentication failed")
 
     if web_dist.is_dir():
-        assets = web_dist / "assets"
+        public_root = web_dist.resolve()
+        assets = public_path(public_root, "assets")
         if assets.is_dir():
             application.mount("/assets", StaticFiles(directory=assets), name="assets")
 
@@ -647,10 +651,10 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             if path == "api" or path.startswith(("api/", "ws/")):
                 # Unknown API routes are errors, not the web app.
                 raise HTTPException(status_code=404, detail="Not found.")
-            candidate = web_dist / path
+            candidate = public_path(public_root, path)
             if path and candidate.is_file():
                 return FileResponse(candidate)
-            return FileResponse(web_dist / "index.html")
+            return FileResponse(public_path(public_root, "index.html"))
 
     return application
 

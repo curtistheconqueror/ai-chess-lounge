@@ -126,6 +126,13 @@ Open <http://localhost:8000>. PostgreSQL data survives container restarts in the
 `make dev`; when `DATABASE_URL` is omitted, the API uses
 `.runtime/lounge.db` through async SQLite.
 
+Compose explicitly selects local mode and binds loopback. Container images default
+to hosted mode and currently refuse startup until private authentication is
+integrated and accepted. Startup no longer runs Alembic automatically. For an
+existing local database requiring an upgrade, back it up and explicitly run
+`docker compose run --rm lounge alembic upgrade head` before starting the app.
+Do not use local mode to expose the unauthenticated operator app publicly.
+
 To enable OpenAI seats, copy `.env.example` to an ignored `.env.local`, set
 `OPENAI_API_KEY`, and optionally set the comma-separated `OPENAI_CHESS_MODELS`
 allowlist. The key remains server-side and is never included in player configuration,
