@@ -1,10 +1,12 @@
 import asyncio
+import threading
 from types import SimpleNamespace
 
 import chess
 import chess.engine
 import pytest
 from fastapi.testclient import TestClient
+from lounge_api.domain import MatchTransitionRejected
 from lounge_api.engine import StockfishService
 from lounge_api.main import create_app
 from lounge_api.manager import GameManager
@@ -12,6 +14,72 @@ from lounge_api.models import CreateGameRequest
 from lounge_api.persistence import DatabaseStore
 from lounge_api.player_protocol import PlayerConfiguration
 from pydantic import ValidationError
+
+
+def test_current_rating_update_fences_running_search_and_configures_resumed_engine(tmp_path):
+    async def run():
+        engine = recording_engine()
+        uci = engine._engine
+        started, release = threading.Event(), threading.Event()
+        original_play = uci.play
+
+        def delayed_play(board, limit):
+            started.set()
+            assert release.wait(5)
+            return original_play(board, limit)
+
+        uci.play = delayed_play
+        manager = GameManager(
+            engine=engine,
+            store=DatabaseStore(f"sqlite+aiosqlite:///{tmp_path / 'change.db'}"),
+            schedule_timeouts=False,
+        )
+        await manager.start()
+        try:
+            game = await manager.create(
+                CreateGameRequest(
+                    white_player=PlayerConfiguration.stockfish("white", target_elo=3100),
+                    black_player=PlayerConfiguration.human("black"),
+                )
+            )
+            assert await asyncio.to_thread(started.wait, 3)
+            pause = asyncio.create_task(manager.pause(game.id, game.revision))
+            await asyncio.sleep(0.02)
+            release.set()
+            paused = await asyncio.wait_for(pause, 3)
+            assert paused.moves == []  # The old search's result cannot land.
+            changed = await manager.change_seat(
+                game.id,
+                "white",
+                PlayerConfiguration.stockfish("white", target_elo=1400),
+                paused.revision,
+            )
+            assert changed.fen == paused.fen
+            assert changed.moves == paused.moves
+            assert changed.clock.white_remaining_ms == paused.clock.white_remaining_ms
+            assert changed.engine.target_elo == 1400
+            with pytest.raises(MatchTransitionRejected):
+                await manager.change_seat(
+                    game.id,
+                    "white",
+                    PlayerConfiguration.stockfish("white", target_elo=1500),
+                    paused.revision,
+                )
+            stored = await manager.store.load_game(game.id)
+            assert stored.white_player.settings["target_elo"] == 1400
+            await manager.resume(game.id, changed.revision)
+            resumed = await manager.wait_for_automation(game.id)
+            assert len(resumed.moves) == 1
+            assert uci.configurations[-1] == {
+                "Skill Level": 20,
+                "UCI_LimitStrength": True,
+                "UCI_Elo": 1400,
+            }
+        finally:
+            release.set()
+            await manager.close()
+
+    asyncio.run(run())
 
 
 class RecordingUCI:

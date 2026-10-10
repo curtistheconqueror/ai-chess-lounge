@@ -1,5 +1,16 @@
 # Stockfish strength
 
+Use **Current match Stockfish strength** to edit an existing Stockfish seat.
+Each color shows its authoritative current value and a proposed value. Update
+opens a confirmation; Cancel sends no request. Confirm pauses a running match
+using its revision, applies the seat setting using the paused revision, and leaves
+the game paused for explicit Resume play. A racing move or another controller's
+change invalidates the confirmation. A failed second step may leave the game
+paused; refresh the displayed setting before retrying. Position and move history
+are preserved, remaining time is settled at pause, and the normal seat event
+updates every connected viewer. The next engine search uses the saved setting.
+Human and agentic AI seats do not receive these configurable Stockfish controls.
+
 The board's strength controls configure the **next match**. Choose Stockfish for
 one or both seats, choose a target Elo or Full strength, then click New match.
 The chosen value survives browser reloads. The separate Current match line shows

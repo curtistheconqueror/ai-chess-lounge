@@ -3,7 +3,7 @@ import base from "./playwright.config";
 
 export default defineConfig({
   ...base,
-  testMatch: /(?:mobile|board-state|entry|multitab-restart|workspace|motion|controls-scroll)\.spec\.ts/,
+  testMatch: /(?:mobile|board-state|entry|multitab-restart|workspace|motion|controls-scroll|current-strength)\.spec\.ts/,
   testIgnore: [],
   outputDir: "./test-results-mobile",
   use: { ...base.use, channel: undefined, launchOptions: {} },

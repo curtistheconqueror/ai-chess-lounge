@@ -31,6 +31,7 @@ import {
 import { pairMoves, parseFen } from "./chess";
 import { ConsultationPanel } from "./ConsultationPanel";
 import { SeatTakeoverDialog } from "./SeatTakeoverDialog";
+import { CurrentStockfishStrength, withStrength } from "./CurrentStockfishStrength";
 import { HumanActionDialog } from "./HumanActionDialog";
 import { MatchActionDialog, type AdjudicatedResult, type MatchAction } from "./MatchActionDialog";
 import { GameUsage } from "./GameUsage";
@@ -881,6 +882,24 @@ function App() {
     }
   }
 
+  async function updateCurrentStockfish(color: Color, value: StockfishChoice, revision: number) {
+    if (!game || game.revision !== revision || !followingLive || connection !== "live"
+      || game[`${color}_player`].adapter_id !== "stockfish") return;
+    const id = game.id;
+    const player = withStrength(game[`${color}_player`], value);
+    setMatchControlBusy(true);
+    setNotice(null);
+    try {
+      const paused = game.lifecycle === "running" ? await controlMatch(id, "pause", revision) : game;
+      acceptSnapshot(paused);
+      acceptSnapshot(await changeSeat(id, color, player, paused.revision));
+      setNotice("Current Stockfish strength updated for all viewers. The match stays paused; Resume play when ready.");
+    } catch (error) {
+      setNotice(`${error instanceof Error ? error.message : "Strength update failed."} Review the current setting and match state before retrying.`);
+      try { acceptSnapshot(await fetchGame(id)); } catch { /* Preserve the action error. */ }
+    } finally { setMatchControlBusy(false); }
+  }
+
   function prepareTakeover(color: Color, restore = false) {
     if (!game || game.lifecycle !== "paused" || !followingLive || connection !== "live") return;
     const previous = (game.seat_history ?? []).filter((change) => change.color === color).at(-1)?.previous_player;
@@ -1308,6 +1327,10 @@ function App() {
                 onRunnerChange={setBlackRunnerId}
               />
             )}
+            {game && [game.white_player, game.black_player].some(p => p.adapter_id === "stockfish") &&
+              <CurrentStockfishStrength game={game} caps={stockfishCaps}
+                disabled={matchControlBusy || !followingLive || connection !== "live" || !["running", "paused"].includes(game.lifecycle)}
+                onApply={updateCurrentStockfish} />}
             <StockfishStrength value={stockfishElo} onChange={setStockfishElo} caps={stockfishCaps} game={game} />
             <label>
               Time control

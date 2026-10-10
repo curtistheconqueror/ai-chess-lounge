@@ -1,5 +1,17 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - confirmed current-match Stockfish strength
+
+Continues from verified `9079ff379124d5572d615cb92eb0db3964fdbe76` / CI152.
+The existing Elo control edited next-game draft settings, so Exhibition correctly
+retained the current rating. Dedicated current-seat controls now show current
+versus proposed strength and require confirmation. Confirm uses existing revision
+fences to pause and change the selected Stockfish seat, preserving the position,
+history, and paused clocks; all viewers receive the authoritative seat snapshot.
+Resume is explicit. Cancel sends no action, and stale confirmations are dismissed.
+The engine-search cancellation regression verifies the old result cannot land and
+the resumed search receives the new UCI_Elo. Native Skill Level is the next phase.
+
 ## October 10 - header tools preserve board hit targets
 
 CI151 on `13c19fec2f5e56d3c0cf362a6bf94052c3301f29` found an actual phone
