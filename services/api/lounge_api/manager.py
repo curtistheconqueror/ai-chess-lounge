@@ -313,9 +313,13 @@ class GameManager:
                 game = self.games[game_id]
             return game.snapshot(now=self._clock())
 
-    async def latest_live_snapshot(self) -> GameSnapshot | None:
+    async def latest_live_snapshot(
+        self, *, exclude_game_id: str | None = None
+    ) -> GameSnapshot | None:
         """The newest match still in play, so a first-time visitor can spectate it."""
         for game_id in await self.store.latest_live_match_ids():
+            if game_id == exclude_game_id:
+                continue
             try:
                 snapshot = await self.snapshot(game_id)
             except GameNotFound:
@@ -420,12 +424,22 @@ class GameManager:
                     "Experiment identity is immutable; control the batch or create a new run."
                 )
 
-    async def reset(self, game_id: str) -> GameSnapshot:
+    async def reset(self, game_id: str, *, allow_terminal: bool = True) -> GameSnapshot:
         await self._reject_experiment_edit(game_id)
+        if not allow_terminal:
+            current = await self.snapshot(game_id)
+            if current.lifecycle not in {MatchState.RUNNING, MatchState.PAUSED}:
+                raise MatchTransitionRejected(
+                    "This match has ended. Its archive is preserved; start a new match."
+                )
         self._cancel_agent_runner(game_id)
         await self.get(game_id)
         async with self._game_locks[game_id]:
             game = deepcopy(await self._reload(game_id))
+            if not allow_terminal and game.lifecycle not in {MatchState.RUNNING, MatchState.PAUSED}:
+                raise MatchTransitionRejected(
+                    "This match has ended. Its archive is preserved; start a new match."
+                )
             expected_revision = game.revision
             if any(p.adapter_id == "stockfish" for p in (game.white_player, game.black_player)):
                 stockfish = next(
@@ -638,9 +652,16 @@ class GameManager:
             self._schedule_agent_runner(game)
             return snapshot
 
-    async def abort(self, game_id: str) -> GameSnapshot:
+    async def abort(self, game_id: str, expected_generation: int | None = None) -> GameSnapshot:
+        if expected_generation is not None:
+            current = await self.snapshot(game_id)
+            if current.generation != expected_generation:
+                raise MatchTransitionRejected("This match was reset. Review it before ending it.")
+        # Interrupt a pending agent before waiting for its game lock.
         self._cancel_agent_runner(game_id)
-        return await self._transition(game_id, MatchState.ABORTED, "match.aborted")
+        return await self._transition(
+            game_id, MatchState.ABORTED, "match.aborted", client_generation=expected_generation
+        )
 
     async def adjudicate(self, game_id: str, result: str) -> GameSnapshot:
         await self._reject_experiment_edit(game_id)
@@ -1284,15 +1305,26 @@ class GameManager:
         event_type: str,
         *,
         client_revision: int | None = None,
+        client_generation: int | None = None,
     ) -> GameSnapshot:
         await self.get(game_id)
         async with self._game_locks[game_id]:
             game = deepcopy(await self._reload(game_id))
+            if client_generation is not None and game.generation != client_generation:
+                raise MatchTransitionRejected("This match was reset. Review it before ending it.")
+            if target is MatchState.ABORTED and game.lifecycle in {
+                MatchState.ABORTED,
+                MatchState.COMPLETED,
+                MatchState.ADJUDICATED,
+            }:
+                return game.snapshot(now=self._clock())
             if client_revision is not None and game.revision != client_revision:
                 raise MatchTransitionRejected("The match changed. Refresh before continuing.")
             expected_revision = game.revision
             now = self._clock()
             if await self._expire_locked(game, now, expected_revision=expected_revision):
+                if target is MatchState.ABORTED:
+                    return game.snapshot(now=now)
                 raise ClockExpired(f"{game.timed_out_by.title()} lost on time.")
             game.transition(target, now=now)
             event = game.event(event_type, self._clock_payload(game, now), now=now)

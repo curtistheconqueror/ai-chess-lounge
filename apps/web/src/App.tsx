@@ -168,6 +168,7 @@ function App() {
   const [matchControlBusy, setMatchControlBusy] = useState(false);
   const [humanAction, setHumanAction] = useState<"white" | "black" | "draw" | null>(null);
   const [matchAction, setMatchAction] = useState<MatchAction | null>(null);
+  const matchActionTarget = useRef<{ id: string; generation: number; label: string } | null>(null);
   const [pauseReason, setPauseReason] = useState<string | null>(null);
   const [promotion, setPromotion] = useState<PromotionRequest | null>(null);
   const [adviceMode, setAdviceMode] = useState(false);
@@ -367,7 +368,7 @@ function App() {
           if (live) {
             acceptSnapshot(live, false, true);
             setReplayPly(null);
-            setNotice("A match is already on the table. It is shown here; continue it, or explicitly end it before starting another.");
+            setNotice(`A match is already on the table: ${live.id.slice(0, 8).toUpperCase()} (${live.lifecycle}). It is shown here. Resume it, or use End and start new to finish this specific match first.`);
           }
         } catch { /* Preserve the creation error and the selected game. */ }
       }
@@ -774,11 +775,20 @@ function App() {
     }
   }
 
+  function openMatchAction(action: MatchAction) {
+    if (!game) return;
+    matchActionTarget.current = {
+      id: game.id, generation: game.generation,
+      label: `Match ${game.id.slice(0, 8).toUpperCase()} · ${game.white_player.display_name} vs ${game.black_player.display_name}`,
+    };
+    setMatchAction(action);
+  }
+
   function onReset() {
     if (!game) return;
     const remoteSeat = [game.white_player, game.black_player].some((player) =>
       player.connection_mode === "remote_runner" || player.connection_mode === "subscription_bridge");
-    if (remoteSeat) setMatchAction("reset");
+    if (remoteSeat) openMatchAction("reset");
     else void resetMatch();
   }
 
@@ -798,6 +808,12 @@ function App() {
 
   async function onMatchAction(result: AdjudicatedResult | null) {
     if (!game || !matchAction) return;
+    const target = matchActionTarget.current;
+    if (!target || target.id !== gameRef.current?.id) {
+      setMatchAction(null);
+      setNotice("The selected match changed. Review it before continuing.");
+      return;
+    }
     const action = matchAction;
     if (action === "reset") {
       setMatchAction(null);
@@ -807,8 +823,11 @@ function App() {
     setMatchControlBusy(true);
     setNotice(null);
     try {
-      acceptSnapshot(action === "abort" ? await abortGame(game.id) : await adjudicateGame(game.id, result ?? "1/2-1/2"));
+      acceptSnapshot(action === "abort" || action === "restart"
+        ? await abortGame(target.id, target.generation)
+        : await adjudicateGame(target.id, result ?? "1/2-1/2"));
       setMatchAction(null);
+      if (action === "restart" && gameRef.current?.id === target.id) await startNewGame();
     } catch (error) {
       setMatchAction(null);
       setNotice(error instanceof Error ? error.message : "Match action failed.");
@@ -987,7 +1006,7 @@ function App() {
   const canRetryAgent = Boolean(
     game?.lifecycle === "paused" && activePlayer && activePlayer.adapter_id !== "human",
   );
-  const newMatchDisabled = busy
+  const newMatchDisabled = busy || matchControlBusy
     || ((whiteSeat === "stockfish" || blackSeat === "stockfish") && !validStrength(stockfishElo, stockfishCaps))
     || (whiteSeat === "remote_runner" && !whiteRunnerId)
     || (blackSeat === "remote_runner" && !blackRunnerId);
@@ -1035,6 +1054,7 @@ function App() {
       <section className="arena-layout">
         <div className="match-stage">
           <section ref={boardControlsRef} className="board-play-controls" aria-label="Board play controls">
+            {game && <small>Viewing match {game.id.slice(0, 8).toUpperCase()} · {game.white_player.display_name} vs {game.black_player.display_name}</small>}
             {!game ? <>
                 <strong>{busy ? "Checking the table" : "Ready to start"}</strong>
                 <p>Choose your seats below, then start a match. Nothing starts until you choose to play.</p>
@@ -1061,6 +1081,10 @@ function App() {
                 <strong>{capitalize(game.turn)} to move</strong>
                 <p>{activePlayer?.adapter_id === "human" ? `Move a ${game.turn} piece: tap its square and destination, or drag it.` : `Waiting for ${activePlayer?.display_name ?? "the player"} to move.`}</p>
               </>}
+            {game && !matchEnded && <div className="secondary-actions">
+              <button disabled={busy || matchControlBusy || !followingLive || connection !== "live"} onClick={() => openMatchAction("abort")}>End match…</button>
+              <button disabled={newMatchDisabled || !followingLive || connection !== "live"} onClick={() => openMatchAction("restart")}>End and start new…</button>
+            </div>}
             {notice && <p className="board-notice" role="alert">{notice}</p>}
           </section>
           <PlayerCard {...(flipped ? whitePlayer : blackPlayer)} />
@@ -1236,8 +1260,8 @@ function App() {
               </div>
             </>}
             {(game?.lifecycle === "running" || game?.lifecycle === "paused") && <div className="secondary-actions">
-              <button disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => setMatchAction("abort")}>Abort match</button>
-              <button disabled={matchControlBusy || !followingLive || connection !== "live"} onClick={() => setMatchAction("adjudicate")}>Adjudicate…</button>
+              <button disabled={busy || matchControlBusy || !followingLive || connection !== "live"} onClick={() => openMatchAction("abort")}>Abort match</button>
+              <button disabled={busy || matchControlBusy || !followingLive || connection !== "live"} onClick={() => openMatchAction("adjudicate")}>Adjudicate…</button>
             </div>}
             {!!game?.seat_history?.length && <details className="seat-history">
               <summary>Seat history · {game.seat_history.length} changes · exhibition</summary>
@@ -1410,7 +1434,7 @@ function App() {
                 Retry agent turn
               </button>
             )}
-            <button onClick={onReset} disabled={!game || busy}>Reset</button>
+            <button onClick={onReset} disabled={!game || matchEnded || busy || matchControlBusy || connection !== "live"}>Reset</button>
             {(["white", "black"] as const).filter((color) => game?.[`${color}_player`].connection_mode === "human").map((color) => (
               <button key={color} onClick={() => setHumanAction(color)} disabled={!game || busy || game.status !== "active" || !followingLive || connection !== "live"}>
                 Resign {color === "white" ? "White" : "Black"}
@@ -1433,7 +1457,7 @@ function App() {
       <footer className="lounge-footer"><span>AI Chess Lounge</span><span>Provider-neutral broadcast shell</span><span>PGN · FEN · JSON · Replay</span></footer>
       {promotion && <PromotionPicker color={promotion.color} onChoose={choosePromotion} onCancel={cancelPromotion} />}
       {takeover && game && <SeatTakeoverDialog color={takeover.color} current={game[`${takeover.color}_player`]} player={takeover.player} busy={matchControlBusy} onConfirm={() => void confirmTakeover()} onCancel={() => setTakeover(null)} />}
-      {matchAction && game && <MatchActionDialog action={matchAction} busy={busy || matchControlBusy} onCancel={() => setMatchAction(null)} onConfirm={(result) => void onMatchAction(result)} />}
+      {matchAction && game && <MatchActionDialog action={matchAction} targetLabel={matchActionTarget.current?.label} nextMatchLabel={`${seatChoiceLabel(whiteSeat)} vs ${seatChoiceLabel(blackSeat)}`} busy={busy || matchControlBusy} onCancel={() => setMatchAction(null)} onConfirm={(result) => void onMatchAction(result)} />}
       {humanAction && game && <HumanActionDialog action={humanAction} claimMoves={game.draw_claim_moves ?? []} busy={busy} onCancel={() => setHumanAction(null)} onConfirm={(move) => void onHumanAction(move)} />}
       <div className="sr-only" aria-live="polite">Position {displayPly}. {selectedPoint ? formatEvaluation(selectedPoint) : "Evaluation pending"}.</div>
     </main>

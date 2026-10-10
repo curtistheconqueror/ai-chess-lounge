@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
-export type MatchAction = "abort" | "adjudicate" | "reset";
+export type MatchAction = "abort" | "restart" | "adjudicate" | "reset";
 export type AdjudicatedResult = "1-0" | "0-1" | "1/2-1/2";
 
 const copy: Record<MatchAction, { title: string; body: string; confirm: string }> = {
+  restart: {
+    title: "End this match and start a new one?",
+    body: "Only the match identified below will end. Its position and history stay saved. A new match uses your selected seats. If another match is already live, it will be shown without being ended.",
+    confirm: "End and start new",
+  },
   abort: {
     title: "Abort this match?",
     body: "The match ends with no result (*). Moves and history are kept. This cannot be undone. Afterward, choose Play a new match for a fresh board.",
@@ -21,9 +26,11 @@ const copy: Record<MatchAction, { title: string; body: string; confirm: string }
   },
 };
 
-export function MatchActionDialog({ action, busy, onConfirm, onCancel }: {
+export function MatchActionDialog({ action, busy, targetLabel, nextMatchLabel, onConfirm, onCancel }: {
   action: MatchAction;
   busy: boolean;
+  targetLabel?: string;
+  nextMatchLabel?: string;
   onConfirm: (result: AdjudicatedResult | null) => void;
   onCancel: () => void;
 }) {
@@ -39,6 +46,8 @@ export function MatchActionDialog({ action, busy, onConfirm, onCancel }: {
     onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }}>
     <h2 id="match-action-title">{text.title}</h2>
     <p>{text.body}</p>
+    {targetLabel && <p><strong>{targetLabel}</strong></p>}
+    {action === "restart" && <p>Next match: {nextMatchLabel}</p>}
     {action === "adjudicate" && <label>Result
       <select aria-label="Adjudicated result" value={result} onChange={event => setResult(event.target.value as AdjudicatedResult)}>
         <option value="1-0">1-0 · White wins</option>

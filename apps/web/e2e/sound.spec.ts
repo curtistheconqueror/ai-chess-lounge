@@ -1,5 +1,8 @@
 import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
 import { createHash } from "node:crypto";
+import { finishFixtureGames } from "./fixture-games";
+
+test.beforeEach(async ({ request }) => { await finishFixtureGames(request); });
 
 type Probe = {
   starts: { duration: number; peak: number; rms: number; gain: number }[];
@@ -189,7 +192,9 @@ test("socket baseline, duplicate update, history gap and reset are silent", asyn
   socket!.send(JSON.stringify({ type: "snapshot", payload: current })); // Gap of two plies.
   await expect(page.getByRole("gridcell", { name: "f3 white knight" })).toBeVisible();
   expect(await count(page)).toBe(1);
-  current = await (await page.request.post(`/api/games/${game.id}/reset`)).json();
+  const reset = await page.request.post(`/api/games/${game.id}/reset`);
+  expect(reset.ok()).toBeTruthy();
+  current = await reset.json();
   socket!.send(JSON.stringify({ type: "snapshot", payload: current }));
   await expect(page.getByRole("gridcell", { name: "e2 white pawn" })).toBeVisible();
   expect(await count(page)).toBe(1);

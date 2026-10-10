@@ -75,6 +75,10 @@ class MoveRequest(BaseModel):
         return value.strip().lower()
 
 
+class AbortRequest(BaseModel):
+    expected_generation: int | None = Field(default=None, ge=0)
+
+
 class ResignRequest(BaseModel):
     color: Literal["white", "black"] | None = None
     position_version: int | None = Field(default=None, ge=0)

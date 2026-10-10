@@ -997,7 +997,7 @@ class DatabaseStore:
             game.comparison_snapshot = comparison.identity if comparison else None
             return game
 
-    async def latest_live_match_ids(self, limit: int = 5) -> list[str]:
+    async def latest_live_match_ids(self, limit: int | None = None) -> list[str]:
         """Most recently updated running or paused exhibition matches (not batch jobs)."""
         await self.initialize()
         async with self.sessions() as session:

@@ -26,6 +26,7 @@ from .experiments import ExperimentService, PlanConfiguration, SaveExperiment
 from .leaderboards import Leaderboards
 from .manager import AnalysisSuperseded, GameManager, GameNotFound
 from .models import (
+    AbortRequest,
     AdjudicateRequest,
     ConsultationRequest,
     CreateGameRequest,
@@ -482,11 +483,23 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     @application.post("/api/games/{game_id}/reset", response_model=GameSnapshot)
     async def reset_game(game_id: str) -> GameSnapshot:
         try:
-            return await active_manager.reset(game_id)
+            async with single_game_creation:
+                blocking = await active_manager.latest_live_snapshot(exclude_game_id=game_id)
+                if blocking:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"Match {blocking.id} is still {blocking.lifecycle.value}. "
+                            "Open that table before starting over."
+                        ),
+                    )
+                return await active_manager.reset(game_id, allow_terminal=False)
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
         except ConcurrentGameUpdate as exc:
             raise HTTPException(status_code=409, detail="Concurrent match update.") from exc
+        except MatchTransitionRejected as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @application.post("/api/games/{game_id}/resign", response_model=GameSnapshot)
     async def resign_game(game_id: str, request: ResignRequest | None = None) -> GameSnapshot:
@@ -596,8 +609,13 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         return await lifecycle_action(active_manager.retry_agent_turn, game_id)
 
     @application.post("/api/games/{game_id}/abort", response_model=GameSnapshot)
-    async def abort_game(game_id: str) -> GameSnapshot:
-        return await lifecycle_action(active_manager.abort, game_id)
+    async def abort_game(game_id: str, request: AbortRequest | None = None) -> GameSnapshot:
+        async with single_game_creation:
+            return await lifecycle_action(
+                active_manager.abort,
+                game_id,
+                expected_generation=request.expected_generation if request else None,
+            )
 
     @application.post("/api/games/{game_id}/adjudicate", response_model=GameSnapshot)
     async def adjudicate_game(game_id: str, request: AdjudicateRequest) -> GameSnapshot:

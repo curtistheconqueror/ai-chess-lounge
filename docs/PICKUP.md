@@ -1,5 +1,34 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 - targeted end/restart across tabs
+
+Continues from `71654cfd9dab183b1e006ce3c9c883c4c05def42` (CI147 passed).
+The reported screenshot displayed an aborted archive, while read-only server
+and database inspection found one different paused Human/Stockfish match with
+16 moves holding the table. This is a different blocking game, not evidence of
+duplicate live games or a Tailscale cache fault. Current served assets matched
+the prior build. Saved snapshots and a consistent SQLite backup preserve the
+user's games before changes; no user game was ended to test recovery.
+
+End match and End and start new are now beside the board. The dialog identifies
+the exact match/players and pins its generation. Restart archives only that game
+and requests normal single-game creation; a concurrent winner or older live
+blocker is shown and preserved. Repeated aborts return the same terminal state.
+Finished games cannot be revived through stale HTTP Reset/Resume requests.
+Active Reset shares the creation lock and refuses a different live blocker.
+Live discovery scans beyond five rows so expired entries cannot hide a paused
+table. See ADR0038 for the single-process boundary and request compatibility.
+
+Build/typecheck and Ruff passed. Backend lifecycle/API/persistence/private-network
+regression:103 passed. Tablet multi-tab/recovery:28 passed. Five additional
+isolated-browser-context checks passed, including moves after restart without
+shared browser storage. Desktop regression:58 passed and one sound fixture
+failed because earlier fixtures left other live games; isolating sound fixtures
+resolved it, and all11 sound checks then passed. Private-serving evidence is
+recorded in the local restart handoff; verify the new head's CI before any merge. Physical
+iPad confirmation remains separate. Existing account access, workflows and public
+hosting remain unchanged. PR36 stays draft.
+
 ## October 10 - fresh connections and iPad entry
 
 Continues from `687101c6f7fc1aed2ff236ec5b698b5db1695b4d`, verified green

@@ -105,8 +105,10 @@ export function fetchGameEvents(gameId: string): Promise<MatchEvent[]> {
   return request<MatchEvent[]>(`/api/games/${gameId}/events`);
 }
 
-export function abortGame(gameId: string): Promise<GameSnapshot> {
-  return request<GameSnapshot>(`/api/games/${gameId}/abort`, { method: "POST" });
+export function abortGame(gameId: string, generation?: number): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/abort`, {
+    method: "POST", body: JSON.stringify({ expected_generation: generation }),
+  });
 }
 
 export function adjudicateGame(gameId: string, result: "1-0" | "0-1" | "1/2-1/2"): Promise<GameSnapshot> {
