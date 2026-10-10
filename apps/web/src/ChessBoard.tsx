@@ -56,6 +56,9 @@ function ChessBoardView({
     media.addEventListener("change", change);
     return () => media.removeEventListener("change", change);
   }, []);
+  // Motion keys on piece placement: a confirming snapshot that only refines FEN metadata
+  // (e.g. after an instant local preview) must not interrupt a translation in progress.
+  const placement = fen.split(" ")[0];
   useLayoutEffect(() => {
     const prior = previous.current;
     const resumable = carried.current;
@@ -142,7 +145,7 @@ function ChessBoardView({
       animations.current = [];
       raised.forEach(el => { el.style.zIndex = ""; });
     };
-  }, [fen, motionContext, flipped, reducedMotion, transitionMs, bufferMs, lastMove, motionPly]);
+  }, [placement, motionContext, flipped, reducedMotion, transitionMs, bufferMs, lastMove, motionPly]);
   // Input never waits for decoration: touching the board lands every piece immediately.
   // Only live flights: finish() on a cancelled animation would revive it as a lingering frame.
   const settle = () => animations.current.forEach(a => {

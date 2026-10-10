@@ -38,7 +38,7 @@ import { GameUsage } from "./GameUsage";
 import { ChessBoard } from "./ChessBoard";
 import { BoardSoundControls, useBoardSound } from "./BoardSoundControls";
 import { newMoveSound } from "./boardSound";
-import { motionStorageKey, readMotionSettings } from "./boardMotion";
+import { motionStorageKey, previewMove, readMotionSettings } from "./boardMotion";
 import { EvaluationChart } from "./EvaluationChart";
 import { PromotionPicker, type PromotionPiece } from "./PromotionPicker";
 import type {
@@ -191,6 +191,10 @@ function App() {
   const [busy, setBusy] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const boardControlsRef = useRef<HTMLElement | null>(null);
+  // Display-only preview of the player's submitted move, pinned to the exact game version.
+  const [optimistic, setOptimistic] = useState<{ gameId: string; generation: number; version: number; uci: string; fen: string } | null>(null);
+  // The move sound already played at submit; its confirming snapshot stays silent.
+  const announcedRef = useRef<{ gameId: string; generation: number; ply: number } | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const gameRef = useRef<GameSnapshot | null>(null);
   const clockSyncRef = useRef<ClockSync | null>(null);
@@ -301,7 +305,11 @@ function App() {
     }
     if (current?.id !== snapshot.id || current.revision !== snapshot.revision) setTakeover(null);
     const sound = newMoveSound(current, snapshot);
-    if (announceMove && sound && replayPlyRef.current === null) playMoveSound(sound);
+    const announced = announcedRef.current;
+    const alreadyPlayed = Boolean(announced && announced.gameId === snapshot.id
+      && announced.generation === snapshot.generation && announced.ply === snapshot.moves.length);
+    if (announced && (announced.gameId !== snapshot.id || snapshot.moves.length >= announced.ply)) announcedRef.current = null;
+    if (announceMove && sound && !alreadyPlayed && replayPlyRef.current === null) playMoveSound(sound);
     const receivedAt = Date.now();
     if (current?.id !== snapshot.id) setConnection("connecting");
     gameRef.current = snapshot;
@@ -620,17 +628,22 @@ function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [game, replayPly]);
 
-  const displayPly = replayPly ?? game?.moves.length ?? 0;
   const followingLive = replayPly === null;
+  // Valid only while the game is still at the version the move was submitted against.
+  const pendingMove = optimistic && game && followingLive && optimistic.gameId === game.id
+    && optimistic.generation === game.generation && optimistic.version === game.version ? optimistic : null;
+  const displayPly = replayPly ?? game?.moves.length ?? 0;
   const displayFen = useMemo(() => {
+    if (pendingMove) return pendingMove.fen;
     if (!game || displayPly === game.moves.length) return game?.fen ?? "";
     if (displayPly === 0) return game.initial_fen;
     return game.moves[displayPly - 1]?.fen ?? game.fen;
-  }, [displayPly, game]);
+  }, [displayPly, game, pendingMove]);
   const displayLastMove = useMemo(() => {
+    if (pendingMove) return pendingMove.uci;
     if (!game || displayPly === 0) return null;
     return game.moves[displayPly - 1]?.uci ?? null;
-  }, [displayPly, game]);
+  }, [displayPly, game, pendingMove]);
   const moveRows = useMemo(() => pairMoves(game?.moves ?? []), [game?.moves]);
   const clocks = useMemo(
     // Snapshot baseline only; each LiveClock ticks itself so the app is not re-rendered 10x/s.
@@ -679,9 +692,15 @@ function App() {
     setPromotion(null);
     setBusy(true);
     setNotice(null);
+    const preview = previewMove(game.fen, move);
+    setOptimistic({ gameId: game.id, generation: game.generation, version: game.version, uci: move, fen: preview.fen });
+    announcedRef.current = { gameId: game.id, generation: game.generation, ply: game.moves.length + 1 };
+    playMoveSound(preview.capture ? "capture" : "move");
     try {
       acceptSnapshot(await submitMove(game.id, move, game.version));
     } catch (error) {
+      setOptimistic(null);
+      announcedRef.current = null;
       setNotice(error instanceof Error ? error.message : "Move failed.");
       try {
         acceptSnapshot(await fetchGame(game.id));
@@ -689,6 +708,7 @@ function App() {
         // Preserve the original move error when refresh also fails.
       }
     } finally {
+      setOptimistic(null);
       setBusy(false);
     }
   }
@@ -1134,7 +1154,7 @@ function App() {
             </div>
             <ChessBoard
               motionContext={`${game?.id}:${game?.generation}:${game?.lifecycle}:${connection}:${followingLive ? "live" : "replay"}`}
-              motionPly={displayPly}
+              motionPly={pendingMove ? displayPly + 1 : displayPly}
               transitionMs={motion.duration}
               bufferMs={followingLive && !game?.can_move && game?.moves.at(-1)?.player_metadata?.adapter_id !== "human" && game?.moves.at(-1)?.player_metadata ? motion.buffer : 0}
               showSquareEntry
@@ -1144,7 +1164,7 @@ function App() {
               legalMoves={followingLive ? game?.legal_moves ?? noMoves : noMoves}
               selected={selected}
               lastMove={displayLastMove}
-              inCheck={Boolean(followingLive && game?.in_check)}
+              inCheck={Boolean(followingLive && !pendingMove && game?.in_check)}
               disabled={!boardCanInteract}
               onSquareClick={boardSquareClick}
               onMoveDrop={boardMoveDrop}

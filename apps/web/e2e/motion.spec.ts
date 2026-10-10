@@ -57,7 +57,8 @@ test("drag follows the pointer, sends one move and does not replay the dragged p
   await expect(page.getByRole("gridcell", { name: "e4 white pawn" })).toBeVisible();
   await expect(moving(page)).toHaveAttribute("data-animating", "false");
   expect(posts).toBe(1);
-  expect((await (await page.request.get(`/api/games/${game.id}`)).json()).moves).toHaveLength(1);
+  // The board previews the move instantly, so wait for the server to record it.
+  await expect.poll(async () => (await (await page.request.get(`/api/games/${game.id}`)).json()).moves.length).toBe(1);
 });
 
 test("keyboard square activation plays once and restores input after translation", async ({ page }) => {

@@ -29,6 +29,49 @@ export function pieceTranslations(before: string, after: string, uci: string | n
   return shifts;
 }
 
+const pieceLetters: Record<string, string> = { king: "k", queen: "q", rook: "r", bishop: "b", knight: "n", pawn: "p" };
+const promotionTypes: Record<string, string> = { q: "Q", r: "R", b: "B", n: "N" };
+
+/**
+ * Display-only preview of a submitted move so the board answers instantly, like chess.com.
+ * Never authoritative: the server snapshot replaces it, and a rejection discards it.
+ * Only the placement and side to move are meaningful; castling/en passant fields are cleared.
+ */
+export function previewMove(fen: string, uci: string): { fen: string; capture: boolean } {
+  const placement = new Map(parseFen(fen).map(s => [s.name, s.piece ? (s.piece.color === "white"
+    ? pieceLetters[s.piece.type].toUpperCase() : pieceLetters[s.piece.type]) : null]));
+  const from = uci.slice(0, 2), to = uci.slice(2, 4);
+  const piece = placement.get(from);
+  if (!piece) return { fen, capture: false };
+  let capture = Boolean(placement.get(to));
+  placement.set(from, null);
+  const white = piece === piece.toUpperCase();
+  const promoted = uci[4] ? promotionTypes[uci[4]] : null;
+  placement.set(to, promoted ? (white ? promoted : promoted.toLowerCase()) : piece);
+  if (piece.toLowerCase() === "k" && Math.abs(from.charCodeAt(0) - to.charCodeAt(0)) === 2) {
+    const rookFrom = `${to[0] === "g" ? "h" : "a"}${from[1]}`;
+    placement.set(`${to[0] === "g" ? "f" : "d"}${from[1]}`, placement.get(rookFrom) ?? null);
+    placement.set(rookFrom, null);
+  }
+  if (piece.toLowerCase() === "p" && from[0] !== to[0] && !capture) {
+    placement.set(`${to[0]}${from[1]}`, null); // En passant.
+    capture = true;
+  }
+  const rows: string[] = [];
+  for (let rank = 8; rank >= 1; rank--) {
+    let row = "", empty = 0;
+    for (let file = 0; file < 8; file++) {
+      const occupant = placement.get(`${String.fromCharCode(97 + file)}${rank}`);
+      if (!occupant) { empty++; continue; }
+      row += (empty || "") + occupant; empty = 0;
+    }
+    rows.push(row + (empty || ""));
+  }
+  const parts = fen.split(" ");
+  const turn = parts[1] === "b" ? "w" : "b";
+  return { fen: `${rows.join("/")} ${turn} - - ${parts[4] ?? 0} ${parts[5] ?? 1}`, capture };
+}
+
 /** One easing for every translation so an interrupted flight can be resumed exactly. */
 export const motionEasing = [0.2, 0.7, 0.25, 1] as const;
 export const motionEasingCss = `cubic-bezier(${motionEasing.join(",")})`;
