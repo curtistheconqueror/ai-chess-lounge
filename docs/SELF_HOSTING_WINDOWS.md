@@ -48,6 +48,15 @@ for Serve's 502) and reloads by itself once `/api/health` answers.
    }
    ```
 
+   In `tailscale-serve` mode the server answers only requests that carry Serve's
+   headers, so give the probe the same ones (your Serve host and an allowed login);
+   otherwise every health check gets 403 and the server is restarted in a loop:
+
+   ```json
+   "health_headers": {"Host": "your-host.your-tailnet.ts.net:8444",
+                      "Tailscale-User-Login": "you@example.com"}
+   ```
+
    Other settings and their defaults are listed in `DEFAULTS` in the supervisor.
 4. Make the Serve listener persistent so it also survives a reboot (this is a lasting
    Tailscale configuration change on the host; the foreground Serve command from the

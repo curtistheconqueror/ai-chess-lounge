@@ -43,6 +43,9 @@ DEFAULTS = {
     "workdir": None,  # default: the launcher's directory
     "env": {},  # extra environment for the server
     "health_url": "http://127.0.0.1:8001/api/health",
+    # Extra probe headers, e.g. the Host and Tailscale-User-Login that Tailscale Serve
+    # sends, for a server in tailscale-serve mode that rejects bare loopback requests.
+    "health_headers": {},
     "state_dir": None,  # default: the configuration's directory
     "memory_limit_mb": 1536,  # whole job: server plus engines
     "below_normal_priority": True,
@@ -303,9 +306,10 @@ class Supervisor:
 
     def healthy(self) -> bool:
         try:
-            with urllib.request.urlopen(
-                self.config["health_url"], timeout=self.config["health_timeout_s"]
-            ) as response:
+            probe = urllib.request.Request(
+                self.config["health_url"], headers=self.config["health_headers"]
+            )
+            with urllib.request.urlopen(probe, timeout=self.config["health_timeout_s"]) as response:
                 return response.status == 200
         except (urllib.error.URLError, OSError, ValueError):
             return False
