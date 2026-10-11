@@ -67,9 +67,29 @@ failures; perf tests need Unix `resource`).
 - Deploy backend changes with the supervisor `restart` command instead of relaunching
   by hand.
 
+**Cutover (verified on the real host through https://…:8444):**
+
+- The old hand-started server and the foreground Serve (PID 36512) were stopped.
+  `tailscale serve --bg --https=8444` is now persistent; :443 and :8443 are untouched.
+- Task `AIChessLounge-private` uses the base Python 3.13 pythonw. The private
+  `service.json` sets `health_headers`, because tailscale-serve mode answers bare
+  loopback probes with 403. This was found on cutover and fixed in 316ecc8.
+- DB backed up first to `handoff\phase1-private-before.db` (integrity ok, 5 matches).
+- Real-host smoke (game vs Stockfish through Tailscale, Chromium):
+  - Server killed mid-game: live again in 3.6 s with no reload, and Stockfish kept
+    replying.
+  - Service stopped: navigation showed the reconnect page (Serve 502 handled by the
+    SW) and returned to the game by itself 2.4 s after start.
+  - No page errors. Test games aborted.
+  - Supervisor killed (as if from Task Manager): the scheduled-task watchdog brought it
+    back by itself 112 s later.
+  - No process in the job has a window.
+- Memory over a 30-ply game at Elo 2000: committed job peak 249 MB, against a
+  1536 MB cap. Each Stockfish shows about 200 MB working set, mostly the shared mapped
+  100 MB binary with embedded nets; the server is about 90 MB.
+
 **Next:**
 
-- Measure memory during a real game on the private host.
 - Phase 2, the hosted release (owner to choose host and budget).
 - Stage 3 visual toggle.
 
