@@ -562,6 +562,7 @@ function App() {
     whiteProviderModel,
     whiteRunnerId,
     whiteSeat,
+    enginePacing,
   ]);
 
   useEffect(() => {
