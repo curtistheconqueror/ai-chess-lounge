@@ -21,15 +21,28 @@ export class ApiRequestError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
+/** Shown when the server cannot be reached; cleared once the board reconnects. */
+export const connectionLostMessage = "Lost connection to the server. The board will show the real position when it reconnects.";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBase}${path}`, {
-    ...init,
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase}${path}`, {
+      ...init,
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch {
+    // A network failure ("Failed to fetch"): the server is down or restarting.
+    throw new ApiRequestError(connectionLostMessage, 0);
+  }
+  // A proxy in front of a stopped or restarting server answers 502-504.
+  if ([502, 503, 504].includes(response.status) && !response.headers.get("content-type")?.includes("json")) {
+    throw new ApiRequestError(connectionLostMessage, response.status);
+  }
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
     try {

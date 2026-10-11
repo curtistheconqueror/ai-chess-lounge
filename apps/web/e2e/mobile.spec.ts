@@ -132,27 +132,38 @@ test("home-screen assets register and never cache match data", async ({ page }) 
   await page.evaluate(() => navigator.serviceWorker.ready);
   await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBeTruthy();
   const cached = await page.evaluate(async () => {
-    const cache = await caches.open("chess-lounge-offline-v1");
+    const cache = await caches.open("chess-lounge-offline-v2");
     return (await cache.keys()).map(request => new URL(request.url).pathname);
   });
   expect(cached).toEqual(["/offline.html"]);
 });
 
-test("actual host shutdown serves the generic offline page", async ({ page }) => {
-  // Shut down a disposable server rather than use WebKit's network-emulation
-  // switch, which aborts navigation before a service worker can handle it.
+async function offlineFixture() {
   const assets = new Map([
     ["/sw.js", ["application/javascript", await readFile("public/sw.js", "utf8")]],
     ["/offline.html", ["text/html", await readFile("public/offline.html", "utf8")]],
-    ["/", ["text/html", '<meta name="viewport" content="width=device-width,initial-scale=1"><h1>Offline fixture</h1><script>navigator.serviceWorker.register("/sw.js")</script>']],
+    ["/api/health", ["application/json", '{"status":"ok"}']],
   ]);
+  const app = '<meta name="viewport" content="width=device-width,initial-scale=1"><h1>Lounge fixture</h1><script>navigator.serviceWorker.register("/sw.js")</script>';
+  // "up" serves the app; "proxy-down" answers everything with 502 like Tailscale Serve
+  // in front of a stopped server.
+  const state = { mode: "up" as "up" | "proxy-down", healthChecks: 0 };
   const server = createServer((request, response) => {
-    const asset = assets.get(request.url ?? "/");
-    response.writeHead(asset ? 200 : 404, { "Content-Type": asset?.[0] ?? "text/plain" });
-    response.end(asset?.[1] ?? "Not found");
+    const path = request.url ?? "/";
+    if (path === "/api/health") state.healthChecks += 1;
+    if (state.mode === "proxy-down") { response.writeHead(502, { "Content-Type": "text/plain" }); response.end("Bad Gateway"); return; }
+    const asset = assets.get(path) ?? ["text/html", app];
+    response.writeHead(200, { "Content-Type": asset[0], "Cache-Control": "no-store" });
+    response.end(asset[1]);
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
-  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  return { server, state, base: `http://127.0.0.1:${(server.address() as AddressInfo).port}` };
+}
+
+test("actual host shutdown serves the reconnect page", async ({ page }) => {
+  // Shut down a disposable server rather than use WebKit's network-emulation
+  // switch, which aborts navigation before a service worker can handle it.
+  const { server, base } = await offlineFixture();
   try {
     await page.goto(base);
     await page.evaluate(() => navigator.serviceWorker.ready);
@@ -160,7 +171,26 @@ test("actual host shutdown serves the generic offline page", async ({ page }) =>
     server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));
     await page.goto(`${base}/games/offline-check`);
-    await expect(page.getByRole("heading", { name: "The board is offline" })).toBeVisible();
-    await expect(page.getByText(/no offline moves are queued/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reconnecting to the Lounge" })).toBeVisible();
+    await expect(page.getByText(/no moves are lost or queued/)).toBeVisible();
+    await expect(page.getByRole("status")).toContainText(/Waiting for the server/);
+  } finally { server.closeAllConnections(); server.close(); }
+});
+
+test("a gateway error while the server restarts shows the reconnect page, then returns by itself", async ({ page }) => {
+  const { server, state, base } = await offlineFixture();
+  try {
+    await page.goto(base);
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBeTruthy();
+    state.mode = "proxy-down";
+    await page.goto(`${base}/games/restart-check`);
+    await expect(page.getByRole("heading", { name: "Reconnecting to the Lounge" })).toBeVisible();
+    await expect(page.getByText("Bad Gateway")).toHaveCount(0);
+    await expect.poll(() => state.healthChecks).toBeGreaterThan(1);
+    // The server comes back: the same URL reloads into the app with no tap needed.
+    state.mode = "up";
+    await expect(page.getByRole("heading", { name: "Lounge fixture" })).toBeVisible({ timeout: 15_000 });
+    expect(new URL(page.url()).pathname).toBe("/games/restart-check");
   } finally { server.closeAllConnections(); server.close(); }
 });

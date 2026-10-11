@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +30,15 @@ class EngineAnalysis:
 
 class EngineFailure(RuntimeError):
     """Raised when Stockfish cannot complete a requested turn."""
+
+
+def _env_int(name: str, default: int, low: int, high: int) -> int:
+    """A bounded integer from the environment; anything unusable falls back to the default."""
+    try:
+        value = int(os.getenv(name, ""))
+    except ValueError:
+        return default
+    return value if low <= value <= high else default
 
 
 async def _engine_thread(operation, *args, discard_cancelled_result=None, on_cancelled_error=None):
@@ -64,6 +74,13 @@ class StockfishService:
         self._engine: chess.engine.SimpleEngine | None = None
         self._lock = asyncio.Lock()
         self._version: str | None = None
+        # Explicit resource limits so a shared host never depends on engine defaults.
+        self.threads = _env_int("STOCKFISH_THREADS", 1, 1, 64)
+        self.hash_mb = _env_int("STOCKFISH_HASH_MB", 16, 1, 4096)
+        # An idle engine process is shut down and restarted on the next request (0 keeps it).
+        self.idle_seconds = _env_int("STOCKFISH_IDLE_SECONDS", 300, 0, 86_400)
+        self._last_used = 0.0
+        self._idle_task: asyncio.Task[None] | None = None
 
     @staticmethod
     def _discover_path() -> str | None:
@@ -98,6 +115,7 @@ class StockfishService:
                 except (chess.engine.EngineError, OSError, TimeoutError) as exc:
                     self._discard_failed_engine()
                     raise EngineFailure("Stockfish startup could not be completed.") from exc
+            self._touch()
         return EngineSummary(
             name="Stockfish" if self.available else "Stockfish unavailable",
             available=self.available,
@@ -129,6 +147,8 @@ class StockfishService:
             except (chess.engine.EngineError, OSError, TimeoutError) as exc:
                 self._discard_failed_engine()
                 raise EngineFailure("Stockfish analysis could not be completed.") from exc
+            finally:
+                self._touch()
 
     async def choose_move(
         self,
@@ -160,6 +180,8 @@ class StockfishService:
             except (chess.engine.EngineError, OSError, TimeoutError) as exc:
                 self._discard_failed_engine()
                 raise EngineFailure("Stockfish could not complete the turn.") from exc
+            finally:
+                self._touch()
             elapsed_ms = round((asyncio.get_running_loop().time() - started) * 1000)
             return EngineMove(uci=move.uci(), elapsed_ms=elapsed_ms)
 
@@ -171,6 +193,7 @@ class StockfishService:
                 except (chess.engine.EngineError, OSError, TimeoutError) as exc:
                     self._discard_failed_engine()
                     raise EngineFailure("Stockfish startup could not be completed.") from exc
+                self._touch()
             options = self._engine.options if self._engine else {}
             elo = options.get("UCI_Elo") if "UCI_LimitStrength" in options else None
             return {
@@ -286,6 +309,41 @@ class StockfishService:
         )
         name = self._engine.id.get("name", "Stockfish")
         self._version = name
+        limits = {
+            option: value
+            for option, value in (("Threads", self.threads), ("Hash", self.hash_mb))
+            if option in self._engine.options
+        }
+        if limits:
+            await _engine_thread(self._engine.configure, limits)
+
+    def _touch(self) -> None:
+        """Record engine use and make sure an idle shutdown is scheduled."""
+        if self.idle_seconds <= 0 or self._engine is None:
+            return
+        self._last_used = time.monotonic()
+        if self._idle_task is None or self._idle_task.done():
+            self._idle_task = asyncio.get_running_loop().create_task(self._close_when_idle())
+
+    async def _close_when_idle(self) -> None:
+        while True:
+            remaining = self._last_used + self.idle_seconds - time.monotonic()
+            if remaining > 0:
+                await asyncio.sleep(remaining)
+                continue
+            async with self._lock:
+                # A request may have finished while this waited for the lock.
+                if self._engine is None:
+                    return
+                if time.monotonic() - self._last_used < self.idle_seconds:
+                    continue
+                # Keep the version: the next request restarts the same binary transparently.
+                engine, self._engine = self._engine, None
+                try:
+                    await _engine_thread(engine.quit, on_cancelled_error=engine.close)
+                except (chess.engine.EngineError, OSError, TimeoutError):
+                    engine.close()
+                return
 
     def _discard_failed_engine(self) -> None:
         engine, self._engine = self._engine, None
@@ -294,6 +352,9 @@ class StockfishService:
             engine.close()
 
     async def close(self) -> None:
+        idle, self._idle_task = self._idle_task, None
+        if idle is not None and idle is not asyncio.current_task():
+            idle.cancel()
         async with self._lock:
             if self._engine is not None:
                 engine, self._engine = self._engine, None

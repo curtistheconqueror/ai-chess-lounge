@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 
 import {
   ApiRequestError,
+  connectionLostMessage,
   fetchTableSettings,
   flushTableSettings,
   saveTableSettings,
@@ -631,7 +632,8 @@ function App() {
 
     function connect() {
       if (stopped || document.visibilityState === "hidden") return;
-      setConnection("connecting");
+      // Stay "offline" across retries instead of flickering between offline and connecting.
+      setConnection(current => current === "offline" ? "offline" : "connecting");
       const socket = new WebSocket(websocketUrl(gameId));
       let receivedSnapshot = false;
       socketRef.current = socket;
@@ -659,6 +661,8 @@ function App() {
             acceptSnapshot(message.payload, receivedSnapshot);
             receivedSnapshot = true;
             setConnection("live");
+            // The authoritative position is back, so a lost-connection notice is stale.
+            setNotice(current => current === connectionLostMessage ? null : current);
           }
         } catch {
           setNotice("A live update could not be read.");

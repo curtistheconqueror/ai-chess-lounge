@@ -1,5 +1,78 @@
 # AI Chess Lounge contributor pickup
 
+## October 11 - Phase 1 self-hosting reliability (background service)
+
+The owner ended the private server to free memory and found the board stayed down
+(Serve 502). The hand-started server showed a console window and had no restart, and
+the :8444 Serve listener was a foreground command that would not survive a reboot.
+
+**What shipped** (ADR0042, runbook `docs/SELF_HOSTING_WINDOWS.md`):
+
+- **Supervisor:** `scripts/windows/lounge_supervisor.py` runs under pythonw.
+  - The server and engines run hidden in a fresh job object per start, with a memory
+    cap, below-normal priority, and kill-on-close.
+  - A server that was healthy restarts after 1 s; repeated failures back off up to 60 s.
+  - Three missed health checks kill and restart a hung server.
+  - Only one supervisor runs per configuration.
+  - Commands: `status`, `restart`, `stop`.
+- **Scheduled task:** `install-lounge-service.ps1` adds a per-user task that runs at
+  sign-in and every 5 minutes.
+- **Engine limits:** `StockfishService` sets explicit Threads (1) and Hash (16 MB), and
+  shuts an engine down after 300 s idle (env `STOCKFISH_THREADS`, `STOCKFISH_HASH_MB`,
+  `STOCKFISH_IDLE_SECONDS`).
+- **Offline handling:**
+  - The service worker shows the reconnect page for 502-504 too, and that page reloads
+    itself when `/api/health` answers.
+  - A failed request now reads "Lost connection to the server…" and clears on
+    reconnect, instead of a sticky "Failed to fetch".
+  - The connection badge no longer flickers offline/connecting while retrying.
+
+**Aggressive smoke (two Haiku 5.5 agents on disposable instances 4177/4178):**
+
+- Passed:
+  - Kill the server, launcher or engine mid-think; game continues.
+  - Hang recovered in about 29 s.
+  - Killing the supervisor leaves no orphans.
+  - Double launch refused.
+  - Crash loop backs off and stays idle on CPU.
+  - Memory cap at 200 MB enforced.
+  - Idle engine shutdown and restart on demand.
+  - No windows.
+  - Browser, Chromium and WebKit:
+    - mid-game kill reconnects with no reload in 7-9 s
+    - 5 consecutive restarts keep the move list exact
+    - no ghost moves
+    - navigation while down shows the reconnect page and returns by itself
+    - two tabs stay in sync
+    - result card after a restart
+- Bugs found and fixed:
+  - `restart` crashed the supervisor (ERROR_ACCESS_DENIED reusing a terminating job).
+  - Stale status after the supervisor died.
+  - Sticky raw fetch error.
+  - Slow backoff after single kills.
+- Rechecked after the fixes: 5 consecutive restarts with one supervisor, and a kill
+  becomes healthy in 1.9 s.
+
+**Tests:** engine lifecycle (limits, idle shutdown, disable); `connection-lost.spec.ts`;
+offline/502 reconnect tests in `mobile.spec.ts` (Chromium and WebKit, 3 widths each).
+Full default e2e: 349 passed, one known-flaky drag test failed once on tablet and
+passed 15/15 on rerun. API suite passes (subscription-bridge has pre-existing Windows
+failures; perf tests need Unix `resource`).
+
+**Private host:**
+
+- Instance folder `C:\Users\curti\.ai-chess-lounge\private`.
+- The supervisor runs from the chess-publish-app checkout.
+- :8444 Serve moved to `--bg`.
+- Deploy backend changes with the supervisor `restart` command instead of relaunching
+  by hand.
+
+**Next:**
+
+- Measure memory during a real game on the private host.
+- Phase 2, the hosted release (owner to choose host and budget).
+- Stage 3 visual toggle.
+
 ## October 10 (evening) - next-game Elo, engine pacing, voice and result card
 
 The owner clarified the rule: like any chess site, Elo is set for the NEXT game and
