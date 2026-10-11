@@ -304,3 +304,82 @@ def test_cancelled_shutdown_drains_quit_and_closes_on_later_failure(monkeypatch,
             await engine.close()
 
     asyncio.run(asyncio.wait_for(run(), timeout=10))
+
+
+class OptionUCI(FixtureUCI):
+    """Advertises the resource options a real Stockfish exposes."""
+
+    options = {"Threads": object(), "Hash": object()}
+
+    def __init__(self):
+        super().__init__()
+        self.configured = []
+
+    def configure(self, values):
+        self.configured.append(dict(values))
+
+
+def test_engine_starts_with_explicit_thread_and_hash_limits(monkeypatch):
+    monkeypatch.setenv("STOCKFISH_THREADS", "2")
+    monkeypatch.setenv("STOCKFISH_HASH_MB", "32")
+    uci = OptionUCI()
+    engine = service(monkeypatch, [uci])
+
+    async def run():
+        try:
+            await engine.analyse_position(chess.Board())
+            assert uci.configured[0] == {"Threads": 2, "Hash": 32}
+        finally:
+            await engine.close()
+
+    asyncio.run(asyncio.wait_for(run(), timeout=10))
+
+
+@pytest.mark.parametrize("raw", ["", "0", "-4", "lots", "999999"])
+def test_unusable_limits_fall_back_to_small_defaults(monkeypatch, raw):
+    for name in ("STOCKFISH_THREADS", "STOCKFISH_HASH_MB"):
+        monkeypatch.setenv(name, raw)
+    engine = StockfishService()
+    assert (engine.threads, engine.hash_mb) == (1, 16)
+
+
+def test_idle_engine_process_is_shut_down_and_restarted_on_demand(monkeypatch):
+    monkeypatch.setenv("STOCKFISH_IDLE_SECONDS", "1")
+    first, second = FixtureUCI(), FixtureUCI()
+    engine = service(monkeypatch, [first, second])
+
+    async def run():
+        try:
+            await engine.choose_move(chess.Board(), target_elo=1600, move_time_ms=10)
+            await asyncio.sleep(0.5)
+            # Activity postpones the shutdown.
+            await engine.analyse_position(chess.Board())
+            await asyncio.sleep(0.7)
+            assert first.quits == 0 and engine._engine is first
+            await asyncio.sleep(0.8)
+            assert first.quits == 1 and engine._engine is None
+            # The summary keeps its version without spawning a process.
+            assert (await engine.summary(1600, 10)).version == "Generated UCI"
+            assert engine._engine is None
+            move = await engine.choose_move(chess.Board(), target_elo=1600, move_time_ms=10)
+            assert move.uci == "e2e4" and engine._engine is second
+        finally:
+            await engine.close()
+        assert second.quits == 1
+
+    asyncio.run(asyncio.wait_for(run(), timeout=10))
+
+
+def test_idle_shutdown_can_be_disabled(monkeypatch):
+    monkeypatch.setenv("STOCKFISH_IDLE_SECONDS", "0")
+    uci = FixtureUCI()
+    engine = service(monkeypatch, [uci])
+
+    async def run():
+        try:
+            await engine.choose_move(chess.Board(), target_elo=1600, move_time_ms=10)
+            assert engine._idle_task is None
+        finally:
+            await engine.close()
+
+    asyncio.run(asyncio.wait_for(run(), timeout=10))

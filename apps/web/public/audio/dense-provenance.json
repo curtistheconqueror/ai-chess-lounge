@@ -1,0 +1,134 @@
+{
+  "source_file": "chess-lounge-wood-prototype.wav",
+  "source_sha256": "45bea7b0a9c90b28ea4e07d12621cb3173e3f1cf7ecace0218cb6a69459cbc00",
+  "source_metrics": {
+    "duration_ms": 200.0,
+    "peak": 0.29998779296875,
+    "rms": 0.019575078443138067,
+    "energy_seconds": 7.663673921100174e-05,
+    "energy95_ms": 3.458333333333333,
+    "energy_after_20ms_fraction": 0.00026977785991458633
+  },
+  "candidates": [
+    {
+      "sound": 14,
+      "file": "dense-14-compact.wav",
+      "sha256": "3fb6769cac74ac5d8f62dd71ffdee79337a00d52f5655dd1d805acaebbd3da08",
+      "parameters": {
+        "speed": 1.0,
+        "lowpass_hz": 1800,
+        "highpass_hz": 180,
+        "damping_seconds": 0.014,
+        "onset_seconds": 0.0001,
+        "saturation": 1.0,
+        "bounded_gain": 1.0846963928380473
+      },
+      "duration_ms": 80.0,
+      "peak": 0.25445556640625,
+      "rms": 0.02853475724616399,
+      "energy_seconds": 6.513858968780065e-05,
+      "energy95_ms": 3.3333333333333335,
+      "energy_after_20ms_fraction": 9.422982402203712e-06
+    },
+    {
+      "sound": 15,
+      "file": "dense-15-felted.wav",
+      "sha256": "0f1d766e2cfc86b87899ea6fceb6e2b23d48c5bdb7060040692ec977d56b2632",
+      "parameters": {
+        "speed": 0.94,
+        "lowpass_hz": 1150,
+        "highpass_hz": 190,
+        "damping_seconds": 0.008,
+        "onset_seconds": 0.00045,
+        "saturation": 1.0,
+        "bounded_gain": 1.2986109789252642
+      },
+      "duration_ms": 75.0,
+      "peak": 0.253936767578125,
+      "rms": 0.02947032189307842,
+      "energy_seconds": 6.51374904361243e-05,
+      "energy95_ms": 3.5833333333333335,
+      "energy_after_20ms_fraction": 3.1642810601785273e-06
+    },
+    {
+      "sound": 16,
+      "file": "dense-16-firm.wav",
+      "sha256": "da4b37f8c88f5920bb6b11662db5a0f54029c359b0563fe75aedda2bf832929c",
+      "parameters": {
+        "speed": 1.1,
+        "lowpass_hz": 2300,
+        "highpass_hz": 250,
+        "damping_seconds": 0.01,
+        "onset_seconds": 8e-05,
+        "saturation": 1.8,
+        "bounded_gain": 1.170102772865191
+      },
+      "duration_ms": 80.0,
+      "peak": 0.264617919921875,
+      "rms": 0.028534520082895285,
+      "energy_seconds": 6.513750690889234e-05,
+      "energy95_ms": 3.0416666666666665,
+      "energy_after_20ms_fraction": 2.0049675637547953e-06
+    },
+    {
+      "sound": 17,
+      "file": "dense-17-weighted.wav",
+      "sha256": "025158f842f03fb9cc078311b76deab5f8caad4b8da9d8971e11a40291baa3a5",
+      "parameters": {
+        "speed": 0.82,
+        "lowpass_hz": 1450,
+        "highpass_hz": 160,
+        "damping_seconds": 0.017,
+        "onset_seconds": 0.00016,
+        "saturation": 1.4,
+        "bounded_gain": 1.0128931001368138
+      },
+      "duration_ms": 95.0,
+      "peak": 0.232269287109375,
+      "rms": 0.02618462543238028,
+      "energy_seconds": 6.513528785823534e-05,
+      "energy95_ms": 4.020833333333334,
+      "energy_after_20ms_fraction": 5.7347719594481934e-05
+    },
+    {
+      "sound": 18,
+      "file": "dense-18-dry.wav",
+      "sha256": "b199ed1584d40527591975d2e69dbb1ab5a91190463d64cb76e5c9bfdcf27ff1",
+      "parameters": {
+        "speed": 1.06,
+        "lowpass_hz": 1850,
+        "highpass_hz": 360,
+        "damping_seconds": 0.005,
+        "onset_seconds": 8e-05,
+        "saturation": 1.0,
+        "bounded_gain": 1.2296601988387221
+      },
+      "duration_ms": 60.0,
+      "peak": 0.26861572265625,
+      "rms": 0.032948717870143474,
+      "energy_seconds": 6.513708055717871e-05,
+      "energy95_ms": 3.0208333333333335,
+      "energy_after_20ms_fraction": 5.421281905601941e-08
+    },
+    {
+      "sound": 19,
+      "file": "dense-19-padded.wav",
+      "sha256": "86026af9382e7e610cd2cd171ecd2e3946ff8aff95ec168b08f30ffec7e932bd",
+      "parameters": {
+        "speed": 0.9,
+        "lowpass_hz": 1000,
+        "highpass_hz": 210,
+        "damping_seconds": 0.01,
+        "onset_seconds": 0.00065,
+        "saturation": 1.3,
+        "bounded_gain": 1.4218011266319646
+      },
+      "duration_ms": 85.0,
+      "peak": 0.239959716796875,
+      "rms": 0.027682194518522437,
+      "energy_seconds": 6.513583093571167e-05,
+      "energy95_ms": 4.125,
+      "energy_after_20ms_fraction": 1.2659233983120909e-05
+    }
+  ]
+}

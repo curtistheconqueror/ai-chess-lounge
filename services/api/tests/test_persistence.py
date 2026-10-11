@@ -122,6 +122,10 @@ def test_player_and_runner_migrations_upgrade_and_downgrade(
             ).fetchone()[0]
             == old_fen
         )
+    command.upgrade(config, "0013_table_settings")
+    assert {"id", "revision", "settings", "updated_at"}.issubset(columns("table_settings"))
+    command.downgrade(config, "0012_comparison_games")
+    assert "table_settings" not in tables()
     command.downgrade(config, "0011_experiment_queue")
     assert "comparison_games" not in tables()
     with closing(sqlite3.connect(database_path)) as connection, connection:

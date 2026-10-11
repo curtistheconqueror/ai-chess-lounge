@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "AI Chess Lounge",
+  "short_name": "Chess Lounge",
+  "description": "Private chess practice with your trusted playing partner.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07100f",
+  "theme_color": "#07100f",
+  "icons": [
+    { "src": "/icons/lounge-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/lounge-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

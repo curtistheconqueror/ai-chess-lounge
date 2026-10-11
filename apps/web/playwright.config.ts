@@ -10,16 +10,21 @@ const viewports = [
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: /mobile\.spec\.ts/,
   outputDir: "./test-results",
   timeout: 30_000,
   expect: { timeout: 8_000 },
   fullyParallel: false,
+  // The fixture server models one shared Lounge table.
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI
     ? [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]]
     : "list",
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: process.env.LOUNGE_E2E_BASE_URL ?? "http://127.0.0.1:4173",
+    channel: process.env.LOUNGE_E2E_CHANNEL,
+    launchOptions: { args: ["--autoplay-policy=document-user-activation-required"] },
     colorScheme: "dark",
     reducedMotion: "reduce",
     trace: "retain-on-failure",
@@ -28,7 +33,7 @@ export default defineConfig({
     name,
     use: { viewport: { width, height } },
   })),
-  webServer: {
+  webServer: process.env.LOUNGE_E2E_BASE_URL ? undefined : {
     command: process.env.CI
       ? "DATABASE_URL=sqlite+aiosqlite:////tmp/ai-chess-lounge-playwright.db python -m uvicorn lounge_api.main:app --app-dir ../../services/api --host 127.0.0.1 --port 4173"
       : "DATABASE_URL=sqlite+aiosqlite:////tmp/ai-chess-lounge-playwright.db ../../.venv/bin/python -m uvicorn lounge_api.main:app --app-dir ../../services/api --host 127.0.0.1 --port 4173",

@@ -1,0 +1,249 @@
+/* Live information leads. Native disclosures retain every secondary control. */
+.app-shell { width: min(1440px, 100%); padding: 20px 28px 36px; }
+body { background: #111815; }
+body::before { display: none; }
+.topbar { position: relative; gap: 18px; margin-bottom: 12px; }
+.brand-mark { box-shadow: none; }
+.broadcast-ribbon { margin-bottom: 18px; background: transparent; }
+.arena-layout { grid-template-columns: minmax(0, 1.65fr) minmax(310px, 1fr); gap: 28px; }
+.match-stage, .control-deck { min-width: 0; box-shadow: none; backdrop-filter: none; border-radius: 14px; background: #17201b; }
+.match-stage { padding: 14px; }
+.control-deck { padding: 20px; min-height: 0; }
+.board-broadcast-frame { width: min(100%, max(360px, calc(100dvh - 370px))); }
+.board-play-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 4px 2px 12px; background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
+.board-play-controls > small, .board-play-controls > p, .board-play-controls > strong { flex: 1 1 100%; }
+.board-play-controls .secondary-actions { margin: 0; justify-content: flex-start; flex-wrap: wrap; }
+.board-play-controls button { padding: 9px 12px; }
+.board-play-controls .secondary-actions { display: flex; gap: 6px; }
+.board-play-controls .secondary-actions button { flex: 0 1 auto; }
+.setup-shortcut { color: var(--gold-soft); background: transparent; border: 1px solid var(--line); border-radius: 7px; }
+.player-card { padding: 10px; margin: 0; min-height: 70px; border-radius: 8px; }
+.player-chips { gap: 6px; }
+.player-card.white { margin-top: 8px; }
+.player-card.black { margin-bottom: 8px; }
+.square-entry { margin: 0; }
+.piece-motion { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; will-change: transform; }
+.piece-motion .piece-svg { width: 79%; height: 79%; }
+/* Drag: faint copy on the origin square; the carried piece may leave the board edge unclipped. */
+.piece-ghost { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; opacity: .3; }
+.piece-ghost .piece-svg { width: 79%; height: 79%; }
+/* min-size 0 keeps the board's grid sizing identical when overflow flips, so lifting a piece never resizes it. */
+.board { min-width: 0; min-height: 0; }
+.board.dragging { overflow: visible; }
+.board .square { overflow: visible; }
+.board .square:hover .piece-svg { transform: translateY(-1%); }
+.workspace-section { border-top: 1px solid var(--line); padding: 0; margin-top: 14px; min-width: 0; }
+.workspace-section > summary { cursor: pointer; padding: 16px 0; color: #e4eae5; font-weight: 600; font-size: .88rem; }
+.workspace-section > summary span { display: block; margin: 6px 0 0 17px; color: var(--muted); font-size: .73rem; font-weight: 400; }
+.workspace-section > p, .motion-preferences p { color: #b2c1b8; font-size: .8rem; line-height: 1.6; }
+.workspace-section[open] { padding-bottom: 8px; }
+summary:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--gold-soft); outline-offset: 3px; }
+.workspace-section .strategy-channel { grid-template-columns: 1fr; margin: 0; }
+.workspace-section .strategy-center { display: flex; }
+.telemetry-grid { margin: 16px 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.panel-content { min-height: 180px; max-height: 290px; overflow: auto; }
+.panel-tabs { display: flex; flex-wrap: wrap; }
+.panel-tabs button { min-height: 44px; flex: 1; }
+.control-deck .metric { padding: 12px; }
+.control-deck .panel-content .empty-state { min-height: 120px; }
+.motion-preferences { display: grid; gap: 14px; }
+.motion-preferences label { display: grid; gap: 8px; color: #c5d2c8; font-size: .8rem; }
+.motion-preferences select { width: 100%; min-height: 44px; background: #101a14; color: inherit; border: 1px solid var(--line); border-radius: 7px; padding: 8px; }
+.lounge-tools { position: relative; }
+.lounge-tools[open] { flex: 1 1 100%; min-width: 0; }
+.lounge-tools > summary { cursor: pointer; padding: 12px; font-size: .8rem; }
+/* The expanded tools occupy header space. An overlay here can intercept board
+   actions when narrow screens scroll back from the setup panel. */
+.lounge-tools > div { position: static; width: 100%; padding: 12px; background: #17201b; border: 1px solid var(--line); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+.lounge-tools > div > * { max-width: 100%; }
+.integrity-note { margin-top: 20px; }
+.current-stockfish-panel { grid-column: 1 / -1; display: grid; gap: 12px; min-width: 0; }
+.current-stockfish-panel h3 { margin: 0; }
+@media (max-width: 1000px) {
+  .app-shell { padding: 16px; }
+  .arena-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .match-stage, .control-deck { width: 100%; max-width: 760px; margin-inline: auto; }
+  .topbar { flex-wrap: wrap; }
+  .topbar-actions { flex: 1 1 auto; }
+  .telemetry-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1001px) and (pointer: coarse) {
+  .arena-layout { grid-template-columns: minmax(0, 1.55fr) minmax(310px, 1fr); }
+  .topbar-actions { flex: 0 1 auto; }
+}
+@media (max-width: 640px) {
+  .app-shell { padding: 10px 8px 24px; }
+  .match-stage { padding: 8px; }
+  .control-deck { padding: 16px; }
+  .topbar-actions { gap: 6px; }
+  .topbar-actions .ghost-button, .topbar-actions .gold-ghost-button { padding: 9px; font-size: .62rem; }
+  .topbar-actions .connection { margin-left: auto; }
+  .board-play-controls { gap: 6px; }
+  .player-card { padding: 8px; }
+  .telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .evaluation-white, .piece-svg { transition: none; }
+}
+
+/* Match bar: fixed geometry in every state so controls never jump and the board never moves. */
+.board-play-controls { gap: 10px; }
+.board-play-controls .match-status { height: calc(1.3rem + 2 * .85rem * 1.45 + 2px); display: grid; grid-template-rows: 1.3rem auto; align-content: start; gap: 2px; overflow: hidden; }
+.board-play-controls .match-status-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.board-play-controls .match-status strong { line-height: 1.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board-play-controls .match-id { flex: none; font-size: .72rem; color: #9fb0a5; letter-spacing: .02em; }
+.board-play-controls .match-status p { line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.board-play-controls .match-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.board-play-controls .match-actions > * {
+  height: 44px; min-height: 44px; width: 100%; justify-self: stretch; justify-content: center; align-items: center; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-inline: 8px;
+}
+.board-play-controls .action-slot { visibility: hidden; }
+@media (max-width: 560px) {
+  .board-play-controls .match-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .board-play-controls .match-actions > * { font-size: .82rem; }
+}
+/* Notices sit below the action slots: nothing above them (board, buttons) ever moves, and nothing is covered. */
+.board-play-controls .board-notice { position: relative; margin: 0; padding: 10px 44px 10px 12px; border: 1px solid #8a6b3a; border-radius: 10px; background: #1d1a12; color: #ffcf9b; }
+.board-play-controls .notice-dismiss {
+  position: absolute; top: 6px; right: 6px; min-height: 32px; width: 32px; padding: 0; border: 0; background: transparent; color: inherit; font-size: 1.2rem;
+}
+
+/* ---- Phase B: board-first layout ---- */
+.topbar { min-height: 52px; margin-bottom: 12px; gap: 12px; }
+.topbar .brand-lockup { color: inherit; text-decoration: none; gap: 10px; min-width: 0; }
+.topbar .brand-lockup h1 { margin: 0; font-size: 1.15rem; white-space: nowrap; }
+.topbar .brand-mark { width: 36px; height: 36px; font-size: 1.45rem; border-radius: 10px; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.board-play-controls { margin: 10px 0 0; }
+.match-stage { display: grid; gap: 8px; align-content: start; }
+
+/* Floating menus: never reflow the page; closed on outside pointer, Escape or a choice. */
+.menu-button { position: relative; }
+.menu-button.lounge-tools[open] { flex: none; }
+.menu-button > summary { list-style: none; cursor: pointer; min-height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: 9px; background: #16211b; color: #e6efe8; font-size: .82rem; white-space: nowrap; }
+.menu-button > summary::-webkit-details-marker { display: none; }
+.menu-button > summary::after { content: "▾"; font-size: .7rem; opacity: .8; }
+.menu-button .menu-items { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: max-content; min-width: 200px; max-width: min(320px, calc(100vw - 32px));
+  display: grid; gap: 4px; padding: 6px; background: #121b16; border: 1px solid #3c4e42; border-radius: 12px; box-shadow: 0 14px 34px rgba(0, 0, 0, .5); }
+.menu-button.align-end .menu-items { left: auto; right: 0; }
+.board-play-controls .menu-button .menu-items { top: auto; bottom: calc(100% + 6px); }
+.menu-button .menu-items > * { min-height: 42px; width: 100%; display: flex; align-items: center; justify-content: flex-start; padding: 0 12px; text-align: left;
+  border: 0; border-radius: 8px; background: transparent; color: #e6efe8; font-size: .86rem; text-decoration: none; }
+.menu-button .menu-items > *:hover:not(:disabled), .menu-button .menu-items > *:focus-visible { background: #22322a; }
+.menu-button .menu-items > *:disabled { opacity: .45; }
+.board-play-controls .match-actions > .menu-button > summary { width: 100%; height: 44px; justify-content: center; }
+
+/* Right rail status chip (was the full-width ribbon). */
+.control-deck .broadcast-ribbon { margin: 0 0 12px; padding: 6px 10px; min-height: 0; font-size: .72rem; gap: 10px; border-radius: 8px; }
+
+/* Full screen: board, clocks and actions only, with an exit that is always on top and always visible. */
+.app-shell.focus-mode { width: 100%; max-width: none; min-height: 100dvh; padding: 10px; }
+.app-shell.focus-mode .topbar, .app-shell.focus-mode .control-deck { display: none; }
+.app-shell.focus-mode .arena-layout { grid-template-columns: minmax(0, 1fr); }
+.app-shell.focus-mode .match-stage { width: min(100%, calc(100dvh - 250px + 34px)); min-width: 280px; margin: 0 auto; padding: 0; background: transparent; border: 0; }
+.exit-focus { position: fixed; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); z-index: 60;
+  min-height: 48px; display: inline-flex; align-items: center; gap: 8px; padding: 0 18px; border: 2px solid #1a1408; border-radius: 999px;
+  background: #f2d27f; color: #1a1408; font-weight: 700; font-size: .95rem; box-shadow: 0 6px 20px rgba(0, 0, 0, .55); cursor: pointer; }
+.exit-focus:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+@media (max-width: 560px) {
+  .topbar .brand-lockup h1 { font-size: 1rem; }
+  .topbar-actions > .ghost-button { padding-inline: 10px; font-size: .78rem; }
+  .app-shell.focus-mode .match-stage { width: 100%; }
+}
+
+/* Board sized to the screen height (chess.com style): the whole stage fits without scrolling on desktop. */
+/* Height budget for everything that is not the board (strips, action bar, notice): the primary
+   action must stay on screen without scrolling. Short screens use the compact chrome below. */
+.match-stage .board-broadcast-frame { width: min(100%, max(320px, calc(100dvh - 500px))); margin-inline: auto; }
+.app-shell.focus-mode .match-stage .board-broadcast-frame { width: 100%; }
+.app-shell.focus-mode .square-entry { display: none; }
+/* Compact player strips: name, configuration and a prominent clock. */
+.match-stage .player-card { min-height: 0; padding: 6px 10px; gap: 10px; }
+.match-stage .player-avatar { width: 34px; height: 34px; font-size: 1.25rem; border-radius: 9px; }
+.match-stage .player-clock { padding: 4px 10px; font-size: clamp(1.25rem, 2.2vw, 1.6rem); min-width: 84px; }
+.match-stage .player-chips { margin-top: 2px; }
+/* Secondary actions share one quiet style; disabled ones fade instead of changing color. */
+.board-play-controls .match-actions > button:not(.primary-button), .board-play-controls .match-actions > a {
+  background: #16211b; border: 1px solid var(--line); color: #e6efe8; border-radius: 10px; }
+.board-play-controls .match-actions > button:disabled { opacity: .45; }
+@media (max-width: 560px) {
+  .match-stage .player-chips, .match-stage .player-copy > span { display: none; }
+  .topbar { margin-bottom: 8px; }
+  .topbar-actions { gap: 6px; }
+  .topbar-actions .ghost-button, .topbar-actions .menu-button > summary { min-height: 36px; padding: 0 9px; font-size: .74rem; letter-spacing: 0; }
+  .topbar .connection { padding: 0 8px; }
+}
+@media (max-width: 440px) { .topbar .brand-lockup h1 { display: none; } }
+@media (max-width: 560px) { .wide-label { display: none; } }
+
+/* The More menu must not inherit the slots' clipping, or its floating items are cut off. */
+.board-play-controls .match-actions > .menu-button { overflow: visible; }
+.board-play-controls .match-actions > .menu-button > summary { overflow: hidden; text-overflow: ellipsis; }
+/* Touch targets: at least 44px everywhere, including the phone top bar and menu items. */
+.menu-button .menu-items > * { min-height: 44px; }
+@media (max-width: 560px) {
+  .topbar-actions .ghost-button, .topbar-actions .menu-button > summary { min-height: 44px; }
+}
+
+/* Short screens (laptops, iPad landscape): give the height to the board. */
+@media (max-height: 959px) {
+  .match-stage .board-broadcast-frame { width: min(100%, max(320px, calc(100dvh - 370px))); }
+  .match-stage .player-chips { display: none; }
+  .board-play-controls .match-status { height: calc(1.3rem + .85rem * 1.45 + 2px); }
+  .board-play-controls .match-status p { -webkit-line-clamp: 1; }
+}
+
+/* Wide stages: status on the left, actions in a fixed-width column on the right. Status text
+   ("White to move" vs "Black to move") can never nudge the buttons sideways. */
+.board-play-controls { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; }
+@media (min-width: 700px) {
+  .board-play-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 460px); column-gap: 14px; }
+  .board-play-controls .board-notice { grid-column: 1 / -1; }
+}
+
+/* Next-game settings confirmation and the tucked-away experimental live-strength switch. */
+.settings-sync { grid-column: 1 / -1; margin: 0; font-size: .82rem; color: #b8c5bc; }
+.settings-sync.saved { color: #9fd9a8; }
+.settings-sync.local { color: #ffcf9b; }
+.experimental-strength { grid-column: 1 / -1; border: 1px dashed #4a5c50; border-radius: 10px; padding: 8px 12px; }
+.experimental-strength > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: #c9d6cc; font-size: .85rem; }
+.experimental-strength > p { margin: 4px 0 10px; color: #9fb0a5; font-size: .78rem; }
+
+/* End-of-game card over the board (Option B, with a little flavor). Presentation only. */
+.board-broadcast-frame { position: relative; }
+.result-backdrop { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 12px;
+  background: rgba(4, 8, 6, .5); border-radius: 12px; animation: result-fade 220ms ease-out both; }
+.result-card { position: relative; width: min(340px, 100%); display: grid; gap: 12px; padding: 18px 18px 14px; text-align: center;
+  background: #111a15; border: 1px solid #3c4e42; border-radius: 16px; box-shadow: 0 18px 50px rgba(0, 0, 0, .55); outline: none;
+  animation: result-pop 260ms cubic-bezier(.2, .9, .3, 1.2) both; }
+.result-card.win { border-color: #b8913f; box-shadow: 0 18px 50px rgba(0, 0, 0, .55), 0 0 0 1px rgba(242, 210, 127, .25); }
+.result-card h2 { margin: 0; font-size: 1.35rem; line-height: 1.2; color: #f4efe2; }
+.result-card.win h2 { color: #f2d27f; }
+.result-how { margin: 2px 0 0; color: #b8c5bc; font-size: .85rem; }
+.result-flavor { margin: 6px 0 0; color: #d4ded6; font-size: .85rem; font-style: italic; }
+.result-trophy { display: inline-grid; place-items: center; width: 44px; height: 44px; margin-bottom: 4px; border-radius: 50%;
+  background: #f2d27f; color: #1a1408; font-size: 1.5rem; animation: result-bounce 900ms ease-out 200ms both; }
+.result-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 10px 0; border-block: 1px solid #26352c; }
+.result-stats span { display: grid; gap: 2px; font-size: .75rem; color: #9fb0a5; }
+.result-stats b { font-size: 1.15rem; color: #e6efe8; }
+.result-stats .best b { color: #8fd18c; } .result-stats .excellent b { color: #9fd9a8; } .result-stats .misses b { color: #f08f7f; }
+.result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.result-actions > button { min-height: 44px; border-radius: 10px; }
+.result-actions > button:not(.primary-button) { background: #16211b; border: 1px solid var(--line); color: #e6efe8; }
+.result-review { justify-self: center; min-height: 36px; border: 0; background: transparent; color: #b8c5bc; text-decoration: underline; cursor: pointer; }
+.result-close { position: absolute; top: 6px; right: 6px; width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; color: #b8c5bc; font-size: 1.3rem; cursor: pointer; }
+.result-close:hover { background: #1f2c25; }
+@keyframes result-fade { from { opacity: 0; } }
+@keyframes result-pop { from { opacity: 0; transform: translateY(8px) scale(.96); } }
+@keyframes result-bounce { 0% { transform: scale(.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .result-backdrop, .result-card, .result-trophy { animation: none; } }
+
+/* King badges after a finished game (chess.com style). */
+.king-mark { position: absolute; top: 4%; right: 4%; z-index: 4; width: 34%; height: 34%; min-width: 16px; min-height: 16px;
+  display: grid; place-items: center; border-radius: 50%; font-size: clamp(.55rem, 1.4vw, .9rem); font-weight: 800; pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .45); }
+.king-mark.won { background: #f2d27f; color: #1a1408; }
+.king-mark.mated, .king-mark.lost { background: #d64848; color: #fff; }
+.king-mark.draw { background: #9fb0a5; color: #10170f; }

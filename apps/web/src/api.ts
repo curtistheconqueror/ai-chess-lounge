@@ -1,3 +1,4 @@
+import { skillValue, type StockfishChoice } from "./StockfishStrength";
 import type { IdentityDeclaration, LeaderboardReport } from "./types";
 import type { Consultation } from "./types";
 import type {
@@ -16,14 +17,32 @@ import type {
 
 const apiBase = import.meta.env.VITE_API_BASE ?? "";
 
+export class ApiRequestError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
+/** Shown when the server cannot be reached; cleared once the board reconnects. */
+export const connectionLostMessage = "Lost connection to the server. The board will show the real position when it reconnects.";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBase}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase}${path}`, {
+      ...init,
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch {
+    // A network failure ("Failed to fetch"): the server is down or restarting.
+    throw new ApiRequestError(connectionLostMessage, 0);
+  }
+  // A proxy in front of a stopped or restarting server answers 502-504.
+  if ([502, 503, 504].includes(response.status) && !response.headers.get("content-type")?.includes("json")) {
+    throw new ApiRequestError(connectionLostMessage, response.status);
+  }
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
     try {
@@ -35,14 +54,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // Keep the HTTP status when the response is not JSON.
     }
-    throw new Error(message);
+    throw new ApiRequestError(message, response.status);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
 export interface CreateGameOptions {
-  stockfishElo: number;
+  startPaused?: boolean;
+  singleGame?: boolean;
+  stockfishElo: StockfishChoice;
   initialTimeMs?: number;
   incrementMs?: number;
   whitePlayer: PlayerConfigurationInput;
@@ -50,6 +71,8 @@ export interface CreateGameOptions {
 }
 
 export function createGame({
+  startPaused = false,
+  singleGame = false,
   stockfishElo,
   initialTimeMs = 300_000,
   incrementMs = 2_000,
@@ -59,9 +82,13 @@ export function createGame({
   return request<GameSnapshot>("/api/games", {
     method: "POST",
     body: JSON.stringify({
+      start_paused: startPaused,
+      single_game: singleGame,
       opponent: "stockfish",
-      stockfish_elo: stockfishElo,
-      engine_move_time_ms: stockfishElo >= 2500 ? 700 : 400,
+      stockfish_elo: typeof stockfishElo === "number" ? stockfishElo : 1600,
+      stockfish_full_strength: stockfishElo === "full",
+      ...(skillValue(stockfishElo) !== null ? { stockfish_skill_level: skillValue(stockfishElo) } : {}),
+      engine_move_time_ms: (stockfishElo === "full" || (typeof stockfishElo === "number" && stockfishElo >= 2500)) ? 700 : 400,
       initial_time_ms: initialTimeMs,
       increment_ms: incrementMs,
       white_player: whitePlayer,
@@ -74,9 +101,41 @@ export function fetchGame(gameId: string): Promise<GameSnapshot> {
   return request<GameSnapshot>(`/api/games/${gameId}`);
 }
 
+export function suggestToAgent(game: GameSnapshot, move: string | null): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${game.id}/human-suggestion`, {
+    method: "POST", body: JSON.stringify({ move, expected_revision: game.revision }),
+  });
+}
+
 /** The newest running or paused match, or null when nothing is live. */
+/** Next-match settings shared by every device at the one Lounge table (ADR0041). */
+export interface TableSettings {
+  white_seat: string;
+  black_seat: string;
+  stockfish: { mode: "elo" | "skill" | "full"; elo: number | null; skill_level: number | null };
+  time_control: string;
+  start_paused: boolean;
+}
+export interface TableSettingsDocument { revision: number; updated_at: string; settings: TableSettings }
+
+export async function fetchTableSettings(): Promise<TableSettingsDocument> {
+  return request<TableSettingsDocument>("/api/table-settings");
+}
+
+export async function saveTableSettings(revision: number, settings: TableSettings): Promise<TableSettingsDocument> {
+  return request<TableSettingsDocument>("/api/table-settings", { method: "PUT", body: JSON.stringify({ revision, settings }) });
+}
+
+/** Fire-and-forget save that survives the page unloading (keepalive), for changes made just before leaving. */
+export function flushTableSettings(revision: number, settings: TableSettings): void {
+  void fetch(`${apiBase}/api/table-settings`, {
+    method: "PUT", keepalive: true, cache: "no-store", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ revision, settings }),
+  }).catch(() => { /* Best effort while the page goes away. */ });
+}
+
 export async function fetchLiveMatch(): Promise<GameSnapshot | null> {
-  const response = await fetch(`${apiBase}/api/live-match`);
+  const response = await fetch(`${apiBase}/api/live-match`, { cache: "no-store" });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   return (await response.json()) as GameSnapshot;
@@ -86,8 +145,10 @@ export function fetchGameEvents(gameId: string): Promise<MatchEvent[]> {
   return request<MatchEvent[]>(`/api/games/${gameId}/events`);
 }
 
-export function abortGame(gameId: string): Promise<GameSnapshot> {
-  return request<GameSnapshot>(`/api/games/${gameId}/abort`, { method: "POST" });
+export function abortGame(gameId: string, generation?: number): Promise<GameSnapshot> {
+  return request<GameSnapshot>(`/api/games/${gameId}/abort`, {
+    method: "POST", body: JSON.stringify({ expected_generation: generation }),
+  });
 }
 
 export function adjudicateGame(gameId: string, result: "1-0" | "0-1" | "1/2-1/2"): Promise<GameSnapshot> {

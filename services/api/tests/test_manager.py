@@ -32,6 +32,7 @@ from sqlalchemy.exc import OperationalError
 class FakeEngine(StockfishService):
     def __init__(self) -> None:
         super().__init__()
+        self.path = None  # This fixture must never launch an installed native engine.
         self.analysis_calls = 0
 
     @property

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from typing import Any
 
@@ -330,6 +331,14 @@ class OpenRouterChatAdapter(OpenAICompatibleChatAdapter):
     provider_name = "OpenRouter"
     credentials_required = True
     connection_mode = ConnectionMode.DIRECT_API
+
+    def normalize_usage(self, usage: object) -> UsageMetrics:
+        metrics = super().normalize_usage(usage)
+        cost = usage.get("cost") if isinstance(usage, dict) else None
+        # OpenRouter reports charged credits in USD; do not infer missing prices.
+        if type(cost) in {int, float} and math.isfinite(cost) and cost >= 0:
+            metrics.estimated_cost_usd = cost
+        return metrics
 
     def __init__(
         self,

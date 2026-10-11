@@ -24,6 +24,7 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       DATABASE_URL: postgresql+asyncpg://lounge:lounge@postgres:5432/lounge
+      LOUNGE_DEPLOYMENT: local
       STOCKFISH_PATH: /usr/games/stockfish
     depends_on:
       postgres:
