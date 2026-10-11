@@ -202,3 +202,48 @@ summary:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid
   .board-play-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 460px); column-gap: 14px; }
   .board-play-controls .board-notice { grid-column: 1 / -1; }
 }
+
+/* Next-game settings confirmation and the tucked-away experimental live-strength switch. */
+.settings-sync { grid-column: 1 / -1; margin: 0; font-size: .82rem; color: #b8c5bc; }
+.settings-sync.saved { color: #9fd9a8; }
+.settings-sync.local { color: #ffcf9b; }
+.experimental-strength { grid-column: 1 / -1; border: 1px dashed #4a5c50; border-radius: 10px; padding: 8px 12px; }
+.experimental-strength > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: #c9d6cc; font-size: .85rem; }
+.experimental-strength > p { margin: 4px 0 10px; color: #9fb0a5; font-size: .78rem; }
+
+/* End-of-game card over the board (Option B, with a little flavor). Presentation only. */
+.board-broadcast-frame { position: relative; }
+.result-backdrop { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 12px;
+  background: rgba(4, 8, 6, .5); border-radius: 12px; animation: result-fade 220ms ease-out both; }
+.result-card { position: relative; width: min(340px, 100%); display: grid; gap: 12px; padding: 18px 18px 14px; text-align: center;
+  background: #111a15; border: 1px solid #3c4e42; border-radius: 16px; box-shadow: 0 18px 50px rgba(0, 0, 0, .55); outline: none;
+  animation: result-pop 260ms cubic-bezier(.2, .9, .3, 1.2) both; }
+.result-card.win { border-color: #b8913f; box-shadow: 0 18px 50px rgba(0, 0, 0, .55), 0 0 0 1px rgba(242, 210, 127, .25); }
+.result-card h2 { margin: 0; font-size: 1.35rem; line-height: 1.2; color: #f4efe2; }
+.result-card.win h2 { color: #f2d27f; }
+.result-how { margin: 2px 0 0; color: #b8c5bc; font-size: .85rem; }
+.result-flavor { margin: 6px 0 0; color: #d4ded6; font-size: .85rem; font-style: italic; }
+.result-trophy { display: inline-grid; place-items: center; width: 44px; height: 44px; margin-bottom: 4px; border-radius: 50%;
+  background: #f2d27f; color: #1a1408; font-size: 1.5rem; animation: result-bounce 900ms ease-out 200ms both; }
+.result-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 10px 0; border-block: 1px solid #26352c; }
+.result-stats span { display: grid; gap: 2px; font-size: .75rem; color: #9fb0a5; }
+.result-stats b { font-size: 1.15rem; color: #e6efe8; }
+.result-stats .best b { color: #8fd18c; } .result-stats .excellent b { color: #9fd9a8; } .result-stats .misses b { color: #f08f7f; }
+.result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.result-actions > button { min-height: 44px; border-radius: 10px; }
+.result-actions > button:not(.primary-button) { background: #16211b; border: 1px solid var(--line); color: #e6efe8; }
+.result-review { justify-self: center; min-height: 36px; border: 0; background: transparent; color: #b8c5bc; text-decoration: underline; cursor: pointer; }
+.result-close { position: absolute; top: 6px; right: 6px; width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; color: #b8c5bc; font-size: 1.3rem; cursor: pointer; }
+.result-close:hover { background: #1f2c25; }
+@keyframes result-fade { from { opacity: 0; } }
+@keyframes result-pop { from { opacity: 0; transform: translateY(8px) scale(.96); } }
+@keyframes result-bounce { 0% { transform: scale(.4); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .result-backdrop, .result-card, .result-trophy { animation: none; } }
+
+/* King badges after a finished game (chess.com style). */
+.king-mark { position: absolute; top: 4%; right: 4%; z-index: 4; width: 34%; height: 34%; min-width: 16px; min-height: 16px;
+  display: grid; place-items: center; border-radius: 50%; font-size: clamp(.55rem, 1.4vw, .9rem); font-weight: 800; pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .45); }
+.king-mark.won { background: #f2d27f; color: #1a1408; }
+.king-mark.mated, .king-mark.lost { background: #d64848; color: #fff; }
+.king-mark.draw { background: #9fb0a5; color: #10170f; }

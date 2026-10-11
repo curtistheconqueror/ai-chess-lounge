@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterable
+from time import monotonic
 from typing import Protocol, runtime_checkable
 
 import chess
@@ -223,6 +225,9 @@ class StockfishPlayerAdapter:
             raise AdapterConfigurationError("Stockfish target_elo must be between 800 and 3200.")
         if not isinstance(move_time_ms, int) or not 50 <= move_time_ms <= 10_000:
             raise AdapterConfigurationError("Stockfish move_time_ms must be between 50 and 10000.")
+        pacing = player.settings.get("reply_pacing_ms", 0)
+        if isinstance(pacing, bool) or not isinstance(pacing, int) or not 0 <= pacing <= 5_000:
+            raise AdapterConfigurationError("Stockfish reply_pacing_ms must be between 0 and 5000.")
 
     async def choose_move(
         self,
@@ -230,6 +235,7 @@ class StockfishPlayerAdapter:
         player: PlayerConfiguration,
     ) -> MoveProposal:
         board = chess.Board(request.fen)
+        started = monotonic()
         try:
             configured_move_time = int(player.settings.get("move_time_ms", 450))
             result = await self.engine.choose_move(
@@ -245,6 +251,15 @@ class StockfishPlayerAdapter:
             )
         except EngineFailure as exc:
             raise RetryableAdapterError(str(exc)) from exc
+        # Optional human-feeling pacing: the reply lands no sooner than reply_pacing_ms after the
+        # turn began. It runs on the engine's own server-side clock (never the opponent's), stays
+        # well inside the move deadline, and is cancelled with the turn on pause or abort.
+        pacing_ms = int(player.settings.get("reply_pacing_ms", 0))
+        if pacing_ms > 0:
+            ceiling_ms = max(0, request.move_deadline_ms - 250)
+            remaining = min(pacing_ms, ceiling_ms) / 1000 - (monotonic() - started)
+            if remaining > 0:
+                await asyncio.sleep(remaining)
         return MoveProposal(
             request_id=request.request_id,
             match_id=request.match_id,

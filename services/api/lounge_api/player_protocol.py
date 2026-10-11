@@ -30,6 +30,7 @@ PUBLIC_SETTINGS_BY_ADAPTER: dict[str, frozenset[str]] = {
             "move_time_ms",
             "move_timeout_ms",
             "spectator_delay_ms",
+            "reply_pacing_ms",
         }
     ),
     "openai": frozenset(
@@ -186,6 +187,9 @@ class PlayerConfiguration(BaseModel):
                 raise ValueError("Stockfish target_elo must be between 800 and 3200.")
             if type(move_time_ms) is not int or not 50 <= move_time_ms <= 10_000:
                 raise ValueError("Stockfish move_time_ms must be between 50 and 10000.")
+            reply_pacing_ms = self.settings.get("reply_pacing_ms", 0)
+            if type(reply_pacing_ms) is not int or not 0 <= reply_pacing_ms <= 5_000:
+                raise ValueError("Stockfish reply_pacing_ms must be between 0 and 5000.")
 
         if self.adapter_id == "openai":
             max_output_tokens = self.settings.get("max_output_tokens", 4_096)

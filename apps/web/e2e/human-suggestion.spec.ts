@@ -26,9 +26,10 @@ test("paused AI suggestion preserves board and a second game is refused", async 
   await expandedWorkspace(page);
   await expect(panel).toContainText("Human suggested e4");
   await expect(page.getByRole("region", { name: "Game compute usage" })).toContainText("Cost: unknown");
-  // A second game is refused before any request: New match is unavailable while this one is live.
-  await expect(page.getByRole("button", { name: "New match", exact: true })).toBeDisabled();
-  await expect(page.getByText("Finish or explicitly abort the current match before creating another.")).toBeVisible();
+  // A second game never starts alongside this one: setup only offers ending this game first (with confirmation).
+  await expect(page.getByRole("button", { name: "New match", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "End this game and start new…", exact: true })).toBeVisible();
+  await expect(page.getByText("The game on the board keeps its current settings.")).toBeVisible();
   await expect(page).toHaveURL(new RegExp(game.id));
   await playControls(page).getByRole("button", { name: "Resume play", exact: true }).click();
   await expect.poll(async () => (await (await page.request.get(`/api/games/${game.id}`)).json()).moves.length).toBe(1);

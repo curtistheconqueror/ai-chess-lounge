@@ -4,7 +4,7 @@ import type { GameSnapshot } from "./types";
 export type BoardSoundKind = "move" | "capture" | "check" | "castle" | "promote" | "end" | "accent";
 export type AudioStatus = "locked" | "ready" | "unavailable";
 export const soundStorageKey = "ai-chess-lounge:board-sound";
-export const defaultSoundSettings = { muted: false, volume: 40, varied: true };
+export const defaultSoundSettings = { muted: false, volume: 40, varied: true, voice: false };
 
 export const woodSamples = [
   { id: 1, name: "Wood", description: "Current board sound · rounded contact, short wooden body", pitch: 1, decay: 1, noise: 1, cutoff: 1900, attack: 0.0012, duration: 0.16, weight: 1, second: 0 },
@@ -46,6 +46,7 @@ export function readSoundSettings() {
       volume: typeof saved?.volume === "number" && Number.isFinite(saved.volume)
         ? Math.max(0, Math.min(100, saved.volume)) : 40,
       varied: typeof saved?.varied === "boolean" ? saved.varied : true,
+      voice: typeof saved?.voice === "boolean" ? saved.voice : false,
     };
   } catch {
     return { ...defaultSoundSettings };
@@ -276,5 +277,21 @@ export class BoardAudio {
       this.context.onstatechange = null;
       void this.context.close().catch(() => {});
     }
+  }
+}
+
+/** Optional spoken "Check" / "Checkmate" using the browser's own voice (no audio files). */
+export function speakAnnouncement(text: string, volume: number): boolean {
+  try {
+    const synth = window.speechSynthesis;
+    if (!synth || typeof SpeechSynthesisUtterance === "undefined") return false;
+    synth.cancel(); // Never queue stale announcements behind a newer one.
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.volume = Math.max(0, Math.min(1, volume / 100));
+    utterance.rate = 1.05;
+    synth.speak(utterance);
+    return true;
+  } catch {
+    return false;
   }
 }

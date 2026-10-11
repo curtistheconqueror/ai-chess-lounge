@@ -50,11 +50,12 @@ test("all supported Elo values and full strength persist without editing the cur
   await expect(page.getByLabel("Current match Stockfish strength")).toContainText("no Stockfish seat");
   for (const value of [caps.elo_min - 1, caps.elo_max + 1, 1600.5]) {
     await elo.fill(String(value));
-    await expect(page.getByRole("button", { name: "New match", exact: true })).toBeDisabled();
+    // A live game is on the table, so setup offers "End this game and start new…"; invalid input disables it.
+    await expect(page.getByRole("button", { name: "End this game and start new…", exact: true })).toBeDisabled();
     await expect(page.getByRole("alert")).toContainText("whole-number Elo");
   }
   for (const value of changes) {
-    // One strength control at a time: the next-match field returns once the live match has ended.
+    // The next-game field is always present; the experimental live switch exists only during a Stockfish game.
     await abortLiveMatches(page.request);
     await expect(elo).toBeVisible();
     await expect(page.getByLabel("Current black strength", { exact: true })).toHaveCount(0);
@@ -67,10 +68,10 @@ test("all supported Elo values and full strength persist without editing the cur
     const game = await created.json();
     expect(game.black_player.settings.target_elo).toBe(value);
     expect(game.black_player.settings.full_strength).toBe(false);
-    // While the match is live only the current-match control exists; the next-match field is gone.
+    // While the match is live, next-game strength stays editable and the live engine keeps its own strength.
     await expect(page.getByLabel("Current black strength", { exact: true })).toContainText(`${value} target Elo`);
-    await expect(elo).toHaveCount(0);
-    await expect(page.getByLabel("Stockfish strength mode", { exact: true })).toHaveCount(0);
+    await expect(elo).toBeVisible();
+    await expect(page.getByLabel("Stockfish strength mode", { exact: true })).toBeVisible();
   }
   await abortLiveMatches(page.request);
   const mode = page.getByLabel("Stockfish strength mode", { exact: true });
@@ -89,15 +90,16 @@ test("all supported Elo values and full strength persist without editing the cur
   expect(game.engine.full_strength).toBe(true);
   await expect(page.locator(".player-card").filter({ hasText: "Stockfish full strength" })).toContainText("Full strength · 700 ms budget");
   await expect(page.getByLabel("Current black strength", { exact: true })).toContainText("Full strength");
-  // The next-match field is hidden during a live Stockfish match. Another device changing the shared
-  // next-match strength reaches this one on focus, and never edits the match already on the board.
+  // Another device changing the shared next-game strength reaches this one on focus, and never edits
+  // the match already on the board.
   await resetTableSettings(page.request, {
     white_seat: "human", black_seat: "stockfish", stockfish: { mode: "elo", elo: 3100, skill_level: null },
     time_control: "5+2", start_paused: false,
   });
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByLabel("Current black strength", { exact: true })).toContainText("Full strength");
-  await expect(elo).toHaveCount(0);
+  await expect(elo).toHaveValue("3100");
+  await expect(page.getByRole("status", { name: "Next game settings status" })).toContainText("Stockfish 3100");
   expect((await (await page.request.get(`/api/games/${game.id}`)).json()).black_player.settings.full_strength).toBe(true);
   await playControls(page).getByRole("button", { name: "Pause play", exact: true }).click();
   await expect(playControls(page)).toContainText("Match paused");

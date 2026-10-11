@@ -41,8 +41,9 @@ import { HumanActionDialog } from "./HumanActionDialog";
 import { MatchActionDialog, type AdjudicatedResult, type MatchAction } from "./MatchActionDialog";
 import { GameUsage } from "./GameUsage";
 import { ChessBoard } from "./ChessBoard";
+import { ResultCard } from "./ResultCard";
 import { BoardSoundControls, useBoardSound } from "./BoardSoundControls";
-import { endingSound, newMoveSound } from "./boardSound";
+import { endingSound, newMoveSound, speakAnnouncement } from "./boardSound";
 import { motionStorageKey, previewMove, readMotionSettings } from "./boardMotion";
 import { EvaluationChart } from "./EvaluationChart";
 import { PromotionPicker, type PromotionPiece } from "./PromotionPicker";
@@ -126,16 +127,28 @@ const providerDetails: Record<AgentProviderChoice, { label: string; provider: st
 
 const noMoves: string[] = [];
 const unsavedTableKey = "ai-chess-lounge:unsaved-table-settings";
+const enginePacingKey = "lounge.engine-pacing.v1";
 // Fixed at load: a live snapshot rewriting the URL to /games/<id> must not turn a page into the table.
 const initialPageRoute = window.location.pathname === "/lab" ? "lab" : window.location.pathname === "/leaderboards" ? "leaderboards" : "table";
 
 function App() {
   const boardSound = useBoardSound();
   const [motion, setMotion] = useState(readMotionSettings);
+  // Per-device: how long a Stockfish reply takes to land (chess.com bots also pause briefly).
+  const [enginePacing, setEnginePacing] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem(enginePacingKey));
+      if ([0, 1000, 2000].includes(saved) && localStorage.getItem(enginePacingKey) !== null) return saved;
+    } catch { /* Optional storage. */ }
+    return 1000;
+  });
+  useEffect(() => { try { localStorage.setItem(enginePacingKey, String(enginePacing)); } catch { /* Optional. */ } }, [enginePacing]);
   useEffect(() => {
     try { localStorage.setItem(motionStorageKey, JSON.stringify(motion)); } catch { /* Optional storage. */ }
   }, [motion]);
   const playMoveSound = boardSound.playMove;
+  const voiceRef = useRef({ on: false, muted: false, volume: 40 });
+  voiceRef.current = { on: boardSound.settings.voice, muted: boardSound.settings.muted, volume: boardSound.settings.volume };
   // Model Lab and leaderboards are their own pages; the table page stays board-first.
   const pageRoute = initialPageRoute;
   // Full screen: board, clocks and actions only. Native fullscreen is requested on the document (not the
@@ -226,6 +239,8 @@ function App() {
   // Next-match settings are shared across devices: loaded from the server, refreshed when the tab
   // returns to the foreground, and saved (debounced, valid values only) when changed here.
   const tableRevision = useRef<number | null>(null);
+  // Visible confirmation that next-game settings were saved (and shared to every device).
+  const [tableSync, setTableSync] = useState<"idle" | "saving" | "saved" | "local">("idle");
   const tableSaved = useRef("");
   const sharedSettings = useMemo<TableSettings>(() => ({
     white_seat: whiteSeat,
@@ -288,6 +303,7 @@ function App() {
     if (revision === null || revision < 0 || JSON.stringify(sharedSettings) === tableSaved.current
       || !validStrength(stockfishElo, stockfishCaps)) { pendingShared.current = null; return; }
     pendingShared.current = sharedSettings;
+    setTableSync("saving");
     try { localStorage.setItem(unsavedTableKey, JSON.stringify({ base: revision, settings: sharedSettings })); } catch { /* Optional. */ }
     const timer = window.setTimeout(() => {
       pendingShared.current = null;
@@ -295,11 +311,12 @@ function App() {
         try { localStorage.removeItem(unsavedTableKey); } catch { /* Optional storage. */ }
         tableRevision.current = doc.revision;
         tableSaved.current = JSON.stringify(doc.settings);
+        setTableSync("saved");
       });
       // Another device saved first: this device's latest explicit change wins, once.
       save(revision).catch(error => error instanceof ApiRequestError && error.status === 409
         ? fetchTableSettings().then(doc => save(doc.revision)).catch(() => fetchTableSettings().then(applyTableSettings))
-        : undefined).catch(() => { /* Settings still apply locally; the next change retries. */ });
+        : undefined).catch(() => setTableSync("local"));
     }, 250);
     return () => window.clearTimeout(timer);
   }, [sharedSettings, stockfishElo, stockfishCaps, applyTableSettings]);
@@ -314,6 +331,10 @@ function App() {
   const announcedRef = useRef<{ gameId: string; generation: number; ply: number } | null>(null);
   // A queued move for the player's next turn; client-held only, submitted through the normal path.
   const [premove, setPremove] = useState<{ gameId: string; generation: number; from: string; to: string } | null>(null);
+  // End-of-game card: shown only when a game finishes while this tab is watching it live.
+  const [resultCard, setResultCard] = useState<string | null>(null);
+  const closeResult = useCallback(() => setResultCard(null), []);
+  const lastStatus = useRef<{ key: string; status: string } | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const gameRef = useRef<GameSnapshot | null>(null);
   const clockSyncRef = useRef<ClockSync | null>(null);
@@ -431,6 +452,12 @@ function App() {
     // An own move already tapped at submit; only what the server alone knows (check, game over) is added.
     const cue = alreadyPlayed ? (sound === "check" ? "accent" : sound === "end" ? "end" : null) : sound;
     if (announceMove && cue && replayPlyRef.current === null) playMoveSound(cue);
+    // Optional voice: announce check and checkmate for new live moves (never on load or replay).
+    const voice = voiceRef.current;
+    if (announceMove && sound && replayPlyRef.current === null && voice.on && !voice.muted && voice.volume > 0) {
+      if (sound === "end" && snapshot.termination_reason === "checkmate") speakAnnouncement("Checkmate", voice.volume);
+      else if (sound === "check") speakAnnouncement("Check", voice.volume);
+    }
     const receivedAt = Date.now();
     if (current?.id !== snapshot.id) setConnection("connecting");
     gameRef.current = snapshot;
@@ -484,6 +511,7 @@ function App() {
             whiteRunnerId,
             activeRunnerSessions,
             whiteIdentity,
+            enginePacing,
           ),
           blackPlayer: createSelectedPlayerConfiguration(
             blackSeat,
@@ -495,6 +523,7 @@ function App() {
             blackRunnerId,
             activeRunnerSessions,
             blackIdentity,
+            enginePacing,
           ),
         }),
         false,
@@ -807,6 +836,16 @@ function App() {
   }, [premove, game, playerCanMove]);
 
   useEffect(() => {
+    if (!game) return;
+    const key = `${game.id}:${game.generation}`;
+    const before = lastStatus.current;
+    lastStatus.current = { key, status: game.status };
+    if (before?.key === key && before.status === "active" && game.status !== "active"
+      && game.lifecycle !== "aborted" && game.result && game.result !== "*") setResultCard(key);
+    if (before?.key !== key) setResultCard(null);
+  }, [game]);
+
+  useEffect(() => {
     if (!premove) return;
     const cancel = (event: KeyboardEvent) => { if (event.key === "Escape") { setPremove(null); setSelected(null); } };
     window.addEventListener("keydown", cancel);
@@ -1111,7 +1150,7 @@ function App() {
     const player = restore && previous ? previous : createSelectedPlayerConfiguration(
       white ? whiteSeat : blackSeat, color, stockfishElo,
       white ? whiteProviderModel : blackProviderModel, white ? whiteEffort : blackEffort,
-      playerAdapters, white ? whiteRunnerId : blackRunnerId, activeRunnerSessions,
+      playerAdapters, white ? whiteRunnerId : blackRunnerId, activeRunnerSessions, undefined, enginePacing,
     );
     setTakeover({ gameId: game.id, revision: game.revision, color, player });
   }
@@ -1245,7 +1284,9 @@ function App() {
     || (whiteSeat === "remote_runner" && !whiteRunnerId)
     || (blackSeat === "remote_runner" && !blackRunnerId);
   const matchEnded = Boolean(game && ["completed", "aborted", "adjudicated"].includes(game.lifecycle));
-  const nextMatchLabel = `Next match: ${seatChoiceLabel(whiteSeat)} vs ${seatChoiceLabel(blackSeat)}`;
+  const seatDescription = (seat: SeatChoice) => seat === "stockfish" ? strengthName(stockfishElo) : seatChoiceLabel(seat);
+  const nextMatchDescription = `${seatDescription(whiteSeat)} vs ${seatDescription(blackSeat)}`;
+  const nextMatchLabel = `Next match: ${nextMatchDescription}`;
   const controlStatus: { title: string; detail: string } = !game
     ? { title: busy ? "Checking the table" : "Ready to start", detail: nextMatchLabel }
     : connection !== "live" ? { title: "Reconnecting to the board", detail: "Moves are disabled until the current position arrives." }
@@ -1265,6 +1306,15 @@ function App() {
   // One Resign: the only human seat, or the side to move when two humans share the board.
   const resignColor = humanColors.length === 1 ? humanColors[0] : game && humanColors.includes(game.turn) ? game.turn : null;
   const liveMatch = Boolean(game && !matchEnded);
+  const finishedWithResult = Boolean(game && game.status !== "active" && game.lifecycle !== "aborted" && game.result && game.result !== "*");
+  const kingMarks = useMemo(() => {
+    if (!game || !finishedWithResult || !followingLive) return undefined;
+    const kings = Object.fromEntries(parseFen(game.fen).filter(sq => sq.piece?.type === "king").map(sq => [sq.piece!.color, sq.name]));
+    const winner = game.result === "1-0" ? "white" : game.result === "0-1" ? "black" : null;
+    if (!winner) return { [kings.white]: "draw", [kings.black]: "draw" } as Record<string, "draw">;
+    const loser = winner === "white" ? "black" : "white";
+    return { [kings[winner]]: "won", [kings[loser]]: game.termination_reason === "checkmate" ? "mated" : "lost" } as Record<string, "won" | "mated" | "lost">;
+  }, [game, finishedWithResult, followingLive]);
   const actionsReady = followingLive && connection === "live";
   const topBar = (
     <header className="topbar">
@@ -1335,9 +1385,16 @@ function App() {
               disabled={!boardCanInteract && !premoveMode}
               movableColor={premoveMode ? premoveColor! : undefined}
               premove={shownPremove}
+              kingMarks={kingMarks}
               onSquareClick={boardSquareClick}
               onMoveDrop={boardMoveDrop}
             />
+            {resultCard && game && `${game.id}:${game.generation}` === resultCard && <ResultCard game={game}
+              perspective={humanColors.length === 1 ? humanColors[0] : null} analysis={currentAnalysis}
+              onClose={closeResult}
+              onRematch={() => { closeResult(); void startNewGame(); }}
+              onNewOpponent={() => { closeResult(); openSetup(); }}
+              onReview={() => { closeResult(); selectPly(0); }} />}
           </div>
 
           <PlayerCard {...(flipped ? blackPlayer : whitePlayer)} />
@@ -1352,7 +1409,7 @@ function App() {
             </div>
             <div className="match-actions">
               {!game || matchEnded
-                ? <button className="primary-button" disabled={newMatchDisabled} onClick={() => void startNewGame()}>Play a new match</button>
+                ? <button className="primary-button" aria-label="Play a new match" disabled={newMatchDisabled} onClick={() => void startNewGame()}>New match</button>
                 : connection !== "live" ? <button className="primary-button" disabled>Reconnecting…</button>
                 : !followingLive ? <button className="primary-button" onClick={() => { setReplayRunning(false); setReplayPly(null); }}>Return to live board</button>
                 : game.lifecycle === "paused" ? <button className="primary-button" disabled={matchControlBusy || busy} onClick={() => void onMatchControl("resume")}>Resume play</button>
@@ -1361,10 +1418,10 @@ function App() {
               {liveMatch
                 ? <button aria-label={resignColor ? `Resign ${capitalize(resignColor)}` : "Resign"} disabled={!resignColor || !game || busy || game.status !== "active" || !actionsReady}
                   onClick={() => resignColor && setHumanAction(resignColor)}>Resign</button>
-                : <button className="setup-shortcut" onClick={openSetup}>Seats &amp; game setup</button>}
+                : <button className="setup-shortcut" aria-label="Seats & game setup" onClick={openSetup}>Setup</button>}
               {liveMatch
                 ? <button onClick={() => setHumanAction("draw")} disabled={!playerCanMove || (!game?.can_claim_draw && !game?.draw_claim_moves?.length)} title="Available for threefold repetition or the fifty-move rule">Claim draw</button>
-                : <a className="table-link" href="/">Open current table</a>}
+                : <a className="table-link" aria-label="Open current table" href="/">Table</a>}
               <MenuButton label="More" className="more-menu" align="end">
                 {liveMatch && <button disabled={busy || matchControlBusy || !actionsReady} onClick={() => openMatchAction("abort")}>End match…</button>}
                 {liveMatch && <button disabled={newMatchDisabled || !actionsReady} onClick={() => openMatchAction("restart")}>End and start new…</button>}
@@ -1559,13 +1616,13 @@ function App() {
                 onRunnerChange={setBlackRunnerId}
               />
             )}
-            {/* One strength control at a time: the live game's engine while a match is on the table,
-                otherwise the next match's. Avoids two Elo fields that disagree. */}
-            {liveMatch && game && [game.white_player, game.black_player].some(p => p.adapter_id === "stockfish")
-              ? <CurrentStockfishStrength game={game} caps={stockfishCaps}
-                disabled={matchControlBusy || !followingLive || connection !== "live" || !["running", "paused"].includes(game.lifecycle)}
-                onApply={updateCurrentStockfish} />
-              : <StockfishStrength value={stockfishElo} onChange={setStockfishElo} caps={stockfishCaps} game={game} />}
+            {/* Like any chess site: strength is chosen for the NEXT game and saved immediately.
+                A game in progress keeps its strength until it ends or is restarted. */}
+            <StockfishStrength value={stockfishElo} onChange={setStockfishElo} caps={stockfishCaps} game={game} />
+            <p className={`settings-sync ${tableSync}`} role="status" aria-label="Next game settings status">
+              {tableSync === "saving" ? "Saving for the next game…"
+                : tableSync === "local" ? "Saved on this device; it will sync when the server is reachable."
+                : `Next game: ${nextMatchDescription}${tableSync === "saved" ? " · saved ✓" : ""}`}</p>
             <label>
               Time control
               <select value={timeControl} onChange={(event) => setTimeControl(event.target.value as TimeControlKey)}>
@@ -1577,14 +1634,18 @@ function App() {
             <label><input type="checkbox" checked={startPaused} onChange={e => setStartPaused(e.target.checked)} /> Start paused to review or advise before any agent call</label>
             {whiteSeat !== "remote_runner" && <IdentityEditor label="White next match" value={whiteIdentity} onChange={setWhiteIdentity} />}
             {blackSeat !== "remote_runner" && <IdentityEditor label="Black next match" value={blackIdentity} onChange={setBlackIdentity} />}
-            {(game?.lifecycle === "running" || game?.lifecycle === "paused") && <p>Finish or explicitly abort the current match before creating another.</p>}
-            <button
-              className="primary-button"
-              onClick={() => void startNewGame()}
-              disabled={newMatchDisabled || game?.lifecycle === "running" || game?.lifecycle === "paused"}
-            >
-              New match
-            </button>
+            {(game?.lifecycle === "running" || game?.lifecycle === "paused") && <p>The game on the board keeps its current settings. End it to start the next game with these.</p>}
+            {game?.lifecycle === "running" || game?.lifecycle === "paused"
+              ? <button className="primary-button" disabled={newMatchDisabled || !followingLive || connection !== "live"} onClick={() => openMatchAction("restart")}>End this game and start new…</button>
+              : <button className="primary-button" onClick={() => void startNewGame()} disabled={newMatchDisabled}>New match</button>}
+            {liveMatch && game && [game.white_player, game.black_player].some(p => p.adapter_id === "stockfish") &&
+              <details className="experimental-strength">
+                <summary>Experimental: change engine strength mid-game</summary>
+                <p>For analysis and experiments only. Pauses this game and changes the live engine; normal games set strength before they start.</p>
+                <CurrentStockfishStrength game={game} caps={stockfishCaps}
+                  disabled={matchControlBusy || !followingLive || connection !== "live" || !["running", "paused"].includes(game.lifecycle)}
+                  onApply={updateCurrentStockfish} />
+              </details>}
           </div>
 
           <section className="takeover-panel" aria-label="Match control">
@@ -1731,7 +1792,10 @@ function App() {
               <label>Automated move buffer<select aria-label="Automated move buffer" value={motion.buffer} onChange={e => setMotion(v => ({ ...v, buffer: Number(e.target.value) }))}>
                 <option value={0}>None</option><option value={150}>150 ms</option><option value={300}>300 ms</option><option value={600}>600 ms</option>
               </select></label>
-              <p>Visual pacing only. Clocks, evaluation and move history stay live. Rapid updates catch up immediately; reduced motion uses instant moves.</p>
+              <label>Engine reply pacing<select aria-label="Engine reply pacing" value={enginePacing} onChange={e => setEnginePacing(Number(e.target.value))}>
+                <option value={0}>Instant</option><option value={1000}>Natural · about 1 s</option><option value={2000}>Relaxed · about 2 s</option>
+              </select></label>
+              <p>Visual pacing only. Clocks, evaluation and move history stay live. Rapid updates catch up immediately; reduced motion uses instant moves. Engine reply pacing applies to new games and runs on the engine's own clock, never yours.</p>
             </div>
             <BoardSoundControls sound={boardSound} />
           </details>
@@ -1755,7 +1819,7 @@ function App() {
 
       {promotion && <PromotionPicker color={promotion.color} onChoose={choosePromotion} onCancel={cancelPromotion} />}
       {takeover && game && <SeatTakeoverDialog color={takeover.color} current={game[`${takeover.color}_player`]} player={takeover.player} busy={matchControlBusy} onConfirm={() => void confirmTakeover()} onCancel={() => setTakeover(null)} />}
-      {matchAction && game && <MatchActionDialog action={matchAction} targetLabel={matchActionTarget.current?.label} nextMatchLabel={`${seatChoiceLabel(whiteSeat)} vs ${seatChoiceLabel(blackSeat)}`} busy={busy || matchControlBusy} onCancel={() => { setMatchAction(null); matchActionTrigger.current?.focus({ preventScroll: true }); }} onConfirm={(result) => void onMatchAction(result)} />}
+      {matchAction && game && <MatchActionDialog action={matchAction} targetLabel={matchActionTarget.current?.label} nextMatchLabel={nextMatchDescription} busy={busy || matchControlBusy} onCancel={() => { setMatchAction(null); matchActionTrigger.current?.focus({ preventScroll: true }); }} onConfirm={(result) => void onMatchAction(result)} />}
       {humanAction && game && <HumanActionDialog action={humanAction} claimMoves={game.draw_claim_moves ?? []} busy={busy} onCancel={() => setHumanAction(null)} onConfirm={(move) => void onHumanAction(move)} />}
       <div className="sr-only" aria-live="polite">Position {displayPly}. {selectedPoint ? formatEvaluation(selectedPoint) : "Evaluation pending"}.</div>
     </main>
@@ -1965,6 +2029,7 @@ function createPlayerConfiguration(
   choice: Exclude<SeatChoice, AgentProviderChoice | "remote_runner">,
   color: "white" | "black",
   stockfishElo: StockfishChoice,
+  replyPacingMs = 0,
 ): PlayerConfiguration {
   if (choice === "stockfish") {
     return {
@@ -1982,6 +2047,8 @@ function createPlayerConfiguration(
         ...strengthSettings(stockfishElo),
         move_time_ms: (stockfishElo === "full" || (typeof stockfishElo === "number" && stockfishElo >= 2500)) ? 700 : 400,
         spectator_delay_ms: 80,
+        // Human-feeling reply timing, served on the engine's own clock (server-side).
+        ...(replyPacingMs > 0 ? { reply_pacing_ms: replyPacingMs } : {}),
       },
     };
   }
@@ -2023,6 +2090,7 @@ function createSelectedPlayerConfiguration(
   requestedRunnerId: string,
   runners: RunnerSessionStatus[],
   comparison?: IdentityDeclaration,
+  replyPacingMs = 0,
 ): PlayerConfiguration {
   if (choice === "remote_runner") {
     const runner = runners.find((candidate) => candidate.player_id === requestedRunnerId)
@@ -2043,7 +2111,7 @@ function createSelectedPlayerConfiguration(
     };
   }
   if (!isAgentProvider(choice)) {
-    return { ...createPlayerConfiguration(choice, color, stockfishElo), ...(comparison && Object.keys(comparison).length ? { comparison } : {}) };
+    return { ...createPlayerConfiguration(choice, color, stockfishElo, replyPacingMs), ...(comparison && Object.keys(comparison).length ? { comparison } : {}) };
   }
 
   const provider = providerDetails[choice];

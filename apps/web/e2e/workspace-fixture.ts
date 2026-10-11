@@ -10,7 +10,8 @@ import type { Locator, Page } from "@playwright/test";
  */
 export async function expandedWorkspace(page: Page) {
   await page.locator(".board").waitFor();
-  await page.locator(".workspace-section").evaluateAll(sections => {
+  // Includes the collapsed "Experimental" live-strength switch inside setup when a Stockfish game is live.
+  await page.locator(".workspace-section, .experimental-strength").evaluateAll(sections => {
     sections.forEach(section => { (section as HTMLDetailsElement).open = true; });
   });
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BoardAudio, originalPrototype, readSoundSettings, soundStorageKey, type AudioStatus, type BoardSoundKind } from "./boardSound";
+import { BoardAudio, originalPrototype, readSoundSettings, soundStorageKey, speakAnnouncement, type AudioStatus, type BoardSoundKind } from "./boardSound";
 
 export function useBoardSound(preloadPrototype = true) {
   const [settings, setSettings] = useState(readSoundSettings);
@@ -76,6 +76,13 @@ export function BoardSoundControls({ sound }: { sound: ReturnType<typeof useBoar
       </label>
       <label className="board-cues"><input type="checkbox" checked={settings.varied}
         onChange={event => setSettings(value => ({ ...value, varied: event.target.checked }))} /> Varied cues</label>
+      <label className="board-cues"><input type="checkbox" checked={settings.voice}
+        onChange={event => {
+          const voice = event.target.checked;
+          // Speaking once inside this tap unlocks speech on iPad/iPhone for later announcements.
+          if (voice && !settings.muted && settings.volume > 0) speakAnnouncement("Voice on", settings.volume);
+          setSettings(value => ({ ...value, voice }));
+        }} /> Say “Check” and “Checkmate”</label>
       <button className="ghost-button" disabled={settings.muted || settings.volume === 0}
         onClick={() => void sound.testSound()}>Test sound</button>
     </div>

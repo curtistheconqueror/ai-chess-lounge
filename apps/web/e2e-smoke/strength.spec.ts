@@ -9,12 +9,14 @@ async function openSetup(page: Page) {
   const summary = page.locator("summary", { hasText: "Seats & game setup" }).first();
   const open = await summary.evaluate(e => (e.parentElement as HTMLDetailsElement).open);
   if (!open) await press(page, summary);
+  // Mid-game strength is an experimental tool behind its own disclosure (present only during a Stockfish game).
+  await page.locator("details.experimental-strength").evaluateAll(els => els.forEach(e => { (e as HTMLDetailsElement).open = true; }));
 }
 const nextElo = (page: Page) => page.getByLabel("Stockfish target Elo", { exact: true });
 const lsKey = "ai-chess-lounge:stockfish-strength";
 const cards = (page: Page) => page.locator(".player-card").allInnerTexts();
 
-test("[S20] 'New match' is not offered while a match is live (otherwise it 409s and re-shows the OLD 3100 game)", async ({ page }) => {
+test("[S20] While a match is live, setup offers only an explicit 'End this game and start new' (never a silent 409)", async ({ page }) => {
   const g = await createGame(page.request, { stockfish_elo: 3100 });
   await page.goto("/");
   await page.locator(".board").waitFor();
@@ -22,25 +24,26 @@ test("[S20] 'New match' is not offered while a match is live (otherwise it 409s 
   await openSetup(page);
   const statuses: number[] = [];
   page.on("response", r => { if (r.url().endsWith("/api/games") && r.request().method() === "POST") statuses.push(r.status()); });
-  const btn = page.getByRole("button", { name: "New match", exact: true });
-  note("evidence", { newMatchEnabledWhileLive: await btn.isEnabled() });
-  await expect(btn, "New match must be unavailable while a match is on the table").toBeDisabled();
-  expect(statuses, "no request that could 409 and re-show the old game").not.toContain(409);
+  await expect(page.getByRole("button", { name: "New match", exact: true })).toHaveCount(0);
+  await press(page, page.getByRole("button", { name: "End this game and start new…", exact: true }));
+  await expect(page.getByRole("dialog")).toBeVisible(); // Confirmation first; nothing posted yet.
+  await press(page, page.getByRole("dialog").getByRole("button", { name: "Cancel" }));
+  expect(statuses).toEqual([]);
   expect((await (await page.request.get("/api/live-match")).json()).id).toBe(g.id);
 });
 
-test("[S21] While a match is live, the only strength control is the live game's, showing its real value with an apply path", async ({ page }) => {
-  await createGame(page.request, { stockfish_elo: 3100 });
+test("[S21] Next-game Elo stays editable during a live game, is visibly saved, and never edits the live engine", async ({ page }) => {
+  const g = await createGame(page.request, { stockfish_elo: 3100 });
   await page.goto("/");
   await page.locator(".board").waitFor();
   await expect(page.getByLabel(/^Connection live/)).toBeVisible();
   await openSetup(page);
-  // One control at a time (Phase B): no next-match Elo field that could disagree with the board.
-  await expect(nextElo(page), "next-match Elo is hidden while a match is live").toHaveCount(0);
-  const current = page.getByRole("region", { name: "Current match engine strength" });
-  await expect(current).toBeVisible();
-  await expect(current).toContainText("3100");
-  note("evidence", { currentPanel: (await current.innerText()).slice(0, 160) });
+  await nextElo(page).fill("1400");
+  const status = page.getByRole("status", { name: "Next game settings status" });
+  await expect(status).toContainText("Stockfish 1400");
+  await expect(status).toContainText("saved");
+  note("evidence", { status: await status.innerText() });
+  expect((await getGame(page.request, g.id)).black_player.settings.target_elo).toBe(3100);
 });
 
 test("[S22] Next-match Elo 1400 (after the old game ends) is sent to the API and shown on the board", async ({ page }) => {

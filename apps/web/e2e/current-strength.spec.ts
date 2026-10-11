@@ -34,6 +34,9 @@ test("confirmed current Stockfish Elo reaches every viewer; cancel and stale con
   const stale = await (await page.request.get(`/api/games/${original.id}`)).json();
   expect(stale.black_player.settings.target_elo).toBe(1400);
   await page.reload(); await expandedWorkspace(page);
+  // The experimental section renders once the live game has loaded; open it then.
+  await page.getByText("Experimental: change engine strength mid-game").waitFor();
+  await expandedWorkspace(page);
   await expect(edit.getByLabel("Current black proposed Elo")).toHaveValue("1400");
   await expect(page.getByRole("group", { name: "Current white Stockfish" })).toHaveCount(0);
   await viewer.close();
@@ -62,6 +65,8 @@ test("native skill is a distinct persisted mode and current edits target one Sto
   expect(game.white_player.settings.skill_level).toBe(3); expect(game.black_player.settings.skill_level).toBe(3);
   const viewer = await browser.newPage({ baseURL: test.info().project.use.baseURL });
   await viewer.goto(`/games/${game.id}`);
+  // Mid-game strength is an experimental tool, tucked behind its own disclosure in setup.
+  await page.getByText("Experimental: change engine strength mid-game").click();
   const white = page.getByRole("group", { name: "Current white Stockfish" });
   await white.getByLabel("Current white proposed Skill Level").fill("21");
   await expect(white.getByRole("button", { name: "Update current white Stockfish" })).toBeDisabled();

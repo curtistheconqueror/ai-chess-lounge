@@ -1,5 +1,48 @@
 # AI Chess Lounge contributor pickup
 
+## October 10 (evening) - next-game Elo, engine pacing, voice and result card
+
+The owner clarified the rule: like any chess site, Elo is set for the NEXT game and
+never changes mid-game.
+
+**Next-game strength**
+
+- Setup always shows next-game strength. It's saved and shared, with a visible
+  "Next game: … · saved ✓" status.
+- During a live game, setup's primary action is "End this game and start new…". The
+  confirmation names the new strength.
+- The mid-game switch (CurrentStockfishStrength) is kept for a future experiments/
+  positions playground. It sits behind a collapsed "Experimental: change engine
+  strength mid-game" disclosure.
+
+**Engine reply pacing**
+
+- New optional Stockfish setting `reply_pacing_ms` (0-5000). The adapter holds its
+  reply until at least that long after the turn began.
+- The hold runs on the engine's own server clock, stays capped 250 ms inside the move
+  deadline, and is cancelled with the turn.
+- Board preferences "Engine reply pacing" (per device): Instant / Natural about 1 s
+  (default) / Relaxed about 2 s. It applies to new games and takeovers.
+
+**Voice and result card**
+
+- **Voice (opt-in):** "Say Check and Checkmate" uses the browser's speechSynthesis and
+  respects mute and volume. It's announced only for adjacent live moves, never on load,
+  replay or history gaps.
+- **Result card (owner chose option B):** appears over the board when a game finishes
+  while watched live. Aborted games don't get one, and neither does reopening.
+  - Win: "You beat X!", "by checkmate", a flavor line, and Best / Excellent / Misses
+    when analysis covers most moves.
+  - Loss and draw have their own tone.
+  - Actions: Rematch, New opponent, Review game. Esc, ✕ or tapping outside dismisses.
+  - King badges on the final position: crown for the winner, # or ⚑ for the loser,
+    ½ for a draw.
+  - Ended-state action labels are shortened visually (accessible names unchanged).
+
+**Tests:** next-game-strength, voice, result-card, backend pacing. Desktop+phone 159
+passed; chromium/webkit 390 phone 73 passed; iPad chromium 74 passed. Smoke strength
+33/33.
+
 ## October 10 - Phase B minimalist board-first layout and shared settings
 
 The owner approved the board-first mockup, shared next-match settings, and separate

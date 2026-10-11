@@ -24,6 +24,8 @@ interface ChessBoardProps {
   /** Whose pieces the player may pick up; defaults to the side to move. Premoves pass the player's color. */
   movableColor?: "white" | "black";
   premove?: { from: string; to: string } | null;
+  /** Finished games: crown the winner's king and mark the loser's (or both for a draw). */
+  kingMarks?: Record<string, "won" | "mated" | "lost" | "draw">;
 }
 
 function ChessBoardView({
@@ -45,6 +47,7 @@ function ChessBoardView({
   motionPly,
   movableColor,
   premove = null,
+  kingMarks,
 }: ChessBoardProps) {
   const board = useRef<HTMLDivElement>(null);
   const previous = useRef({ fen, motionContext, flipped, motionPly });
@@ -292,6 +295,8 @@ function ChessBoardView({
                 </span>
               )}
               {isTarget && !square.piece && <span className="target-dot" aria-hidden="true" />}
+              {kingMarks?.[square.name] && <span className={`king-mark ${kingMarks[square.name]}`} aria-hidden="true">
+                {kingMarks[square.name] === "won" ? "♛" : kingMarks[square.name] === "mated" ? "#" : kingMarks[square.name] === "draw" ? "½" : "⚑"}</span>}
             </button>
           );
         })}</div>)}

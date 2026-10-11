@@ -85,7 +85,7 @@ export function StockfishStrength({ value, onChange, caps, game }: {
     {skillValue(value) !== null ? <p>Native Skill Level 0–20. Lower levels weaken play; these are not calibrated Elo ratings or a guarantee of beginner difficulty.</p> : value === "full" ? <p>No Elo handicap. Search time and hardware still limit playing strength.</p>
       : <p>Target Elo uses Stockfish's native rating limit; it is not a guaranteed rating. Type any supported integer, or use 25-Elo slider steps.</p>}
     {!validStrength(value, caps) && <p role="alert">{skillValue(value) !== null ? "Enter a whole-number Skill Level from 0 to 20." : "Enter a whole-number Elo within the supported range."}</p>}
-    <p>These are next-match settings only. For the game already on the board, use Current match Stockfish strength above and confirm the update.</p>
+    <p>Applies to your next game and saves automatically. A game in progress keeps its strength.</p>
     {/* An ended or aborted game is history, not the "current" match. */}
     <p className="stockfish-current" aria-label="Current match Stockfish strength">{game && ["running", "paused", "created", "waiting"].includes(game.lifecycle) ? "Current match" : "Last match"}: {current.length
       ? current.map(([color, player]) => `${color}: ${player.settings.skill_level != null ? `Skill Level ${player.settings.skill_level} (uncalibrated)` : player.settings.full_strength ? "full strength" : `${player.settings.target_elo ?? 1600} target Elo`}`).join("; ")
