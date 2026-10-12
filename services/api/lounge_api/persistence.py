@@ -33,7 +33,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
 
 from .comparison_identity import outcome as comparison_outcome
-from .deployment_guard import require_local_runtime
+from .deployment_guard import require_supported_runtime
 from .domain import GameSession
 from .models import (
     Consultation,
@@ -51,8 +51,9 @@ from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 from .table_settings import TableSettings, TableSettingsConflict
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0013_table_settings"
+SCHEMA_REVISION = "0014_hosted_members"
 TABLE_SETTINGS_ID = "default"
+ANY_OWNER = object()
 
 
 class ConcurrentGameUpdate(RuntimeError):
@@ -117,6 +118,8 @@ class MatchRow(Base):
     __tablename__ = "matches"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    # The hosted account that owns the match; NULL for local and pre-hosting matches.
+    owner_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     lifecycle: Mapped[str] = mapped_column(String(24), nullable=False)
     opponent: Mapped[str] = mapped_column(String(24), nullable=False)
     stockfish_elo: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -167,9 +170,25 @@ class ComparisonGameRow(Base):
 class TableSettingsRow(Base):
     __tablename__ = "table_settings"
 
-    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    # "default" for the local table; the owner's account id for a hosted player's table.
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
     revision: Mapped[int] = mapped_column(Integer, nullable=False)
     settings: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class MemberRow(Base):
+    """Invite list for the hosted Lounge: only active members may sign in."""
+
+    __tablename__ = "lounge_members"
+
+    email: Mapped[str] = mapped_column(String(254), primary_key=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)  # admin | player
+    status: Mapped[str] = mapped_column(String(16), nullable=False)  # active | revoked
+    # Bound at first sign-in so a different account using the same address is refused.
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    invited_by: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
@@ -331,8 +350,14 @@ class DatabaseStore:
         self._initialized = False
 
     async def initialize(self) -> None:
-        require_local_runtime()
+        mode = require_supported_runtime()
         if self._initialized:
+            return
+        if mode == "hosted":
+            # Hosted schema comes only from Alembic migrations (the deploy's release
+            # step); the app verifies it and never creates or stamps tables.
+            await self.validate_existing_schema(SCHEMA_REVISION)
+            self._initialized = True
             return
         async with self.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
@@ -349,6 +374,30 @@ class DatabaseStore:
                 await connection.execute(
                     text(f"INSERT INTO alembic_version (version_num) VALUES ('{SCHEMA_REVISION}')")
                 )
+            elif current_revision != SCHEMA_REVISION:
+                # create_all adds new tables but never columns: give an existing local
+                # database the 0014 match owner column (always NULL locally), and
+                # advance its stamp once every current column is present.
+                def missing_columns(sync) -> set[str]:
+                    inspector = inspect(sync)
+                    return {
+                        f"{table.name}.{column}"
+                        for table in Base.metadata.sorted_tables
+                        for column in table.columns.keys()
+                        if column not in {c["name"] for c in inspector.get_columns(table.name)}
+                    }
+
+                if "matches.owner_id" in await connection.run_sync(missing_columns):
+                    await connection.execute(
+                        text("ALTER TABLE matches ADD COLUMN owner_id VARCHAR(64)")
+                    )
+                    await connection.execute(
+                        text("CREATE INDEX ix_matches_owner_id ON matches (owner_id)")
+                    )
+                if not await connection.run_sync(missing_columns):
+                    await connection.execute(
+                        text(f"UPDATE alembic_version SET version_num = '{SCHEMA_REVISION}'")
+                    )
         self._initialized = True
 
     async def validate_existing_schema(
@@ -1008,25 +1057,120 @@ class DatabaseStore:
             game.comparison_snapshot = comparison.identity if comparison else None
             return game
 
-    async def latest_live_match_ids(self, limit: int | None = None) -> list[str]:
-        """Most recently updated running or paused exhibition matches (not batch jobs)."""
+    async def latest_live_match_ids(
+        self, limit: int | None = None, *, owner_id: str | None | object = ANY_OWNER
+    ) -> list[str]:
+        """Most recently updated running or paused exhibition matches (not batch jobs).
+
+        ``owner_id`` limits the result to one owner's table (``None`` = unowned games).
+        """
         await self.initialize()
+        query = select(MatchRow.id).where(
+            MatchRow.lifecycle.in_([MatchState.RUNNING.value, MatchState.PAUSED.value]),
+            MatchRow.id.not_in(select(ExperimentJobRow.id)),
+        )
+        if owner_id is not ANY_OWNER:
+            query = query.where(
+                MatchRow.owner_id.is_(None) if owner_id is None else MatchRow.owner_id == owner_id
+            )
         async with self.sessions() as session:
             return list(
                 (
-                    await session.scalars(
-                        select(MatchRow.id)
-                        .where(
-                            MatchRow.lifecycle.in_(
-                                [MatchState.RUNNING.value, MatchState.PAUSED.value]
-                            ),
-                            MatchRow.id.not_in(select(ExperimentJobRow.id)),
-                        )
-                        .order_by(MatchRow.updated_at.desc())
-                        .limit(limit)
-                    )
+                    await session.scalars(query.order_by(MatchRow.updated_at.desc()).limit(limit))
                 ).all()
             )
+
+    async def match_owner(self, game_id: str) -> tuple[bool, str | None]:
+        """(exists, owner_id) for an access check; never loads the match itself."""
+        await self.initialize()
+        async with self.sessions() as session:
+            row = (
+                await session.execute(select(MatchRow.owner_id).where(MatchRow.id == game_id))
+            ).first()
+            return (False, None) if row is None else (True, row[0])
+
+    # --- hosted members ---------------------------------------------------------
+    async def ensure_admins(self, emails: frozenset[str]) -> None:
+        """Configured admins are always active admins (never revoked from the UI)."""
+        await self.initialize()
+        now = datetime.now(UTC)
+        async with self.sessions.begin() as session:
+            for email in sorted(emails):
+                row = await session.get(MemberRow, email)
+                if row is None:
+                    session.add(
+                        MemberRow(
+                            email=email,
+                            role="admin",
+                            status="active",
+                            user_id=None,
+                            invited_by=None,
+                            created_at=now,
+                            updated_at=now,
+                        )
+                    )
+                elif row.role != "admin" or row.status != "active":
+                    row.role, row.status, row.updated_at = "admin", "active", now
+
+    async def member_role(self, email: str, user_id: str) -> str | None:
+        """The role of an active member, binding the account id on first sign-in."""
+        await self.initialize()
+        async with self.sessions.begin() as session:
+            row = await session.get(MemberRow, email)
+            if row is None or row.status != "active":
+                return None
+            if row.user_id is None:
+                row.user_id, row.updated_at = user_id, datetime.now(UTC)
+            elif row.user_id != user_id:
+                return None
+            return row.role
+
+    async def list_members(self) -> list[dict[str, object]]:
+        await self.initialize()
+        async with self.sessions() as session:
+            rows = (await session.scalars(select(MemberRow).order_by(MemberRow.created_at))).all()
+            return [
+                {
+                    "email": row.email,
+                    "role": row.role,
+                    "status": row.status,
+                    "signed_in": row.user_id is not None,
+                    "invited_by": row.invited_by,
+                    "created_at": _utc(row.created_at),
+                }
+                for row in rows
+            ]
+
+    async def invite_member(self, email: str, *, role: str, invited_by: str) -> None:
+        await self.initialize()
+        now = datetime.now(UTC)
+        async with self.sessions.begin() as session:
+            row = await session.get(MemberRow, email)
+            if row is None:
+                session.add(
+                    MemberRow(
+                        email=email,
+                        role=role,
+                        status="active",
+                        user_id=None,
+                        invited_by=invited_by,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+                return
+            if row.status != "active":
+                row.user_id = None  # a re-invited address may bind a new account
+            row.role, row.status, row.invited_by, row.updated_at = role, "active", invited_by, now
+
+    async def revoke_member(self, email: str) -> bool:
+        await self.initialize()
+        async with self.sessions.begin() as session:
+            row = await session.get(MemberRow, email)
+            if row is None:
+                return False
+            row.status, row.updated_at = "revoked", datetime.now(UTC)
+            return True
 
     async def load_revision(self, game_id: str) -> tuple[int, int] | None:
         await self.initialize()
@@ -1101,10 +1245,12 @@ class DatabaseStore:
             for row in rows
         ]
 
-    async def load_table_settings(self) -> tuple[int, TableSettings, datetime] | None:
+    async def load_table_settings(
+        self, table_id: str = TABLE_SETTINGS_ID
+    ) -> tuple[int, TableSettings, datetime] | None:
         await self.initialize()
         async with self.sessions() as session:
-            row = await session.get(TableSettingsRow, TABLE_SETTINGS_ID)
+            row = await session.get(TableSettingsRow, table_id)
             if row is None:
                 return None
             return (
@@ -1114,7 +1260,7 @@ class DatabaseStore:
             )
 
     async def save_table_settings(
-        self, settings: TableSettings, *, expected_revision: int
+        self, settings: TableSettings, *, expected_revision: int, table_id: str = TABLE_SETTINGS_ID
     ) -> tuple[int, datetime]:
         """Compare-and-swap the shared table settings.
 
@@ -1130,7 +1276,7 @@ class DatabaseStore:
                 if expected_revision == 0:
                     session.add(
                         TableSettingsRow(
-                            id=TABLE_SETTINGS_ID,
+                            id=table_id,
                             revision=1,
                             settings=document,
                             updated_at=now,
@@ -1141,7 +1287,7 @@ class DatabaseStore:
                     result = await session.execute(
                         update(TableSettingsRow)
                         .where(
-                            TableSettingsRow.id == TABLE_SETTINGS_ID,
+                            TableSettingsRow.id == table_id,
                             TableSettingsRow.revision == expected_revision,
                         )
                         .values(
@@ -1171,6 +1317,7 @@ class DatabaseStore:
             await session.execute(delete(ComparisonGameRow))
             await session.execute(delete(MatchRow))
             await session.execute(delete(TableSettingsRow))
+            await session.execute(delete(MemberRow))
 
     async def _record_comparison(self, session: AsyncSession, game: GameSession) -> None:
         row = await session.get(ComparisonGameRow, (game.id, game.generation))
@@ -1202,6 +1349,7 @@ class DatabaseStore:
     @staticmethod
     def _match_values(game: GameSession) -> dict[str, object]:
         return {
+            "owner_id": game.owner_id,
             "lifecycle": game.lifecycle.value,
             "opponent": game.opponent.value,
             "stockfish_elo": game.stockfish_elo,
@@ -1322,6 +1470,7 @@ class DatabaseStore:
             raise RuntimeError(f"Persisted projection for {row.id} does not match move history.")
         return GameSession(
             id=row.id,
+            owner_id=row.owner_id,
             opponent=OpponentKind(row.opponent),
             stockfish_elo=row.stockfish_elo,
             engine_move_time_ms=row.engine_move_time_ms,

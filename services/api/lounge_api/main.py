@@ -7,7 +7,16 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -15,7 +24,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .adapters import AdapterConfigurationError
-from .deployment_guard import require_local_runtime
+from .deployment_guard import deployment_mode, require_supported_runtime
 from .domain import ClockExpired, MatchTransitionRejected, MoveRejected, StalePosition
 from .engine import EngineFailure
 from .experiment_metrics import ExperimentMetrics
@@ -23,6 +32,14 @@ from .experiment_queue import QueueConflict
 from .experiment_reports import ExperimentReports, ReportConflict, ReportTooLarge
 from .experiment_worker import ExperimentWorker
 from .experiments import ExperimentService, PlanConfiguration, SaveExperiment
+from .hosted_auth import (
+    HostedAccessMiddleware,
+    HostedSettings,
+    Identity,
+    LiveTickets,
+    TokenVerifier,
+    normalize_email,
+)
 from .leaderboards import Leaderboards
 from .manager import AnalysisSuperseded, GameManager, GameNotFound
 from .models import (
@@ -50,7 +67,7 @@ from .models import (
     SeatTakeoverRequest,
 )
 from .operations import LocalOperations, OperationsMiddleware, Readiness
-from .persistence import ConcurrentGameUpdate, IdempotencyConflict
+from .persistence import ANY_OWNER, TABLE_SETTINGS_ID, ConcurrentGameUpdate, IdempotencyConflict
 from .player_protocol import PROTOCOL_VERSION
 from .private_network import NetworkSettings, PrivateNetworkMiddleware
 from .public_files import public_path
@@ -79,6 +96,14 @@ class CreateExperimentRun(BaseModel):
     concurrency: int = Field(default=1, ge=1, le=4)
 
 
+class MemberUpdate(BaseModel):
+    role: Literal["player", "admin"] = "player"
+
+
+# Seats a hosted player may use: their own moves against the server's Stockfish.
+HOSTED_ADAPTERS = frozenset({"human", "stockfish"})
+
+
 class ControlExperimentRun(BaseModel):
     target: Literal["running", "paused", "cancelled"]
     expected_revision: int = Field(ge=0)
@@ -86,20 +111,28 @@ class ControlExperimentRun(BaseModel):
 
 
 def create_app(game_manager: GameManager | None = None) -> FastAPI:
+    mode = deployment_mode()
+    # Hosted mode needs complete identity configuration before anything is built.
+    hosted = HostedSettings.from_environment() if mode == "hosted" else None
     network = NetworkSettings.from_environment()
     active_manager = game_manager or GameManager()
+    tickets = LiveTickets()
 
     batch_worker = ExperimentWorker(active_manager)
     export_slots = asyncio.Semaphore(2)
     single_game_creation = asyncio.Lock()
     operations = LocalOperations()
-    readiness = Readiness(active_manager, batch_worker)
+    # The batch worker (Model Lab) is not part of the hosted release.
+    readiness = Readiness(active_manager, batch_worker, worker_required=hosted is None)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        require_local_runtime()
+        require_supported_runtime()
         await active_manager.start()
-        batch_worker.start()
+        if hosted is not None:
+            await active_manager.store.ensure_admins(hosted.admin_emails)
+        else:
+            batch_worker.start()
         readiness.started = True
         try:
             yield
@@ -119,13 +152,110 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     application.add_middleware(OperationsMiddleware, operations=operations)
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=list(network.origins),
+        allow_origins=[hosted.public_origin] if hosted else list(network.origins),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    if network.mode != "local":
+    if hosted is not None:
+        application.add_middleware(
+            HostedAccessMiddleware,
+            settings=hosted,
+            verifier=TokenVerifier(hosted),
+            tickets=tickets,
+            member_role=active_manager.store.member_role,
+            match_owner=active_manager.store.match_owner,
+        )
+    elif network.mode != "local":
         application.add_middleware(PrivateNetworkMiddleware, settings=network)
+
+    def identity_of(request: Request | WebSocket) -> Identity | None:
+        return getattr(request.state, "identity", None)
+
+    def owner_scope(request: Request) -> object:
+        """Hosted: the signed-in player's own table. Local: the one shared table."""
+        identity = identity_of(request)
+        return identity.user_id if hosted is not None and identity else ANY_OWNER
+
+    def table_id(request: Request) -> str:
+        identity = identity_of(request)
+        return identity.user_id if hosted is not None and identity else TABLE_SETTINGS_ID
+
+    def require_hosted_seats(*players) -> None:
+        if hosted is None:
+            return
+        for player in players:
+            if player is not None and player.adapter_id not in HOSTED_ADAPTERS:
+                raise HTTPException(
+                    status_code=422,
+                    detail="The hosted Lounge offers human and Stockfish seats only.",
+                )
+
+    @application.get("/api/auth/config")
+    async def auth_config() -> dict[str, object]:
+        if hosted is None:
+            return {"mode": "local"}
+        return {
+            "mode": "hosted",
+            "supabase_url": hosted.supabase_url,
+            "publishable_key": hosted.publishable_key,
+            "providers": list(hosted.providers),
+        }
+
+    @application.get("/api/auth/me")
+    async def auth_me(request: Request) -> dict[str, object]:
+        identity = identity_of(request)
+        if identity is None:
+            return {"mode": "local"}
+        return {"mode": "hosted", "email": identity.email, "role": identity.role}
+
+    @application.post("/api/ws-ticket")
+    async def ws_ticket(request: Request) -> dict[str, str]:
+        identity = identity_of(request)
+        if identity is None:
+            raise HTTPException(status_code=404, detail="Not available in local mode.")
+        return {"ticket": tickets.issue(identity)}
+
+    @application.get("/api/admin/members")
+    async def list_members() -> list[dict[str, object]]:
+        if hosted is None:
+            raise HTTPException(status_code=404, detail="Not available in local mode.")
+        members = await active_manager.store.list_members()
+        for member in members:
+            member["configured_admin"] = member["email"] in hosted.admin_emails
+        return members
+
+    @application.put("/api/admin/members/{email}", status_code=204)
+    async def invite_member(email: str, update: MemberUpdate, request: Request) -> Response:
+        identity = identity_of(request)
+        if hosted is None or identity is None:
+            raise HTTPException(status_code=404, detail="Not available in local mode.")
+        try:
+            address = normalize_email(email)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if address in hosted.admin_emails and update.role != "admin":
+            raise HTTPException(status_code=409, detail="Configured admins stay admins.")
+        await active_manager.store.invite_member(
+            address, role=update.role, invited_by=identity.email
+        )
+        return Response(status_code=204)
+
+    @application.delete("/api/admin/members/{email}", status_code=204)
+    async def revoke_member(email: str) -> Response:
+        if hosted is None:
+            raise HTTPException(status_code=404, detail="Not available in local mode.")
+        try:
+            address = normalize_email(email)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if address in hosted.admin_emails:
+            raise HTTPException(
+                status_code=409, detail="Configured admins are removed in the deployment settings."
+            )
+        if not await active_manager.store.revoke_member(address):
+            raise HTTPException(status_code=404, detail="No such member.")
+        return Response(status_code=204)
 
     @application.get("/api/leaderboards")
     async def get_leaderboards(
@@ -271,8 +401,8 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @application.get("/api/table-settings", response_model=TableSettingsResponse)
-    async def get_table_settings() -> TableSettingsResponse:
-        stored = await active_manager.store.load_table_settings()
+    async def get_table_settings(request: Request) -> TableSettingsResponse:
+        stored = await active_manager.store.load_table_settings(table_id(request))
         if stored is None:
             return TableSettingsResponse(
                 revision=0, updated_at=UNSAVED_UPDATED_AT, settings=TableSettings.defaults()
@@ -281,10 +411,12 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         return TableSettingsResponse(revision=revision, updated_at=updated_at, settings=settings)
 
     @application.put("/api/table-settings", response_model=TableSettingsResponse)
-    async def put_table_settings(request: TableSettingsUpdate) -> TableSettingsResponse:
+    async def put_table_settings(
+        request: TableSettingsUpdate, http: Request
+    ) -> TableSettingsResponse:
         try:
             revision, updated_at = await active_manager.store.save_table_settings(
-                request.settings, expected_revision=request.revision
+                request.settings, expected_revision=request.revision, table_id=table_id(http)
             )
         except TableSettingsConflict:
             raise HTTPException(
@@ -297,10 +429,10 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
 
     @application.get("/api/player-adapters")
     async def player_adapters() -> dict[str, object]:
-        return {
-            "protocol_version": PROTOCOL_VERSION,
-            "adapters": active_manager.adapters.catalog(),
-        }
+        catalog = active_manager.adapters.catalog()
+        if hosted is not None:
+            catalog = [item for item in catalog if item["adapter_id"] in HOSTED_ADAPTERS]
+        return {"protocol_version": PROTOCOL_VERSION, "adapters": catalog}
 
     @application.get("/api/player-adapters/reliability")
     async def player_adapter_reliability() -> dict[str, object]:
@@ -426,10 +558,16 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @application.post("/api/games", response_model=GameSnapshot, status_code=201)
-    async def create_game(request: CreateGameRequest) -> GameSnapshot:
+    async def create_game(request: CreateGameRequest, http: Request) -> GameSnapshot:
+        require_hosted_seats(request.white_player, request.black_player)
+        identity = identity_of(http)
         try:
             async with single_game_creation:
-                if request.single_game and await active_manager.latest_live_snapshot() is not None:
+                # Hosted: one live match per player, always; locally only when asked.
+                if (request.single_game or hosted is not None) and (
+                    await active_manager.latest_live_snapshot(owner_id=owner_scope(http))
+                    is not None
+                ):
                     raise HTTPException(
                         status_code=409,
                         detail=(
@@ -437,7 +575,16 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
                             "before starting another."
                         ),
                     )
-                game = await active_manager.create(request)
+                if hosted is not None and (
+                    len(await active_manager.store.latest_live_match_ids()) >= hosted.max_live_games
+                ):
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Every table is busy right now. Try again in a few minutes.",
+                    )
+                game = await active_manager.create(
+                    request, owner_id=identity.user_id if hosted is not None and identity else None
+                )
         except HTTPException:
             raise
         except (AdapterConfigurationError, ValueError) as exc:
@@ -447,8 +594,8 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         return await active_manager.snapshot(game.id)
 
     @application.get("/api/live-match", response_model=GameSnapshot)
-    async def get_live_match() -> GameSnapshot:
-        snapshot = await active_manager.latest_live_snapshot()
+    async def get_live_match(request: Request) -> GameSnapshot:
+        snapshot = await active_manager.latest_live_snapshot(owner_id=owner_scope(request))
         if snapshot is None:
             raise HTTPException(status_code=404, detail="No match is live.")
         return snapshot
@@ -513,10 +660,12 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @application.post("/api/games/{game_id}/reset", response_model=GameSnapshot)
-    async def reset_game(game_id: str) -> GameSnapshot:
+    async def reset_game(game_id: str, request: Request) -> GameSnapshot:
         try:
             async with single_game_creation:
-                blocking = await active_manager.latest_live_snapshot(exclude_game_id=game_id)
+                blocking = await active_manager.latest_live_snapshot(
+                    exclude_game_id=game_id, owner_id=owner_scope(request)
+                )
                 if blocking:
                     raise HTTPException(
                         status_code=409,
@@ -625,6 +774,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     async def change_seat(game_id: str, color: str, request: SeatTakeoverRequest) -> GameSnapshot:
         if color not in {"white", "black"}:
             raise HTTPException(status_code=422, detail="Color must be white or black.")
+        require_hosted_seats(request.player)
         try:
             return await active_manager.change_seat(
                 game_id, color, request.player, request.expected_revision

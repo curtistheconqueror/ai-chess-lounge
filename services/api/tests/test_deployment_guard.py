@@ -87,6 +87,9 @@ def test_schema_verification_reads_all_heads_and_required_columns(tmp_path, monk
                     await connection.execute(text("DROP TABLE comparison_games"))
                 elif failure == "missing_column":
                     await connection.execute(text("ALTER TABLE matches DROP COLUMN consultations"))
+                elif failure == "missing_ownership":
+                    await connection.execute(text("DROP INDEX ix_matches_owner_id"))
+                    await connection.execute(text("ALTER TABLE matches DROP COLUMN owner_id"))
                 before = list(
                     (
                         await connection.execute(
@@ -95,14 +98,12 @@ def test_schema_verification_reads_all_heads_and_required_columns(tmp_path, monk
                     ).all()
                 )
             monkeypatch.setenv("LOUNGE_DEPLOYMENT", "hosted")
+            monkeypatch.setenv("LOUNGE_HOSTED_MODE", "1")
             if failure == "none":
                 await store.validate_existing_schema(SCHEMA_REVISION)
             else:
                 with pytest.raises(RuntimeError, match="schema"):
-                    await store.validate_existing_schema(
-                        SCHEMA_REVISION,
-                        {"matches": {"owner_id"}} if failure == "missing_ownership" else None,
-                    )
+                    await store.validate_existing_schema(SCHEMA_REVISION)
             async with store.engine.connect() as connection:
                 after = list(
                     (
@@ -112,7 +113,7 @@ def test_schema_verification_reads_all_heads_and_required_columns(tmp_path, monk
                     ).all()
                 )
             assert before == after
-            # Read-only schema success must never unlock this unfinished hosted build.
+            # Read-only schema success never unlocks hosted mode without identity config.
             with pytest.raises(RuntimeError, match="Hosted startup"):
                 await store.initialize()
         finally:
