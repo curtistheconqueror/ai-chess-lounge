@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { SoundLab } from "./SoundLab";
 import { BoardStudio } from "./BoardStudio";
+import { AuthGate } from "./AuthGate";
 import "./styles.css";
 import "./workspace.css";
 
@@ -17,7 +18,9 @@ if ("serviceWorker" in navigator && window.isSecureContext && import.meta.env.PR
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {window.location.pathname === "/sound-lab" ? <SoundLab />
-      : window.location.pathname === "/board-studio" ? <BoardStudio /> : <App />}
+    <AuthGate>
+      {window.location.pathname === "/sound-lab" ? <SoundLab />
+        : window.location.pathname === "/board-studio" ? <BoardStudio /> : <App />}
+    </AuthGate>
   </React.StrictMode>,
 );

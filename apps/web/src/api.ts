@@ -1,3 +1,4 @@
+import { authHeaders, cachedAuthHeaders, hostedMode } from "./auth";
 import { skillValue, type StockfishChoice } from "./StockfishStrength";
 import type { IdentityDeclaration, LeaderboardReport } from "./types";
 import type { Consultation } from "./types";
@@ -32,6 +33,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
+        ...(await authHeaders()),
         ...init?.headers,
       },
     });
@@ -129,13 +131,13 @@ export async function saveTableSettings(revision: number, settings: TableSetting
 /** Fire-and-forget save that survives the page unloading (keepalive), for changes made just before leaving. */
 export function flushTableSettings(revision: number, settings: TableSettings): void {
   void fetch(`${apiBase}/api/table-settings`, {
-    method: "PUT", keepalive: true, cache: "no-store", headers: { "Content-Type": "application/json" },
+    method: "PUT", keepalive: true, cache: "no-store", headers: { "Content-Type": "application/json", ...cachedAuthHeaders() },
     body: JSON.stringify({ revision, settings }),
   }).catch(() => { /* Best effort while the page goes away. */ });
 }
 
 export async function fetchLiveMatch(): Promise<GameSnapshot | null> {
-  const response = await fetch(`${apiBase}/api/live-match`, { cache: "no-store" });
+  const response = await fetch(`${apiBase}/api/live-match`, { cache: "no-store", headers: await authHeaders() });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   return (await response.json()) as GameSnapshot;
@@ -241,14 +243,15 @@ export function retryAgentTurn(gameId: string): Promise<GameSnapshot> {
   return request<GameSnapshot>(`/api/games/${gameId}/retry-agent`, { method: "POST" });
 }
 
-export function websocketUrl(gameId: string): string {
-  if (apiBase) {
-    const url = new URL(apiBase, window.location.href);
-    const protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${url.host}/ws/games/${gameId}`;
-  }
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/ws/games/${gameId}`;
+/** The live-updates address for a game. On the hosted Lounge it carries a one-time
+ *  ticket, because a browser cannot send its sign-in with a WebSocket. */
+export async function gameSocketUrl(gameId: string): Promise<string> {
+  const base = apiBase ? new URL(apiBase, window.location.href) : window.location;
+  const protocol = base.protocol === "https:" ? "wss:" : "ws:";
+  const url = `${protocol}//${base.host}/ws/games/${gameId}`;
+  if (!hostedMode()) return url;
+  const { ticket } = await request<{ ticket: string }>("/api/ws-ticket", { method: "POST" });
+  return `${url}?ticket=${encodeURIComponent(ticket)}`;
 }
 
 export function revokeRunnerSession(sessionId: string): Promise<void> {

@@ -88,7 +88,7 @@ class HostedSettings:
             emails = frozenset()
         if not emails:
             problems.append("LOUNGE_ADMIN_EMAILS")
-        if not database.startswith("postgresql+asyncpg://"):
+        if not database.startswith(("postgresql+asyncpg://", "postgresql://", "postgres://")):
             problems.append("DATABASE_URL (PostgreSQL)")
         providers = tuple(
             item.strip()

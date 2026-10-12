@@ -77,7 +77,8 @@ summary:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid
   .control-deck { padding: 16px; }
   .topbar-actions { gap: 6px; }
   .topbar-actions .ghost-button, .topbar-actions .gold-ghost-button { padding: 9px; font-size: .62rem; }
-  .topbar-actions .connection { margin-left: auto; }
+  /* The status badge gives up a few pixels before the menu is pushed off a 320px screen. */
+  .topbar-actions .connection { margin-left: auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .board-play-controls { gap: 6px; }
   .player-card { padding: 8px; }
   .telemetry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -247,3 +248,4 @@ summary:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid
 .king-mark.won { background: #f2d27f; color: #1a1408; }
 .king-mark.mated, .king-mark.lost { background: #d64848; color: #fff; }
 .king-mark.draw { background: #9fb0a5; color: #10170f; }
+.menu-account { display: block; padding: 8px 12px 4px; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }

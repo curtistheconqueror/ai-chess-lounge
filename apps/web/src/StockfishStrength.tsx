@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { authHeaders } from "./auth";
 import type { GameSnapshot } from "./types";
 
 export type StockfishChoice = number | "full" | `skill:${number}`;
@@ -40,7 +41,8 @@ export function useStockfishCapabilities() {
   const [caps, setCaps] = useState<StockfishCapabilities | null>(null);
   useEffect(() => {
     const controller = new AbortController();
-    void fetch(`${import.meta.env.VITE_API_BASE ?? ""}/api/engine/strength`, { signal: controller.signal })
+    void authHeaders()
+      .then(headers => fetch(`${import.meta.env.VITE_API_BASE ?? ""}/api/engine/strength`, { signal: controller.signal, headers }))
       .then(response => { if (!response.ok) throw new Error("Engine unavailable"); return response.json(); })
       .then(setCaps).catch(() => { /* The control explains missing runtime information. */ });
     return () => controller.abort();

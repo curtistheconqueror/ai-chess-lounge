@@ -25,6 +25,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://lounge:lounge@postgres:5432/lounge
       LOUNGE_DEPLOYMENT: local
+      LOUNGE_HOSTED_MODE: "0"
       STOCKFISH_PATH: /usr/games/stockfish
     depends_on:
       postgres:
