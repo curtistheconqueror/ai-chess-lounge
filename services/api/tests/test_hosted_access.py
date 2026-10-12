@@ -226,10 +226,10 @@ def test_hosted_seats_and_provider_actions_are_limited(hosted):
         "display_name": "Bot",
         "provider": "local",
         "model": "deterministic-v1",
-        "connection_mode": "local_engine",
+        "connection_mode": "local",
     }
     rejected = new_game(hosted, "token-bob", black_player=scripted)
-    assert rejected.status_code == 422
+    assert rejected.status_code == 422 and "human and Stockfish" in rejected.json()["detail"]
     adapters = hosted.get("/api/player-adapters", headers=auth("token-bob")).json()["adapters"]
     assert {item["adapter_id"] for item in adapters} <= {"human", "stockfish"}
     game = new_game(hosted, "token-bob").json()
@@ -312,12 +312,18 @@ def test_token_verifier_checks_signature_audience_issuer_and_expiry(monkeypatch)
         "aud": "authenticated",
         "iss": settings.issuer,
         "exp": now + 600,
+        "amr": [{"method": "otp", "timestamp": now}],
     }
 
     def token(claims, key=private):
         return jwt.encode(claims, key, algorithm="ES256")
 
     assert asyncio.run(verifier.verify(token(good))) == ("user-1", "bob@example.com")
+    confirmed = {**good, "amr": [{"method": "password"}], "user_metadata": {"email_verified": True}}
+    assert asyncio.run(verifier.verify(token(confirmed)))[1] == "bob@example.com"
+    assert (
+        asyncio.run(verifier.verify(token({**good, "amr": [{"method": "oauth"}]})))[0] == "user-1"
+    )
     other = ec.generate_private_key(ec.SECP256R1())
     for bad, key in (
         ({**good, "aud": "anon"}, private),
@@ -327,6 +333,9 @@ def test_token_verifier_checks_signature_audience_issuer_and_expiry(monkeypatch)
         ({**good, "role": "anon"}, private),
         ({k: v for k, v in good.items() if k != "email"}, private),
         (good, other),
+        # A password account whose address was never confirmed cannot claim an invite.
+        ({**good, "amr": [{"method": "password", "timestamp": now}]}, private),
+        ({**good, "amr": [], "user_metadata": {"email_verified": False}}, private),
     ):
         with pytest.raises(InvalidToken):
             asyncio.run(verifier.verify(token(bad, key)))
@@ -361,3 +370,101 @@ def test_existing_local_database_gains_the_owner_column(tmp_path, monkeypatch):
         assert db.execute("SELECT version_num FROM alembic_version").fetchall() == [
             ("0014_hosted_members",)
         ]
+
+
+def test_hosted_tables_need_a_person_and_a_quick_engine(hosted):
+    invite(hosted, "bob@example.com")
+    engine = {
+        "adapter_id": "stockfish",
+        "display_name": "Stockfish",
+        "provider": "stockfish",
+        "model": "stockfish",
+        "connection_mode": "local",
+    }
+    both = new_game(
+        hosted,
+        "token-bob",
+        white_player={**engine, "settings": {"target_elo": 3200}},
+        black_player={**engine, "settings": {"target_elo": 3200}},
+    )
+    assert both.status_code == 422 and "person" in both.json()["detail"]
+    slow = new_game(hosted, "token-bob", engine_move_time_ms=10_000)
+    assert slow.status_code == 422 and "one second" in slow.json()["detail"]
+    game = new_game(hosted, "token-bob").json()
+    # Swapping the human seat for a second engine is refused too.
+    takeover = hosted.post(
+        f"/api/games/{game['id']}/seats/white",
+        headers=auth("token-bob"),
+        json={
+            "player": {**engine, "settings": {"target_elo": 1600}},
+            "expected_revision": game["revision"],
+        },
+    )
+    assert takeover.status_code == 422
+
+
+def test_rate_body_and_header_limits(hosted, monkeypatch):
+    invite(hosted, "bob@example.com")
+    huge = hosted.post(
+        "/api/games",
+        headers={**auth("token-bob"), "content-type": "application/json"},
+        content=b"{" + b" " * (hosted_auth.MAX_BODY_BYTES + 10) + b"}",
+    )
+    assert huge.status_code == 413
+    monkeypatch.setattr(hosted_auth, "CREATE_LIMIT_PER_MINUTE", 2)
+    codes = [new_game(hosted, "token-bob").status_code for _ in range(3)]
+    assert codes[-1] == 429, codes
+    page = hosted.get("/api/health")
+    assert page.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
+    assert page.headers["strict-transport-security"].startswith("max-age=")
+
+
+def test_open_socket_closes_when_access_ends_and_sockets_are_capped(tmp_path, monkeypatch):
+    from lounge_api import main as main_module
+
+    monkeypatch.setattr(main_module, "SOCKET_RECHECK_SECONDS", 0.2)
+    with build_hosted(tmp_path, monkeypatch) as client:
+        invite(client, "bob@example.com")
+        game = new_game(client, "token-bob").json()
+        url = f"/ws/games/{game['id']}"
+
+        def connect():
+            ticket = client.post("/api/ws-ticket", headers=auth("token-bob")).json()["ticket"]
+            return client.websocket_connect(f"{url}?ticket={ticket}", headers={"origin": ORIGIN})
+
+        with connect() as socket:
+            socket.receive_json()
+            assert (
+                client.delete(
+                    "/api/admin/members/bob@example.com", headers=auth("token-admin")
+                ).status_code
+                == 204
+            )
+            with pytest.raises(WebSocketDisconnect) as closed:
+                for _ in range(20):
+                    socket.receive_json()
+            assert closed.value.code == 1008
+        invite(client, "bob@example.com")
+        monkeypatch.setattr(main_module, "HOSTED_SOCKETS_PER_PLAYER", 1)
+        with connect() as first:
+            first.receive_json()
+            with pytest.raises(WebSocketDisconnect):
+                with connect() as second:
+                    second.receive_json()
+
+
+def test_admin_binding_can_be_reset_for_one_deploy(tmp_path, monkeypatch):
+    with build_hosted(tmp_path, monkeypatch) as client:
+        assert client.get("/api/auth/me", headers=auth("token-admin")).status_code == 200
+    ACCOUNTS["token-admin-recreated"] = ("55555555-5555-5555-5555-555555555555", ADMIN)
+    try:
+        monkeypatch.setenv("LOUNGE_ADMIN_REBIND", "1")
+        database = f"sqlite+aiosqlite:///{tmp_path / 'hosted.db'}"
+        manager = GameManager(engine=FakeEngine(), store=DatabaseStore(database))
+        with TestClient(create_app(manager), base_url=ORIGIN) as client:
+            assert (
+                client.get("/api/auth/me", headers=auth("token-admin-recreated")).status_code == 200
+            )
+    finally:
+        del ACCOUNTS["token-admin-recreated"]

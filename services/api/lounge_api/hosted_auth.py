@@ -40,6 +40,17 @@ HOSTED_BLOCKED_ACTIONS = re.compile(
 )
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 TICKET_SECONDS = 30
+MAX_BODY_BYTES = 64 * 1024
+# Per-player request budgets (sliding 60 s windows) for changes, and for new games.
+WRITE_LIMIT_PER_MINUTE = 90
+CREATE_LIMIT_PER_MINUTE = 6
+SECURITY_HEADERS = [
+    (b"x-frame-options", b"DENY"),
+    (b"content-security-policy", b"frame-ancestors 'none'"),
+    (b"x-content-type-options", b"nosniff"),
+    (b"referrer-policy", b"strict-origin-when-cross-origin"),
+    (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
+]
 
 
 def normalize_email(value: str) -> str:
@@ -128,7 +139,11 @@ class TokenVerifier:
 
     def __init__(self, settings: HostedSettings):
         self.settings = settings
-        self._keys = jwt.PyJWKClient(settings.jwks_url, cache_keys=True, lifespan=600)
+        # The key set is cached for 10 minutes; individual keys are not cached forever,
+        # so a key Supabase rotates out stops being trusted.
+        self._keys = jwt.PyJWKClient(
+            settings.jwks_url, cache_keys=False, cache_jwk_set=True, lifespan=600, timeout=5
+        )
 
     async def verify(self, token: str) -> tuple[str, str]:
         try:
@@ -147,10 +162,44 @@ class TokenVerifier:
         email = claims.get("email")
         if claims.get("role") != "authenticated" or claims.get("is_anonymous") or not email:
             raise InvalidToken
+        if not _email_proven(claims):
+            raise InvalidToken
         try:
             return str(claims["sub"]), normalize_email(str(email))
         except ValueError as exc:
             raise InvalidToken from exc
+
+
+def _email_proven(claims: dict) -> bool:
+    """The address was proven: confirmed, or signed in by link/code or a provider.
+
+    Defense in depth beside Supabase's "Confirm email" setting: a password account
+    whose address was never confirmed cannot claim an invitation.
+    """
+    metadata = claims.get("user_metadata")
+    if isinstance(metadata, dict) and metadata.get("email_verified") is True:
+        return True
+    methods = {item.get("method") for item in claims.get("amr") or [] if isinstance(item, dict)}
+    return bool(methods & {"otp", "magiclink", "oauth"})
+
+
+class RateLimiter:
+    """Small in-memory sliding-window limiter (one machine, see ADR0043)."""
+
+    def __init__(self) -> None:
+        self._hits: dict[str, list[float]] = {}
+
+    def allow(self, key: str, limit: int, window: float = 60.0) -> bool:
+        now = time.monotonic()
+        hits = [t for t in self._hits.get(key, ()) if now - t < window]
+        if len(hits) >= limit:
+            self._hits[key] = hits
+            return False
+        hits.append(now)
+        self._hits[key] = hits
+        if len(self._hits) > 10_000:  # forget idle keys
+            self._hits = {k: v for k, v in self._hits.items() if v and now - v[-1] < window}
+        return True
 
 
 class LiveTickets:
@@ -196,10 +245,13 @@ class HostedAccessMiddleware:
     ):
         self.app, self.settings, self.verifier, self.tickets = app, settings, verifier, tickets
         self.member_role, self.match_owner = member_role, match_owner
+        self.limits = RateLimiter()
 
     async def __call__(self, scope, receive, send):
         if scope["type"] not in {"http", "websocket"}:
             return await self.app(scope, receive, send)
+        if scope["type"] == "http":
+            send = _with_security_headers(send)
         path = scope.get("path", "")
         if not path.startswith(("/api", "/ws", "/docs", "/redoc", "/openapi")):
             return await self.app(scope, receive, send)  # the web app itself
@@ -229,6 +281,19 @@ class HostedAccessMiddleware:
             )
         if path.startswith("/api/admin/") and not identity.admin:
             return await self._deny(scope, receive, send, 403, "Admins only.")
+        method = scope.get("method", "GET")
+        if scope["type"] == "http" and method not in {"GET", "HEAD", "OPTIONS"}:
+            length = headers.get("content-length", "0")
+            if not length.isdigit() or int(length) > MAX_BODY_BYTES:
+                return await self._deny(scope, receive, send, 413, "Request too large.")
+            creating = path == "/api/games" and method == "POST"
+            if not self.limits.allow(f"write:{identity.user_id}", WRITE_LIMIT_PER_MINUTE) or (
+                creating
+                and not self.limits.allow(f"create:{identity.user_id}", CREATE_LIMIT_PER_MINUTE)
+            ):
+                return await self._deny(
+                    scope, receive, send, 429, "Too many actions at once. Wait a moment."
+                )
         if game is not None:
             exists, owner = await self.match_owner(game.group(1))
             # Unowned (pre-hosting) games belong to the admins. Never reveal others' games.
@@ -259,6 +324,14 @@ class HostedAccessMiddleware:
             return "not-invited"
         return Identity(user_id=user_id, email=email, role=role)
 
+    async def still_allowed(self, identity: Identity, game_id: str) -> bool:
+        """Re-check an open socket: still a member, still allowed on this game."""
+        role = await self.member_role(identity.email, identity.user_id)
+        if role is None:
+            return False
+        exists, owner = await self.match_owner(game_id)
+        return exists and (role == "admin" or owner == identity.user_id)
+
     @staticmethod
     async def _deny(scope, receive, send, status: int, detail: str):
         if scope["type"] == "websocket":
@@ -267,3 +340,21 @@ class HostedAccessMiddleware:
         await JSONResponse(
             {"detail": detail}, status_code=status, headers={"Cache-Control": "no-store"}
         )(scope, receive, send)
+
+
+def _with_security_headers(send):
+    """Hosted responses refuse framing (clickjacking) and insist on HTTPS."""
+
+    async def wrapped(message):
+        if message["type"] == "http.response.start":
+            present = {name.lower() for name, _ in message.get("headers", [])}
+            message = {
+                **message,
+                "headers": [
+                    *message.get("headers", []),
+                    *[(name, value) for name, value in SECURITY_HEADERS if name not in present],
+                ],
+            }
+        await send(message)
+
+    return wrapped

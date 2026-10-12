@@ -1090,8 +1090,12 @@ class DatabaseStore:
             return (False, None) if row is None else (True, row[0])
 
     # --- hosted members ---------------------------------------------------------
-    async def ensure_admins(self, emails: frozenset[str]) -> None:
-        """Configured admins are always active admins (never revoked from the UI)."""
+    async def ensure_admins(self, emails: frozenset[str], *, rebind: bool = False) -> None:
+        """Configured admins are always active admins (never revoked from the UI).
+
+        ``rebind`` clears their account binding so a recreated sign-in account can
+        claim the address again (set LOUNGE_ADMIN_REBIND=1 for one deploy).
+        """
         await self.initialize()
         now = datetime.now(UTC)
         async with self.sessions.begin() as session:
@@ -1109,8 +1113,11 @@ class DatabaseStore:
                             updated_at=now,
                         )
                     )
-                elif row.role != "admin" or row.status != "active":
-                    row.role, row.status, row.updated_at = "admin", "active", now
+                else:
+                    if row.role != "admin" or row.status != "active":
+                        row.role, row.status, row.updated_at = "admin", "active", now
+                    if rebind and row.user_id is not None:
+                        row.user_id, row.updated_at = None, now
 
     async def member_role(self, email: str, user_id: str) -> str | None:
         """The role of an active member, binding the account id on first sign-in."""

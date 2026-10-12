@@ -1,5 +1,48 @@
 # AI Chess Lounge contributor pickup
 
+## October 12 - Phase 2 hosted Lounge (in progress, branch feat/hosted-fly-supabase, PR #37)
+
+**Owner decisions:**
+- Host: Fly.io, with the existing Supabase project `ai-chess-lounge` (ref
+  krkjhkhkgackragoclul, us-east-1, Postgres 17; the org is on Pro).
+- Access: invite-only.
+- Sign-in: email magic link, Google and GitHub.
+- The 17 pre-hosting test games are kept and are visible to admins only.
+- Admin: curtistheconqueror@gmail.com.
+
+**Built** (ADR0043, runbook `docs/HOSTING_FLY.md`):
+- Fail-closed hosted mode:
+  - The server verifies Supabase JWTs against the project's JWKS (ES256).
+  - `lounge_members` invite list, with account binding on first sign-in.
+  - Ownership middleware on every game route and socket.
+  - One-time WebSocket tickets.
+- Per-player tables and settings, one live game per player, and a global cap.
+- Hosted seats are human vs Stockfish only.
+- Migration 0014 (RLS enabled on new Postgres tables). Local databases gain
+  `owner_id` in place; the private DB is stamped 0012 and its copy upgraded fine.
+- Web:
+  - AuthGate (lazy supabase-js chunk), sign-in / not-invited screens.
+  - Account menu and admin Players page.
+  - Tokens on every API call.
+- `fly.toml`: one always-on shared-cpu-2x/2 GB machine in iad; the release command
+  runs Alembic. Non-root Dockerfile.
+
+**Verified:**
+- API suite passes, including `test_hosted_access.py`.
+- Local e2e: 349 passed.
+- `hosted-auth.spec.ts`: 20/20.
+- Migration up/down/up on SQLite.
+
+**Owner steps before first deploy:**
+- Create a Fly account and app.
+- Set the `DATABASE_URL` secret.
+- Supabase Site URL and redirect URLs.
+- Google and GitHub OAuth apps, configured in Supabase.
+
+**Next:**
+- Security review findings, then rate limits.
+- First deploy and on-Fly smoke tests: desktop, phone, reconnect, load.
+
 ## October 11 - Phase 1 self-hosting reliability (background service)
 
 The owner ended the private server to free memory and found the board stayed down

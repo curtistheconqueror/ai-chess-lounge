@@ -29,4 +29,5 @@ RUN useradd --system --no-create-home --shell /usr/sbin/nologin lounge
 USER lounge
 
 EXPOSE 8000
-CMD ["uvicorn", "lounge_api.main:app", "--app-dir", "services/api", "--host", "0.0.0.0", "--port", "8000"]
+# No access log: WebSocket tickets travel in the query string.
+CMD ["uvicorn", "lounge_api.main:app", "--app-dir", "services/api", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

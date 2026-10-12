@@ -38,7 +38,8 @@ details or handle passwords.
 4. **Supabase sign-in settings** (Authentication in the Supabase dashboard):
    - URL Configuration → Site URL: `https://ai-chess-lounge.fly.dev`; Redirect URLs:
      add `https://ai-chess-lounge.fly.dev/**`.
-   - Sign In / Providers → Email: enabled (magic link).
+   - Sign In / Providers → Email: enabled, with **Confirm email ON** (it is today).
+     The server also refuses accounts whose address was never proven.
    - Google: create an OAuth client in Google Cloud Console (Web application),
      authorized redirect URI `https://krkjhkhkgackragoclul.supabase.co/auth/v1/callback`,
      then paste its client ID and secret into the Google provider.
@@ -63,9 +64,18 @@ details or handle passwords.
 - Logs: `fly logs`. Status: `fly status`. Restart: `fly machine restart`.
 - Backups: Supabase Pro takes daily backups (7 days).
 
+## Recovering the admin account
+
+If the owner's sign-in account is deleted and recreated, the admin address stays
+bound to the old account. Deploy once with `fly secrets set LOUNGE_ADMIN_REBIND=1`,
+sign in, then `fly secrets unset LOUNGE_ADMIN_REBIND`.
+
 ## Limits
 
 - One machine: a crash or deploy briefly disconnects boards; games resume.
 - Supabase's built-in email sends only a few sign-in links per hour. For more
   players, add custom SMTP in Supabase or rely on Google and GitHub sign-in.
-- Hosted seats are human and Stockfish only (ADR0043).
+- Hosted seats are human and Stockfish only, a person plays at least one side, and
+  Stockfish thinks at most one second per move (the engine is shared).
+- Per player: 90 changes and 6 new games per minute, 4 open boards, 64 KB requests.
+- Removed players lose live updates within 10 seconds.

@@ -38,6 +38,13 @@ Model Lab, leaderboards, API docs and provider consultations are not served.
 token in a URL ends up in logs. The page trades its sign-in for a one-time ticket
 (30 s, `POST /api/ws-ticket`) and the socket must also come from the public origin.
 
+**Abuse limits** (from the security review): a person plays at least one side and
+the shared Stockfish thinks at most one second per move; per player 90 changes and
+6 new games a minute, 4 open sockets and 64 KB request bodies; open sockets
+re-check membership and ownership every 10 seconds; sign-ins must prove the email
+(confirmed, link or provider); hosted responses forbid framing and set HSTS; internal
+error text is not shown; there is no access log (tickets are in socket URLs).
+
 **Fail closed:** hosted startup needs every setting (Supabase URL and public key,
 public origin, admin emails, a PostgreSQL URL) and a schema at exactly the current
 revision; it never creates tables. `LOUNGE_DEPLOYMENT` and `LOUNGE_HOSTED_MODE`
