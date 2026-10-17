@@ -53,6 +53,10 @@ details or handle passwords.
    fly deploy --ha=false
    ```
 
+   On a PC whose antivirus inspects HTTPS (Norton on the owner's PC), Fly's default
+   Depot builder fails with "certificate signed by unknown authority"; add
+   `--remote-only --depot=false` to use Fly's own builder instead.
+
    The release step migrates the database first. Then open
    `https://ai-chess-lounge.fly.dev`, sign in with the admin address, and invite
    players from **Account → Players**.

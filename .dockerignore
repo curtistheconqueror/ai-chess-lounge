@@ -1,11 +1,19 @@
-.git
-.github
-.runtime
-**/.runtime
-.venv
+# Allow-list: only what the Dockerfile builds from is sent to the (remote) builder,
+# so local notes, databases and secrets in the checkout can never be uploaded.
+*
+!Dockerfile
+!requirements.lock
+!alembic.ini
+!services/
+!apps/web/
+
+# Local build and test output inside the allowed folders.
 apps/web/node_modules
 apps/web/dist
+apps/web/test-results*
+apps/web/smoke-out
+apps/web/tsconfig.tsbuildinfo
+**/.runtime
 **/__pycache__
-.pytest_cache
-*.pyc
-.env*
+**/*.pyc
+**/.env*
