@@ -67,6 +67,7 @@ class GameSession:
     initial_time_ms: int = 300_000
     increment_ms: int = 2_000
     id: str = field(default_factory=lambda: str(uuid4()))
+    owner_id: str | None = None
     board: chess.Board = field(default_factory=chess.Board)
     initial_fen: str = chess.STARTING_FEN
     lifecycle: MatchState = MatchState.CREATED

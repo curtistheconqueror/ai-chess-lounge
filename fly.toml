@@ -1,0 +1,51 @@
+# Hosted, invite-only AI Chess Lounge on Fly.io (ADR0043, docs/HOSTING_FLY.md).
+# If you rename the app, change LOUNGE_PUBLIC_ORIGIN to match (https://<app>.fly.dev).
+app = "ai-chess-lounge"
+primary_region = "iad"  # next to the Supabase project in us-east-1
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  # Database changes run once per deploy, before the new version starts.
+  release_command = "python -m alembic upgrade head"
+  strategy = "immediate"
+
+[env]
+  LOUNGE_DEPLOYMENT = "hosted"
+  LOUNGE_HOSTED_MODE = "1"
+  LOUNGE_PUBLIC_ORIGIN = "https://ai-chess-lounge.fly.dev"
+  LOUNGE_ADMIN_EMAILS = "curtistheconqueror@gmail.com"
+  LOUNGE_AUTH_PROVIDERS = "email,google,github"
+  LOUNGE_MAX_LIVE_GAMES = "20"
+  SUPABASE_URL = "https://krkjhkhkgackragoclul.supabase.co"
+  # Public by design (it ships to every browser); access is enforced by the server.
+  SUPABASE_PUBLISHABLE_KEY = "sb_publishable_xDC_MpQlmedhtUrrYUKj5A_2CdPp5sm"
+  STOCKFISH_THREADS = "1"
+  STOCKFISH_HASH_MB = "16"
+  STOCKFISH_IDLE_SECONDS = "300"
+  # DATABASE_URL is a secret: fly secrets set DATABASE_URL=... (never in this file).
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # Live games keep WebSockets and clocks in memory: one machine, always on.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    path = "/api/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"
