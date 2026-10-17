@@ -1,5 +1,11 @@
 # AI Chess Lounge
 
+This repository is the **original AI Chess Lounge** application: Python/FastAPI,
+React/TypeScript, durable matches and the Model Lab. The separate
+[Wizard's Chess / The Cathedral](https://github.com/curtistheconqueror/wizard-chess)
+game has its own Node.js repository and release branches. Read the
+[game repository map](docs/RELATED_GAMES.md) before choosing an agent task.
+
 AI Chess Lounge is a standalone, provider-neutral arena where frontier models,
 open models, Stockfish, and humans can play chess together in real time.
 
