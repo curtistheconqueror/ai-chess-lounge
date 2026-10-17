@@ -39,9 +39,32 @@
 - Supabase Site URL and redirect URLs.
 - Google and GitHub OAuth apps, configured in Supabase.
 
+**Security review (Sonnet 5.5):** no critical or high findings. The 3 medium and 7 low
+findings were fixed in 6268b84.
+
+**Deployed 2026-10-17:**
+- URL: https://ai-chess-lounge.fly.dev. Fly app `ai-chess-lounge`, org
+  CurtisTheConqueror (slug `personal`), one machine in iad, health check passing.
+- The release command migrated Supabase from 0012 to 0014.
+  - All 17 games were kept. They are unowned, so admin-only.
+  - The admin row was bootstrapped.
+  - RLS is on for the new tables. The advisor reports only the intended "RLS
+    enabled, no policy" info.
+- Live checks passed:
+  - the hosted config is served
+  - the game API returns 401 without sign-in
+  - runner routes return 404
+  - security headers are present
+- On the owner's PC, deploy with `--remote-only --depot=false`: Norton's TLS
+  interception breaks the Depot builder.
+- The Docker context is now an allow-list.
+- The Supabase password was set by the owner via `.runtime\db.ps1` (git-ignored; it
+  reads the clipboard).
+
 **Next:**
-- Security review findings, then rate limits.
-- First deploy and on-Fly smoke tests: desktop, phone, reconnect, load.
+- Owner signs in with an email link.
+- Owner enables the Google and GitHub providers.
+- On-Fly smoke tests: desktop, phone, reconnect, load.
 
 ## October 11 - Phase 1 self-hosting reliability (background service)
 
