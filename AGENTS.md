@@ -2,6 +2,12 @@
 
 These rules apply to every coding agent and automated contributor in this repository.
 
+This is the **original AI Chess Lounge** Python/React application. Wizard's Chess /
+The Cathedral is a separate Node.js game in `curtistheconqueror/wizard-chess`.
+Read `docs/RELATED_GAMES.md` when resolving a request that could refer to either
+game. Do not import the cathedral game into `apps/web` or apply its runtime commands
+here. This repository's existing architecture and contribution rules remain in force.
+
 ## Read first
 
 Before changing code, read:

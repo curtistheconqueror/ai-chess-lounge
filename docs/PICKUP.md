@@ -1,5 +1,20 @@
 # AI Chess Lounge contributor pickup
 
+## Repository routing update — 2026-10-17
+
+This handoff belongs to the original Python/React AI Chess Lounge. The separate
+Node.js Wizard's Chess / The Cathedral application is now maintained at
+`curtistheconqueror/wizard-chess`; read `docs/RELATED_GAMES.md` to choose the correct
+project. Its `main`, `develop` and v1.9.3 baseline do not replace this repository's
+stage branches, match records, architecture or pending release work.
+
+This documentation-only contributor branch is based on main commit
+`3b2cb0bd9bf02e130f56d19e6a2995cbf52424dc`. Existing code and historical handoff
+evidence below are preserved. This update performs no merge, deployment, provider
+inference, credential transfer or database migration. The next target for a Wizard
+task is its own handoff; for a Lounge task, continue with this repository's applicable
+stage and release gates. No historical acceptance result is refreshed by this note.
+
 Updated 2026-10-04. Read AGENTS.md, README.md, MASTER_PLAN.md, STAGE_7_MODEL_LAB.md
 and ADRs 0023–0024 before continuing.
 
