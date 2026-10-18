@@ -1,5 +1,136 @@
 # AI Chess Lounge contributor pickup
 
+## October 12 - Phase 2 hosted Lounge (in progress, branch feat/hosted-fly-supabase, PR #37)
+
+**Owner decisions:**
+- Host: Fly.io, with the existing Supabase project `ai-chess-lounge` (ref
+  krkjhkhkgackragoclul, us-east-1, Postgres 17; the org is on Pro).
+- Access: invite-only.
+- Sign-in: email magic link, Google and GitHub.
+- The 17 pre-hosting test games are kept and are visible to admins only.
+- Admin: curtistheconqueror@gmail.com.
+
+**Built** (ADR0043, runbook `docs/HOSTING_FLY.md`):
+- Fail-closed hosted mode:
+  - The server verifies Supabase JWTs against the project's JWKS (ES256).
+  - `lounge_members` invite list, with account binding on first sign-in.
+  - Ownership middleware on every game route and socket.
+  - One-time WebSocket tickets.
+- Per-player tables and settings, one live game per player, and a global cap.
+- Hosted seats are human vs Stockfish only.
+- Migration 0014 (RLS enabled on new Postgres tables). Local databases gain
+  `owner_id` in place; the private DB is stamped 0012 and its copy upgraded fine.
+- Web:
+  - AuthGate (lazy supabase-js chunk), sign-in / not-invited screens.
+  - Account menu and admin Players page.
+  - Tokens on every API call.
+- `fly.toml`: one always-on shared-cpu-2x/2 GB machine in iad; the release command
+  runs Alembic. Non-root Dockerfile.
+
+**Verified:**
+- API suite passes, including `test_hosted_access.py`.
+- Local e2e: 349 passed.
+- `hosted-auth.spec.ts`: 20/20.
+- Migration up/down/up on SQLite.
+
+**Owner steps before first deploy:**
+- Create a Fly account and app.
+- Set the `DATABASE_URL` secret.
+- Supabase Site URL and redirect URLs.
+- Google and GitHub OAuth apps, configured in Supabase.
+
+**Security review (Sonnet 5.5):** no critical or high findings. The 3 medium and 7 low
+findings were fixed in 6268b84.
+
+**Deployed 2026-10-17:**
+- URL: https://ai-chess-lounge.fly.dev. Fly app `ai-chess-lounge`, org
+  CurtisTheConqueror (slug `personal`), one machine in iad, health check passing.
+- The release command migrated Supabase from 0012 to 0014.
+  - All 17 games were kept. They are unowned, so admin-only.
+  - The admin row was bootstrapped.
+  - RLS is on for the new tables. The advisor reports only the intended "RLS
+    enabled, no policy" info.
+- Live checks passed:
+  - the hosted config is served
+  - the game API returns 401 without sign-in
+  - runner routes return 404
+  - security headers are present
+- On the owner's PC, deploy with `--remote-only --depot=false`: Norton's TLS
+  interception breaks the Depot builder.
+- The Docker context is now an allow-list.
+- The Supabase password was set by the owner via `.runtime\db.ps1` (git-ignored; it
+  reads the clipboard).
+
+**Live status (end of 2026-10-17 session):**
+- The owner and the first friend (pythondeuce@gmail.com) have both signed in. Their
+  membership rows are bound to their accounts.
+- The Fly account is still on the trial, so machines stop every 5 minutes ("add a credit
+  card at fly.io/trial"). These are clean SIGINT exits, not crashes. The owner must add
+  a card.
+- Admin invites do not email anyone; the friend needs the URL.
+
+**Owner's actual goal (re-scope):** friends each connect their own agent and play
+agent-vs-agent. An agent may run on a Claude subscription or on API credits. Also
+wanted:
+- Human-vs-human between friends.
+- Always-visible pending states.
+- Any member can challenge any member.
+- Games auto-start, and clocks start after each side's first move (30 s, or the game is
+  aborted).
+- Color choice is a setting; by default the challenger picks, with Random preselected.
+
+**Runner research (2026-10-17):**
+- The pairing/session/grant/audit protocol is cryptographically sound, but every record
+  is single-owner. Pairing, session, grant and audit rows have no owner column.
+- `GET /api/runner-sessions` lists every session; revoke and audit are unscoped.
+- Seat binding is equality on PlayerConfiguration, and the first dispatch wins. A user
+  could therefore seat another user's runner.
+- Matches have one owner controlling both seats.
+- Hosted middleware cannot carry runners as built:
+  - runner bearer tokens collide with the Supabase JWT check;
+  - `/ws/runners` fails the browser Origin and ticket rule.
+- `LOUNGE_RUNNER_SECRET` is unset on Fly, so runner sessions die on every restart.
+- Clients:
+  - The Python and TypeScript SDKs accept https URLs, but their samples are
+    deterministic (no LLM handler).
+  - The MCP facade is loopback-only.
+  - The subscription bridge is Codex-only and POSIX-only (it refuses Windows).
+  - There is no Claude-subscription route. The repo deferred it pending Anthropic's
+    third-party terms. Verify the current terms before building a Claude Code CLI route.
+  - The bridge and MCP read `/api/games` without auth, which returns 401 when hosted.
+- A runner failure pauses a match indefinitely (no forfeit).
+
+**Agreed plan, starting next session:**
+- **Part 1, multiplayer (about 1–1.5 days):**
+  - Per-seat ownership columns on matches: each user controls only their own side,
+    both seat owners can view, no pause in friend games, abort only before first moves.
+  - Presence (last_seen) and a Friends panel showing invited / online / in a game /
+    offline, plus a "joined the Lounge" notice.
+  - Copyable invite link and message.
+  - A challenges table and API: create, accept, decline, cancel. Each side picks human
+    or their own agent.
+  - Incoming and outgoing banners; auto-start with first-move timers.
+  - Color setting; rematch swaps colors.
+- **Part 2, agents (about 1.5–2 days):**
+  - `owner_user_id` on runner pairings and sessions. Owner-scoped list, revoke and
+    audit. Seat binding requires the runner to belong to that seat's user, with the
+    grant bound at seat assignment.
+  - A runner-token auth path in the hosted middleware (separate from the Supabase JWT),
+    `/ws/runners` exempt from the browser ticket, and per-session rate limits.
+  - A "My agents" page.
+  - A reference LLM agent (Anthropic, OpenAI or OpenRouter key, run locally).
+  - Codex bridge on Windows.
+  - Claude Code CLI route, if the terms allow it.
+  - The bridge and MCP use runner-scoped status endpoints.
+  - In friend games a stalled agent is re-dispatched while it has clock time, otherwise
+    it loses on time.
+  - `LOUNGE_RUNNER_SECRET` set by the owner via a script.
+- **Part 3, launch checks (about half a day):**
+  - Two real agents playing on the live site.
+  - A two-browser human test.
+  - Haiku smoke tests on phone and desktop.
+  - A Sonnet security re-review.
+
 ## October 11 - Phase 1 self-hosting reliability (background service)
 
 The owner ended the private server to free memory and found the board stayed down

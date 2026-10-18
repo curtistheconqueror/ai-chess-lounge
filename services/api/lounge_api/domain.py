@@ -67,6 +67,14 @@ class GameSession:
     initial_time_ms: int = 300_000
     increment_ms: int = 2_000
     id: str = field(default_factory=lambda: str(uuid4()))
+    owner_id: str | None = None
+    # Friend games: the accounts that own each seat. Only they may act for that side.
+    white_user_id: str | None = None
+    black_user_id: str | None = None
+    # When set, each side's clock waits for its first move, which must come within this
+    # window or the game is aborted without a result (as on Lichess and Chess.com).
+    first_move_window_ms: int | None = None
+    abort_reason: str | None = None
     board: chess.Board = field(default_factory=chess.Board)
     initial_fen: str = chess.STARTING_FEN
     lifecycle: MatchState = MatchState.CREATED
@@ -146,10 +154,38 @@ class GameSession:
         return GameStatus.ACTIVE
 
     @property
+    def friend_game(self) -> bool:
+        return self.white_user_id is not None and self.black_user_id is not None
+
+    def seat_user(self, color: str) -> str | None:
+        return self.white_user_id if color == "white" else self.black_user_id
+
+    def color_of_user(self, user_id: str) -> str | None:
+        if user_id == self.white_user_id:
+            return "white"
+        if user_id == self.black_user_id:
+            return "black"
+        return None
+
+    def in_first_move_phase(self) -> bool:
+        """Clocks have not started: a side still owes its first move."""
+        return self.first_move_window_ms is not None and len(self.moves) < 2
+
+    def first_move_deadline(self) -> datetime | None:
+        if (
+            not self.in_first_move_phase()
+            or self.lifecycle is not MatchState.RUNNING
+            or self.turn_started_at is None
+        ):
+            return None
+        started = self._normalize_now(self.turn_started_at)
+        return started + timedelta(milliseconds=self.first_move_window_ms or 0)
+
+    @property
     def termination_reason(self) -> str | None:
         """Why a finished match ended; None while it is still live."""
         if self.lifecycle is MatchState.ABORTED:
-            return "aborted"
+            return self.abort_reason or "aborted"
         if self.lifecycle is MatchState.ADJUDICATED:
             return "adjudicated"
         if self.lifecycle is not MatchState.COMPLETED:
@@ -220,7 +256,11 @@ class GameSession:
             raise MoveRejected(f"{uci} is not legal in the current position.")
 
         moving_color = "white" if self.board.turn is chess.WHITE else "black"
-        if not self._settle_active_clock(action_time, add_increment=True):
+        if self.in_first_move_phase():
+            # The first move only has to beat its window (checked above); no clock time
+            # is used and no increment is added.
+            self.turn_started_at = None
+        elif not self._settle_active_clock(action_time, add_increment=True):
             raise ClockExpired(f"{moving_color.title()} lost on time.")
         san = self.board.san(move)
         self.board.push(move)
@@ -356,6 +396,7 @@ class GameSession:
         self.draw_reason = None
         self.adjudicated_result = None
         self.timed_out_by = None
+        self.abort_reason = None
         self.white_remaining_ms = self.initial_time_ms
         self.black_remaining_ms = self.initial_time_ms
         self.turn_started_at = action_time
@@ -411,6 +452,7 @@ class GameSession:
             self.lifecycle is MatchState.RUNNING
             and self.status is GameStatus.ACTIVE
             and self.turn_started_at is not None
+            and not self.in_first_move_phase()
         ):
             elapsed_ms = self._elapsed_since_turn_start(action_time)
             if self.board.turn is chess.WHITE:
@@ -420,6 +462,8 @@ class GameSession:
         return white, black
 
     def deadline_at(self) -> datetime | None:
+        if self.in_first_move_phase():
+            return self.first_move_deadline()
         if (
             self.lifecycle is not MatchState.RUNNING
             or self.status is not GameStatus.ACTIVE
@@ -438,6 +482,18 @@ class GameSession:
         ):
             return False
         color = "white" if self.board.turn is chess.WHITE else "black"
+        if self.in_first_move_phase():
+            deadline = self.first_move_deadline()
+            if deadline is None or action_time < deadline:
+                return False
+            # No first move in time: abort, no competitive result.
+            self.abort_reason = f"no_first_move_{color}"
+            self.lifecycle = MatchState.ABORTED
+            self.turn_started_at = None
+            self.version += 1
+            self.revision += 1
+            self.updated_at = action_time
+            return True
         remaining = self._stored_remaining(color) - self._elapsed_since_turn_start(action_time)
         if remaining > 0:
             return False
@@ -453,16 +509,18 @@ class GameSession:
     def clock_snapshot(self, now: datetime | None = None) -> ClockSnapshot:
         action_time = self._normalize_now(now)
         white, black = self.remaining_times(action_time)
-        deadline = self.deadline_at()
+        first_move = self.first_move_deadline()
+        # During the first-move window the chess clocks are frozen: no running turn.
+        running = self.turn_started_at is not None and first_move is None
+        deadline = None if first_move is not None else self.deadline_at()
         return ClockSnapshot(
             initial_time_ms=self.initial_time_ms,
             increment_ms=self.increment_ms,
             white_remaining_ms=white,
             black_remaining_ms=black,
-            turn_started_at=(
-                self.turn_started_at.isoformat() if self.turn_started_at is not None else None
-            ),
+            turn_started_at=self.turn_started_at.isoformat() if running else None,
             deadline_at=deadline.isoformat() if deadline is not None else None,
+            first_move_deadline_at=first_move.isoformat() if first_move is not None else None,
             server_time=action_time.isoformat(),
             timed_out_by=self.timed_out_by,
         )
@@ -671,6 +729,8 @@ class GameSession:
             engine=self.engine_summary,
             white_player=self.player_for_color("white"),
             black_player=self.player_for_color("black"),
+            white_user_id=self.white_user_id,
+            black_user_id=self.black_user_id,
             clock=self.clock_snapshot(snapshot_time),
             strategy_banner=banner,
             created_at=self.created_at.isoformat(),
@@ -692,6 +752,9 @@ class GameSession:
         if status is GameStatus.PAUSED:
             return "Match paused — the authoritative position is safely preserved."
         if status is GameStatus.ABORTED:
+            if self.abort_reason and self.abort_reason.startswith("no_first_move_"):
+                side = self.abort_reason.removeprefix("no_first_move_").title()
+                return f"Game aborted — {side} did not make a first move in time."
             return "Match aborted — no competitive result was recorded."
         if status is GameStatus.ADJUDICATED:
             return f"Match adjudicated — final result {self.result}."

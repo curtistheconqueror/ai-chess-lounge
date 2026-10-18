@@ -51,7 +51,7 @@ def test_default_is_loopback_and_hosted_guard_stays_on(monkeypatch):
     with pytest.raises(ValueError):
         NetworkSettings.from_environment()
     monkeypatch.setenv("LOUNGE_HOSTED_MODE", "1")
-    with pytest.raises(RuntimeError, match="Hosted startup"):
+    with pytest.raises(RuntimeError, match="refusing startup"):
         require_local_runtime()
 
 

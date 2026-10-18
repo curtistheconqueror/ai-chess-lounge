@@ -3,6 +3,7 @@ import { Leaderboards } from "./Leaderboards";
 import { IdentityEditor } from "./IdentityEditor";
 import type { IdentityDeclaration } from "./types";
 import { ModelLab } from "./ModelLab";
+import { useAccount } from "./auth";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import {
@@ -32,7 +33,7 @@ import {
   retryAgentTurn,
   submitMove,
   suggestToAgent,
-  websocketUrl,
+  gameSocketUrl,
 } from "./api";
 import { pairMoves, parseFen } from "./chess";
 import { ConsultationPanel } from "./ConsultationPanel";
@@ -325,6 +326,7 @@ function App() {
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [busy, setBusy] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+  const account = useAccount();
   const boardControlsRef = useRef<HTMLElement | null>(null);
   // Display-only preview of the player's submitted move, pinned to the exact game version.
   const [optimistic, setOptimistic] = useState<{ gameId: string; generation: number; version: number; uci: string; fen: string } | null>(null);
@@ -629,12 +631,30 @@ function App() {
     let stopped = false;
     let retryTimer: number | undefined;
     let retryCount = 0;
+    let attempt = 0;
+
+    function scheduleRetry() {
+      setConnection("offline");
+      const delay = Math.min(10_000, 500 * 2 ** retryCount);
+      retryCount += 1;
+      retryTimer = window.setTimeout(connect, delay);
+    }
 
     function connect() {
       if (stopped || document.visibilityState === "hidden") return;
       // Stay "offline" across retries instead of flickering between offline and connecting.
       setConnection(current => current === "offline" ? "offline" : "connecting");
-      const socket = new WebSocket(websocketUrl(gameId));
+      const mine = ++attempt;
+      // The hosted Lounge first trades the sign-in for a one-time socket ticket.
+      gameSocketUrl(gameId).then(url => {
+        if (!stopped && mine === attempt) openSocket(url);
+      }, () => {
+        if (!stopped && mine === attempt) scheduleRetry();
+      });
+    }
+
+    function openSocket(url: string) {
+      const socket = new WebSocket(url);
       let receivedSnapshot = false;
       socketRef.current = socket;
       const isCurrentSocket = () => !stopped && socketRef.current === socket && gameRef.current?.id === gameId;
@@ -644,11 +664,7 @@ function App() {
         // Enable input only after the reconnect delivers an authoritative snapshot.
       });
       socket.addEventListener("close", () => {
-        if (!isCurrentSocket()) return;
-        setConnection("offline");
-        const delay = Math.min(10_000, 500 * 2 ** retryCount);
-        retryCount += 1;
-        retryTimer = window.setTimeout(connect, delay);
+        if (isCurrentSocket()) scheduleRetry();
       });
       socket.addEventListener("error", () => {
         if (isCurrentSocket()) setConnection("offline");
@@ -673,6 +689,7 @@ function App() {
     connect();
     function visibilityChanged() {
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      attempt += 1; // a ticket still being fetched must not open a stale socket
       // Invalidate the old socket before closing it so queued events cannot
       // re-enable input. Foreground always gets a fresh authoritative baseline.
       const previous = socketRef.current;
@@ -1335,11 +1352,14 @@ function App() {
           <button className="ghost-button" aria-label="Flip board" onClick={() => setFlipped((value) => !value)}><span aria-hidden="true">⇅ </span>Flip<span className="wide-label"> board</span></button>
           <button className="ghost-button" aria-label="Full screen" onClick={enterFocusMode}><span aria-hidden="true">⛶ </span>Full<span className="wide-label"> screen</span></button>
         </> : <a className="ghost-button" href="/">Back to table</a>}
-        <MenuButton label="Lounge tools" className="lounge-tools" align="end">
-          <a href="/lab">Model Lab</a>
-          <a href="/leaderboards">AI leaderboards</a>
+        <MenuButton label={account ? "Account" : "Lounge tools"} className="lounge-tools" align="end">
+          {account && <span className="menu-account" aria-label="Signed in as">{account.email}</span>}
+          {account?.role === "admin" && <a href="/players">Players</a>}
+          {!account && <a href="/lab">Model Lab</a>}
+          {!account && <a href="/leaderboards">AI leaderboards</a>}
           <a href="/board-studio">Compare board looks</a>
-          <button onClick={() => void shareMatch()} disabled={!game}>Share match</button>
+          {!account && <button onClick={() => void shareMatch()} disabled={!game}>Share match</button>}
+          {account && <button onClick={() => void account.signOut()}>Sign out</button>}
         </MenuButton>
       </div>
     </header>
@@ -1677,7 +1697,7 @@ function App() {
 
           </details>
 
-          <details className="workspace-section">
+          {!account && <details className="workspace-section">
             <summary>Connections &amp; API access <span>Remote runners, provider setup</span></summary>
             <p>Direct-provider API keys are configured on the server. This browser never collects keys. Choose configured providers, including OpenRouter, in Seats &amp; game setup.</p>
             {runnerAccessDenied && <p>Runner pairing is unavailable on this private connection. Existing player access is unchanged.</p>}
@@ -1787,7 +1807,7 @@ function App() {
               ))}
             </div>
           </div>}
-          </details>
+          </details>}
           <details className="workspace-section">
             <summary>Board preferences <span>Motion, spectator pacing, sound</span></summary>
             <div className="motion-preferences">
@@ -1921,6 +1941,11 @@ function SeatOptions({ catalog, runners }: {
   catalog: PlayerAdapterCatalog | null;
   runners: RunnerSessionStatus[];
 }) {
+  // The hosted Lounge offers your own moves against Stockfish only.
+  if (useAccount()) return <>
+    <option value="human">Human player</option>
+    <option value="stockfish">Stockfish</option>
+  </>;
   return (
     <>
       <option value="human">Human player</option>

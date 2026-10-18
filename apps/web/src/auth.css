@@ -1,0 +1,30 @@
+/* Hosted sign-in, "not invited" and Players pages. Uses the app's theme tokens. */
+.auth-shell { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: #111815; }
+.auth-card { width: min(420px, 100%); padding: 32px 28px; border: 1px solid var(--line); border-radius: 14px; background: #17201b; display: grid; gap: 14px; }
+.auth-card h1 { margin: 0; font-size: 1.6rem; }
+.auth-brand { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; background: var(--emerald-deep); color: var(--gold-soft); font-size: 1.6rem; }
+.auth-muted { margin: 0; color: var(--muted); line-height: 1.5; }
+.auth-card p { margin: 0; line-height: 1.5; }
+.auth-provider, .auth-primary, .auth-secondary { min-height: 44px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; }
+.auth-provider { background: transparent; color: inherit; border: 1px solid var(--line); }
+.auth-provider:hover, .auth-secondary:hover { border-color: var(--gold); }
+.auth-primary { background: var(--gold); color: #1a1406; border: 0; padding: 0 16px; }
+.auth-primary:disabled { opacity: .55; cursor: default; }
+.auth-secondary { background: transparent; color: var(--gold-soft); border: 1px solid var(--line); }
+.auth-email { display: grid; gap: 8px; }
+.auth-email label, .players-invite label { font-size: .9rem; color: var(--muted); }
+.auth-email input, .players-row input, .players-row select { min-height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: #0f1512; color: inherit; font: inherit; }
+.auth-divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .85rem; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.auth-status { min-height: 1.5em; color: var(--gold-soft); }
+.auth-back { color: var(--gold-soft); text-decoration: none; }
+.players-card { width: min(640px, 100%); }
+.players-invite { display: grid; gap: 8px; }
+.players-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.players-row input { flex: 1 1 220px; min-width: 0; }
+.players-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.players-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.players-list li.revoked { opacity: .6; }
+.players-list li span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.players-list small { color: var(--muted); }
+.players-list button { min-height: 40px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; cursor: pointer; }

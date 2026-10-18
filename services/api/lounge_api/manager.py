@@ -34,7 +34,7 @@ from .adapters import (
 from .anthropic_adapter import AnthropicMessagesAdapter
 from .comparison_identity import snapshot as comparison_snapshot
 from .consultation import ConsultationService
-from .deployment_guard import require_local_runtime
+from .deployment_guard import require_supported_runtime
 from .domain import (
     ClockExpired,
     GameSession,
@@ -60,6 +60,7 @@ from .ollama_adapter import OllamaChatAdapter
 from .openai_adapter import OpenAIResponsesAdapter
 from .openai_compatible_adapter import OpenRouterChatAdapter, VLLMChatAdapter
 from .persistence import (
+    ANY_OWNER,
     ConcurrentGameUpdate,
     DatabaseStore,
     IdempotencyConflict,
@@ -156,7 +157,7 @@ class GameManager:
         self.experiment_queue = ExperimentQueue(self.store)
 
     async def start(self) -> None:
-        require_local_runtime()
+        require_supported_runtime()
         self._closed = False
         await self.store.initialize()
         self._experiment_tokens.clear()
@@ -173,6 +174,9 @@ class GameManager:
         *,
         experiment_job: dict | None = None,
         initial_fen: str = chess.STARTING_FEN,
+        owner_id: str | None = None,
+        seat_users: tuple[str, str] | None = None,
+        first_move_window_ms: int | None = None,
     ) -> GameSession:
         if experiment_job:
             await self.adopt_experiment_claim(
@@ -236,6 +240,10 @@ class GameManager:
         )
         game = GameSession(
             **({"id": experiment_job["id"]} if experiment_job else {}),
+            owner_id=owner_id,
+            white_user_id=seat_users[0] if seat_users else None,
+            black_user_id=seat_users[1] if seat_users else None,
+            first_move_window_ms=first_move_window_ms,
             board=chess.Board(initial_fen),
             initial_fen=initial_fen,
             opponent=legacy_opponent,
@@ -320,11 +328,25 @@ class GameManager:
                 game = self.games[game_id]
             return game.snapshot(now=self._clock())
 
+    async def live_snapshot_for_user(self, user_id: str) -> GameSnapshot | None:
+        """The account's live table: a match it owns or plays a seat in."""
+        for game_id in await self.store.live_match_ids_for_user(user_id):
+            try:
+                snapshot = await self.snapshot(game_id)
+            except GameNotFound:
+                continue
+            if snapshot.lifecycle in {MatchState.RUNNING, MatchState.PAUSED}:
+                return snapshot
+        return None
+
     async def latest_live_snapshot(
-        self, *, exclude_game_id: str | None = None
+        self, *, exclude_game_id: str | None = None, owner_id: str | None | object = ANY_OWNER
     ) -> GameSnapshot | None:
-        """The newest match still in play, so a first-time visitor can spectate it."""
-        for game_id in await self.store.latest_live_match_ids():
+        """The newest match still in play, so a first-time visitor can spectate it.
+
+        In hosted mode ``owner_id`` keeps this to the signed-in player's own table.
+        """
+        for game_id in await self.store.latest_live_match_ids(owner_id=owner_id):
             if game_id == exclude_game_id:
                 continue
             try:
@@ -1373,6 +1395,19 @@ class GameManager:
         expected = game.revision if expected_revision is None else expected_revision
         if not game.expire_if_needed(now):
             return False
+        if game.lifecycle is MatchState.ABORTED:
+            # A side missed its first-move window: no result, no rating impact.
+            events = [
+                game.event(
+                    "match.aborted",
+                    {"reason": game.abort_reason, **self._clock_payload(game, now)},
+                    now=now,
+                )
+            ]
+            await self._record_action(game, events, expected)
+            self._cancel_timeout(game.id)
+            await self.broadcast(game, now=now)
+            return True
         payload = self._clock_payload(game, now)
         payload.update({"color": game.timed_out_by, "result": game.result})
         events = [

@@ -13,7 +13,10 @@ from sqlalchemy import text
 class Readiness:
     """One shared DB probe, with bounded caller wait and no connection cancellation."""
 
-    def __init__(self, manager, worker, *, wait_seconds=0.25, freshness_seconds=2.0):
+    def __init__(
+        self, manager, worker, *, wait_seconds=0.25, freshness_seconds=2.0, worker_required=True
+    ):
+        self.worker_required = worker_required
         self.manager = manager
         self.worker = worker
         self.wait_seconds = wait_seconds
@@ -61,7 +64,9 @@ class Readiness:
         )
         engine = bool(self.manager.engine.available)
         return {
-            "ok": database and worker and (engine or not require_engine),
+            "ok": database
+            and (worker or not self.worker_required)
+            and (engine or not require_engine),
             "checks": {"database": database, "worker": worker, "engine": engine},
             "engine_required": require_engine,
         }
