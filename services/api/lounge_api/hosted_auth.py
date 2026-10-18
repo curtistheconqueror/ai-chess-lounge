@@ -31,8 +31,11 @@ MEMBER_PATHS = frozenset(
         "/api/games",
         "/api/engine/strength",
         "/api/player-adapters",
+        "/api/lobby",
+        "/api/challenges",
     }
 )
+PRESENCE_SECONDS = 20  # how often a member's last-seen time is refreshed
 GAME_PATH = re.compile(r"^/(?:api|ws)/games/([0-9a-fA-F-]{36})(?:/|$)")
 # Game actions that call AI providers or agent seats: not part of the hosted release.
 HOSTED_BLOCKED_ACTIONS = re.compile(
@@ -228,7 +231,14 @@ class LiveTickets:
 
 
 MemberLookup = Callable[[str, str], Awaitable[str | None]]
-OwnerLookup = Callable[[str], Awaitable[tuple[bool, str | None]]]
+# (exists, owner_id, white_user_id, black_user_id)
+AccessLookup = Callable[[str], Awaitable[tuple[bool, str | None, str | None, str | None]]]
+SeenHook = Callable[[str], Awaitable[None]]
+
+
+def may_open(identity: Identity, owner: str | None, white: str | None, black: str | None) -> bool:
+    """Admins, the match owner and the two seat owners of a friend game."""
+    return identity.admin or identity.user_id in {owner, white, black} - {None}
 
 
 class HostedAccessMiddleware:
@@ -241,10 +251,12 @@ class HostedAccessMiddleware:
         verifier: TokenVerifier,
         tickets: LiveTickets,
         member_role: MemberLookup,
-        match_owner: OwnerLookup,
+        match_access: AccessLookup,
+        seen: SeenHook | None = None,
     ):
         self.app, self.settings, self.verifier, self.tickets = app, settings, verifier, tickets
-        self.member_role, self.match_owner = member_role, match_owner
+        self.member_role, self.match_access, self.seen = member_role, match_access, seen
+        self._last_seen: dict[str, float] = {}
         self.limits = RateLimiter()
 
     async def __call__(self, scope, receive, send):
@@ -265,6 +277,7 @@ class HostedAccessMiddleware:
         allowed = not HOSTED_BLOCKED_ACTIONS.match(path) and (
             path in MEMBER_PATHS
             or path.startswith("/api/admin/members")
+            or path.startswith("/api/challenges/")
             or (game is not None and path.startswith("/api/games/"))
             or (game is not None and scope["type"] == "websocket")
         )
@@ -295,13 +308,12 @@ class HostedAccessMiddleware:
                     scope, receive, send, 429, "Too many actions at once. Wait a moment."
                 )
         if game is not None:
-            exists, owner = await self.match_owner(game.group(1))
+            exists, owner, white, black = await self.match_access(game.group(1))
             # Unowned (pre-hosting) games belong to the admins. Never reveal others' games.
-            if not exists or not (
-                identity.admin or (owner is not None and owner == identity.user_id)
-            ):
+            if not exists or not may_open(identity, owner, white, black):
                 return await self._deny(scope, receive, send, 404, "Game not found.")
         scope.setdefault("state", {})["identity"] = identity
+        await self._mark_seen(identity)
         await self.app(scope, receive, send)
 
     async def _identity(self, scope, headers) -> Identity | str | None:
@@ -329,8 +341,19 @@ class HostedAccessMiddleware:
         role = await self.member_role(identity.email, identity.user_id)
         if role is None:
             return False
-        exists, owner = await self.match_owner(game_id)
-        return exists and (role == "admin" or owner == identity.user_id)
+        exists, owner, white, black = await self.match_access(game_id)
+        current = Identity(user_id=identity.user_id, email=identity.email, role=role)
+        return exists and may_open(current, owner, white, black)
+
+    async def _mark_seen(self, identity: Identity) -> None:
+        """Presence for the lobby, written at most every PRESENCE_SECONDS per member."""
+        if self.seen is None:
+            return
+        now = time.monotonic()
+        if now - self._last_seen.get(identity.user_id, -PRESENCE_SECONDS) < PRESENCE_SECONDS:
+            return
+        self._last_seen[identity.user_id] = now
+        await self.seen(identity.email)
 
     @staticmethod
     async def _deny(scope, receive, send, status: int, detail: str):

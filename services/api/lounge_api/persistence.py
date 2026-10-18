@@ -51,7 +51,7 @@ from .player_protocol import PlayerConfiguration, PlayerMoveMetadata
 from .table_settings import TableSettings, TableSettingsConflict
 
 DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./.runtime/lounge.db"
-SCHEMA_REVISION = "0014_hosted_members"
+SCHEMA_REVISION = "0015_friend_games"
 TABLE_SETTINGS_ID = "default"
 ANY_OWNER = object()
 
@@ -120,6 +120,11 @@ class MatchRow(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     # The hosted account that owns the match; NULL for local and pre-hosting matches.
     owner_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # Friend games: seat owners, the first-move window and why a game was aborted.
+    white_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    black_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    first_move_window_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    abort_reason: Mapped[str | None] = mapped_column(String(48), nullable=True)
     lifecycle: Mapped[str] = mapped_column(String(24), nullable=False)
     opponent: Mapped[str] = mapped_column(String(24), nullable=False)
     stockfish_elo: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -190,6 +195,32 @@ class MemberRow(Base):
     invited_by: Mapped[str | None] = mapped_column(String(254), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Presence: refreshed (throttled) on a member's requests.
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ChallengeRow(Base):
+    """A member's invitation to another member to play a friend game."""
+
+    __tablename__ = "challenges"
+    __table_args__ = (
+        Index("ix_challenges_challenger", "challenger_id", "status"),
+        Index("ix_challenges_opponent", "opponent_email", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    challenger_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    challenger_email: Mapped[str] = mapped_column(String(254), nullable=False)
+    opponent_email: Mapped[str] = mapped_column(String(254), nullable=False)
+    initial_time_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    increment_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    color: Mapped[str] = mapped_column(String(8), nullable=False)  # white | black | random
+    # pending -> accepting -> accepted, or declined | cancelled | expired
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    game_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class MoveRow(Base):
@@ -387,13 +418,23 @@ class DatabaseStore:
                         if column not in {c["name"] for c in inspector.get_columns(table.name)}
                     }
 
-                if "matches.owner_id" in await connection.run_sync(missing_columns):
+                # Every column added since 0013 is nullable, so it can be added in place.
+                for qualified in sorted(await connection.run_sync(missing_columns)):
+                    table_name, column_name = qualified.split(".", 1)
+                    column = Base.metadata.tables[table_name].columns[column_name]
+                    if not column.nullable:
+                        continue
+                    kind = column.type.compile(dialect=connection.dialect)
                     await connection.execute(
-                        text("ALTER TABLE matches ADD COLUMN owner_id VARCHAR(64)")
+                        text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {kind}")
                     )
-                    await connection.execute(
-                        text("CREATE INDEX ix_matches_owner_id ON matches (owner_id)")
-                    )
+                    if column.index:
+                        await connection.execute(
+                            text(
+                                f"CREATE INDEX ix_{table_name}_{column_name} "
+                                f"ON {table_name} ({column_name})"
+                            )
+                        )
                 if not await connection.run_sync(missing_columns):
                     await connection.execute(
                         text(f"UPDATE alembic_version SET version_num = '{SCHEMA_REVISION}'")
@@ -1082,12 +1123,159 @@ class DatabaseStore:
 
     async def match_owner(self, game_id: str) -> tuple[bool, str | None]:
         """(exists, owner_id) for an access check; never loads the match itself."""
+        exists, owner, _, _ = await self.match_access(game_id)
+        return exists, owner
+
+    async def match_access(self, game_id: str) -> tuple[bool, str | None, str | None, str | None]:
+        """(exists, owner_id, white_user_id, black_user_id) for an access check."""
         await self.initialize()
         async with self.sessions() as session:
             row = (
-                await session.execute(select(MatchRow.owner_id).where(MatchRow.id == game_id))
+                await session.execute(
+                    select(MatchRow.owner_id, MatchRow.white_user_id, MatchRow.black_user_id).where(
+                        MatchRow.id == game_id
+                    )
+                )
             ).first()
-            return (False, None) if row is None else (True, row[0])
+            return (False, None, None, None) if row is None else (True, row[0], row[1], row[2])
+
+    async def live_match_ids_for_user(self, user_id: str) -> list[str]:
+        """Running or paused exhibition matches the account owns or plays a seat in."""
+        await self.initialize()
+        query = select(MatchRow.id).where(
+            MatchRow.lifecycle.in_([MatchState.RUNNING.value, MatchState.PAUSED.value]),
+            MatchRow.id.not_in(select(ExperimentJobRow.id)),
+            or_(
+                MatchRow.owner_id == user_id,
+                MatchRow.white_user_id == user_id,
+                MatchRow.black_user_id == user_id,
+            ),
+        )
+        async with self.sessions() as session:
+            return list((await session.scalars(query.order_by(MatchRow.updated_at.desc()))).all())
+
+    async def busy_user_ids(self) -> set[str]:
+        """Accounts that own or play a seat in a running or paused match."""
+        await self.initialize()
+        async with self.sessions() as session:
+            rows = (
+                await session.execute(
+                    select(MatchRow.owner_id, MatchRow.white_user_id, MatchRow.black_user_id).where(
+                        MatchRow.lifecycle.in_([MatchState.RUNNING.value, MatchState.PAUSED.value]),
+                        MatchRow.id.not_in(select(ExperimentJobRow.id)),
+                    )
+                )
+            ).all()
+            return {user for row in rows for user in row if user is not None}
+
+    # --- presence and challenges ------------------------------------------------
+    async def touch_member(self, email: str, now: datetime) -> None:
+        await self.initialize()
+        async with self.sessions.begin() as session:
+            await session.execute(
+                update(MemberRow).where(MemberRow.email == email).values(last_seen_at=now)
+            )
+
+    async def active_members(self) -> list[dict[str, object]]:
+        await self.initialize()
+        async with self.sessions() as session:
+            rows = (
+                await session.scalars(
+                    select(MemberRow)
+                    .where(MemberRow.status == "active")
+                    .order_by(MemberRow.created_at)
+                )
+            ).all()
+            return [
+                {
+                    "email": row.email,
+                    "user_id": row.user_id,
+                    "last_seen_at": _utc(row.last_seen_at) if row.last_seen_at else None,
+                }
+                for row in rows
+            ]
+
+    @staticmethod
+    def _challenge(row: ChallengeRow) -> dict[str, object]:
+        return {
+            "id": row.id,
+            "challenger_id": row.challenger_id,
+            "challenger_email": row.challenger_email,
+            "opponent_email": row.opponent_email,
+            "initial_time_ms": row.initial_time_ms,
+            "increment_ms": row.increment_ms,
+            "color": row.color,
+            "status": row.status,
+            "game_id": row.game_id,
+            "created_at": _utc(row.created_at),
+            "updated_at": _utc(row.updated_at),
+            "expires_at": _utc(row.expires_at),
+        }
+
+    async def expire_challenges(self, now: datetime) -> None:
+        await self.initialize()
+        async with self.sessions.begin() as session:
+            await session.execute(
+                update(ChallengeRow)
+                .where(ChallengeRow.status == "pending", ChallengeRow.expires_at <= now)
+                .values(status="expired", updated_at=now)
+            )
+
+    async def create_challenge(self, values: dict[str, object]) -> dict[str, object]:
+        await self.initialize()
+        async with self.sessions.begin() as session:
+            row = ChallengeRow(**values)
+            session.add(row)
+            await session.flush()
+            return self._challenge(row)
+
+    async def get_challenge(self, challenge_id: str) -> dict[str, object] | None:
+        await self.initialize()
+        async with self.sessions() as session:
+            row = await session.get(ChallengeRow, challenge_id)
+            return None if row is None else self._challenge(row)
+
+    async def challenges_for(self, user_id: str, email: str) -> list[dict[str, object]]:
+        """Pending challenges to or from a member, plus their own recently answered ones."""
+        await self.initialize()
+        async with self.sessions() as session:
+            rows = (
+                await session.scalars(
+                    select(ChallengeRow)
+                    .where(
+                        or_(
+                            ChallengeRow.challenger_id == user_id,
+                            ChallengeRow.opponent_email == email,
+                        ),
+                        ChallengeRow.status.in_(["pending", "accepting", "accepted", "declined"]),
+                    )
+                    .order_by(ChallengeRow.created_at.desc())
+                    .limit(20)
+                )
+            ).all()
+            return [self._challenge(row) for row in rows]
+
+    async def transition_challenge(
+        self,
+        challenge_id: str,
+        *,
+        from_status: str,
+        to_status: str,
+        now: datetime,
+        game_id: str | None = None,
+    ) -> bool:
+        """Compare-and-swap a challenge's status; exactly one caller wins a race."""
+        await self.initialize()
+        values: dict[str, object] = {"status": to_status, "updated_at": now}
+        if game_id is not None:
+            values["game_id"] = game_id
+        async with self.sessions.begin() as session:
+            result = await session.execute(
+                update(ChallengeRow)
+                .where(ChallengeRow.id == challenge_id, ChallengeRow.status == from_status)
+                .values(**values)
+            )
+            return result.rowcount == 1
 
     # --- hosted members ---------------------------------------------------------
     async def ensure_admins(self, emails: frozenset[str], *, rebind: bool = False) -> None:
@@ -1325,6 +1513,7 @@ class DatabaseStore:
             await session.execute(delete(MatchRow))
             await session.execute(delete(TableSettingsRow))
             await session.execute(delete(MemberRow))
+            await session.execute(delete(ChallengeRow))
 
     async def _record_comparison(self, session: AsyncSession, game: GameSession) -> None:
         row = await session.get(ComparisonGameRow, (game.id, game.generation))
@@ -1357,6 +1546,10 @@ class DatabaseStore:
     def _match_values(game: GameSession) -> dict[str, object]:
         return {
             "owner_id": game.owner_id,
+            "white_user_id": game.white_user_id,
+            "black_user_id": game.black_user_id,
+            "first_move_window_ms": game.first_move_window_ms,
+            "abort_reason": game.abort_reason,
             "lifecycle": game.lifecycle.value,
             "opponent": game.opponent.value,
             "stockfish_elo": game.stockfish_elo,
@@ -1478,6 +1671,10 @@ class DatabaseStore:
         return GameSession(
             id=row.id,
             owner_id=row.owner_id,
+            white_user_id=row.white_user_id,
+            black_user_id=row.black_user_id,
+            first_move_window_ms=row.first_move_window_ms,
+            abort_reason=row.abort_reason,
             opponent=OpponentKind(row.opponent),
             stockfish_elo=row.stockfish_elo,
             engine_move_time_ms=row.engine_move_time_ms,

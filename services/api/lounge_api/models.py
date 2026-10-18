@@ -349,6 +349,8 @@ class ClockSnapshot(BaseModel):
     deadline_at: str | None
     server_time: str
     timed_out_by: str | None
+    # Set while a side's first move is still owed (friend games); the clocks are frozen.
+    first_move_deadline_at: str | None = None
 
 
 class GameSnapshot(BaseModel):
@@ -379,6 +381,9 @@ class GameSnapshot(BaseModel):
     opponent: OpponentKind
     engine: EngineSummary | None
     white_player: PlayerConfiguration
+    # Friend games: the accounts that own each seat (opaque ids; no emails).
+    white_user_id: str | None = None
+    black_user_id: str | None = None
     black_player: PlayerConfiguration
     clock: ClockSnapshot
     strategy_banner: str

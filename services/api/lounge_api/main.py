@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
@@ -33,6 +34,8 @@ from .experiment_queue import QueueConflict
 from .experiment_reports import ExperimentReports, ReportConflict, ReportTooLarge
 from .experiment_worker import ExperimentWorker
 from .experiments import ExperimentService, PlanConfiguration, SaveExperiment
+from .friend_games import FriendGames
+from .friend_games import register as register_friend_games
 from .hosted_auth import (
     HostedAccessMiddleware,
     HostedSettings,
@@ -185,7 +188,8 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             verifier=TokenVerifier(hosted),
             tickets=tickets,
             member_role=active_manager.store.member_role,
-            match_owner=active_manager.store.match_owner,
+            match_access=active_manager.store.match_access,
+            seen=lambda email: active_manager.store.touch_member(email, datetime.now(UTC)),
         )
         application.add_middleware(SharedAccess, access=access)
     elif network.mode != "local":
@@ -194,10 +198,27 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     def identity_of(request: Request | WebSocket) -> Identity | None:
         return getattr(request.state, "identity", None)
 
+    friends = FriendGames(active_manager, hosted, single_game_creation) if hosted else None
+
+    async def guard(request: Request, game_id: str, action: str, color: str | None = None):
+        """Friend games: a person acts only for their own side (ADR0044)."""
+        if friends is None:
+            return
+        try:
+            await friends.guard(identity_of(request), game_id, action, color)
+        except GameNotFound as exc:
+            raise HTTPException(status_code=404, detail="Game not found.") from exc
+
     def owner_scope(request: Request) -> object:
         """Hosted: the signed-in player's own table. Local: the one shared table."""
         identity = identity_of(request)
         return identity.user_id if hosted is not None and identity else ANY_OWNER
+
+    async def live_table(request: Request) -> GameSnapshot | None:
+        identity = identity_of(request)
+        if hosted is not None and identity is not None:
+            return await active_manager.live_snapshot_for_user(identity.user_id)
+        return await active_manager.latest_live_snapshot(owner_id=owner_scope(request))
 
     def table_id(request: Request) -> str:
         identity = identity_of(request)
@@ -251,7 +272,12 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         identity = identity_of(request)
         if identity is None:
             return {"mode": "local"}
-        return {"mode": "hosted", "email": identity.email, "role": identity.role}
+        return {
+            "mode": "hosted",
+            "email": identity.email,
+            "role": identity.role,
+            "user_id": identity.user_id,
+        }
 
     @application.post("/api/ws-ticket")
     async def ws_ticket(request: Request) -> dict[str, str]:
@@ -621,8 +647,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             async with single_game_creation:
                 # Hosted: one live match per player, always; locally only when asked.
                 if (request.single_game or hosted is not None) and (
-                    await active_manager.latest_live_snapshot(owner_id=owner_scope(http))
-                    is not None
+                    await live_table(http) is not None
                 ):
                     raise HTTPException(
                         status_code=409,
@@ -654,7 +679,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
 
     @application.get("/api/live-match", response_model=GameSnapshot)
     async def get_live_match(request: Request) -> GameSnapshot:
-        snapshot = await active_manager.latest_live_snapshot(owner_id=owner_scope(request))
+        snapshot = await live_table(request)
         if snapshot is None:
             raise HTTPException(status_code=404, detail="No match is live.")
         return snapshot
@@ -674,8 +699,14 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
 
     @application.get("/api/games/{game_id}/analysis", response_model=GameAnalysis)
-    async def get_analysis(game_id: str) -> GameAnalysis:
+    async def get_analysis(game_id: str, request: Request) -> GameAnalysis:
         try:
+            if friends is not None and not await friends.analysis_allowed(
+                identity_of(request), game_id
+            ):
+                raise HTTPException(
+                    status_code=403, detail="Engine analysis opens when the game ends."
+                )
             return await active_manager.analysis(game_id)
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
@@ -687,6 +718,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
     @application.post("/api/games/{game_id}/moves", response_model=GameSnapshot)
     async def make_move(
         game_id: str,
+        http: Request,
         request: MoveRequest,
         idempotency_key: Annotated[
             str | None,
@@ -698,6 +730,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             ),
         ] = None,
     ) -> GameSnapshot:
+        await guard(http, game_id, "move")
         try:
             return await active_manager.make_human_move(
                 game_id,
@@ -720,6 +753,7 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
 
     @application.post("/api/games/{game_id}/reset", response_model=GameSnapshot)
     async def reset_game(game_id: str, request: Request) -> GameSnapshot:
+        await guard(request, game_id, "reset")
         try:
             async with single_game_creation:
                 blocking = await active_manager.latest_live_snapshot(
@@ -742,9 +776,17 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @application.post("/api/games/{game_id}/resign", response_model=GameSnapshot)
-    async def resign_game(game_id: str, request: ResignRequest | None = None) -> GameSnapshot:
+    async def resign_game(
+        game_id: str, http: Request, request: ResignRequest | None = None
+    ) -> GameSnapshot:
+        request = request or ResignRequest()
+        await guard(http, game_id, "resign", request.color)
+        if friends is not None and request.color is None:
+            identity = identity_of(http)
+            game = await active_manager.get(game_id)
+            if identity is not None and game.friend_game:
+                request = request.model_copy(update={"color": game.color_of_user(identity.user_id)})
         try:
-            request = request or ResignRequest()
             return await active_manager.resign(game_id, request.color, request.position_version)
         except GameNotFound as exc:
             raise HTTPException(status_code=404, detail="Game not found.") from exc
@@ -756,7 +798,8 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="Concurrent match update.") from exc
 
     @application.post("/api/games/{game_id}/claim-draw", response_model=GameSnapshot)
-    async def claim_draw(game_id: str, request: DrawClaimRequest) -> GameSnapshot:
+    async def claim_draw(game_id: str, request: DrawClaimRequest, http: Request) -> GameSnapshot:
+        await guard(http, game_id, "claim_draw")
         try:
             return await active_manager.claim_draw(
                 game_id, request.position_version, request.intended_move
@@ -779,7 +822,10 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="Concurrent match update.") from exc
 
     @application.post("/api/games/{game_id}/pause", response_model=GameSnapshot)
-    async def pause_game(game_id: str, request: LifecycleRequest | None = None) -> GameSnapshot:
+    async def pause_game(
+        game_id: str, http: Request, request: LifecycleRequest | None = None
+    ) -> GameSnapshot:
+        await guard(http, game_id, "pause")
         return await lifecycle_action(
             active_manager.pause,
             game_id,
@@ -787,7 +833,10 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
         )
 
     @application.post("/api/games/{game_id}/resume", response_model=GameSnapshot)
-    async def resume_game(game_id: str, request: LifecycleRequest | None = None) -> GameSnapshot:
+    async def resume_game(
+        game_id: str, http: Request, request: LifecycleRequest | None = None
+    ) -> GameSnapshot:
+        await guard(http, game_id, "resume")
         return await lifecycle_action(
             active_manager.resume,
             game_id,
@@ -830,7 +879,10 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @application.post("/api/games/{game_id}/seats/{color}", response_model=GameSnapshot)
-    async def change_seat(game_id: str, color: str, request: SeatTakeoverRequest) -> GameSnapshot:
+    async def change_seat(
+        game_id: str, color: str, request: SeatTakeoverRequest, http: Request
+    ) -> GameSnapshot:
+        await guard(http, game_id, "seat")
         if color not in {"white", "black"}:
             raise HTTPException(status_code=422, detail="Color must be white or black.")
         if hosted is not None:
@@ -849,11 +901,15 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @application.post("/api/games/{game_id}/retry-agent", response_model=GameSnapshot)
-    async def retry_agent_turn(game_id: str) -> GameSnapshot:
+    async def retry_agent_turn(game_id: str, http: Request) -> GameSnapshot:
+        await guard(http, game_id, "retry")
         return await lifecycle_action(active_manager.retry_agent_turn, game_id)
 
     @application.post("/api/games/{game_id}/abort", response_model=GameSnapshot)
-    async def abort_game(game_id: str, request: AbortRequest | None = None) -> GameSnapshot:
+    async def abort_game(
+        game_id: str, http: Request, request: AbortRequest | None = None
+    ) -> GameSnapshot:
+        await guard(http, game_id, "abort")
         async with single_game_creation:
             return await lifecycle_action(
                 active_manager.abort,
@@ -862,7 +918,10 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             )
 
     @application.post("/api/games/{game_id}/adjudicate", response_model=GameSnapshot)
-    async def adjudicate_game(game_id: str, request: AdjudicateRequest) -> GameSnapshot:
+    async def adjudicate_game(
+        game_id: str, request: AdjudicateRequest, http: Request
+    ) -> GameSnapshot:
+        await guard(http, game_id, "adjudicate")
         try:
             return await active_manager.adjudicate(game_id, request.result)
         except GameNotFound as exc:
@@ -931,6 +990,9 @@ def create_app(game_manager: GameManager | None = None) -> FastAPI:
             await active_manager.remote_runners.socket_loop(websocket, token)
         except RunnerAuthenticationError:
             await websocket.close(code=4401, reason="Runner authentication failed")
+
+    if friends is not None:
+        register_friend_games(application, friends, identity_of)
 
     if web_dist.is_dir():
         public_root = web_dist.resolve()

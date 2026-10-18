@@ -12,7 +12,7 @@ from lounge_api import hosted_auth
 from lounge_api.hosted_auth import HostedSettings, InvalidToken, TokenVerifier
 from lounge_api.main import create_app
 from lounge_api.manager import GameManager
-from lounge_api.persistence import DatabaseStore
+from lounge_api.persistence import SCHEMA_REVISION, DatabaseStore
 from starlette.websockets import WebSocketDisconnect
 from test_manager import FakeEngine
 
@@ -141,7 +141,12 @@ def test_public_paths_and_sign_in_requirement(hosted):
 
 def test_invite_only_admin_bootstrap_and_revocation(hosted):
     me = hosted.get("/api/auth/me", headers=auth("token-admin")).json()
-    assert me == {"mode": "hosted", "email": ADMIN, "role": "admin"}
+    assert me == {
+        "mode": "hosted",
+        "email": ADMIN,
+        "role": "admin",
+        "user_id": ACCOUNTS["token-admin"][0],
+    }
     assert hosted.get("/api/auth/me", headers=auth("token-bob")).status_code == 403
     invite(hosted, "Bob@Example.com")
     assert hosted.get("/api/auth/me", headers=auth("token-bob")).json()["role"] == "player"
@@ -358,8 +363,13 @@ def test_existing_local_database_gains_the_owner_column(tmp_path, monkeypatch):
 
     asyncio.run(build_old())
     with sqlite3.connect(path) as db:  # rewind to the 0013 shape
-        db.execute("DROP INDEX ix_matches_owner_id")
-        db.execute("ALTER TABLE matches DROP COLUMN owner_id")
+        for column in ("owner_id", "white_user_id", "black_user_id"):
+            db.execute(f"DROP INDEX ix_matches_{column}")
+            db.execute(f"ALTER TABLE matches DROP COLUMN {column}")
+        for column in ("first_move_window_ms", "abort_reason"):
+            db.execute(f"ALTER TABLE matches DROP COLUMN {column}")
+        db.execute("ALTER TABLE lounge_members DROP COLUMN last_seen_at")
+        db.execute("DROP TABLE challenges")
         db.execute("UPDATE alembic_version SET version_num = '0013_table_settings'")
     manager = GameManager(engine=FakeEngine(), store=DatabaseStore(f"sqlite+aiosqlite:///{path}"))
     with TestClient(create_app(manager)) as client:
@@ -368,8 +378,10 @@ def test_existing_local_database_gains_the_owner_column(tmp_path, monkeypatch):
         assert client.get("/api/live-match").json()["id"] == game["id"]
     with sqlite3.connect(path) as db:
         assert db.execute("SELECT version_num FROM alembic_version").fetchall() == [
-            ("0014_hosted_members",)
+            (SCHEMA_REVISION,)
         ]
+        columns = {row[1] for row in db.execute("PRAGMA table_info(matches)")}
+        assert {"owner_id", "white_user_id", "black_user_id", "first_move_window_ms"} <= columns
 
 
 def test_hosted_tables_need_a_person_and_a_quick_engine(hosted):
